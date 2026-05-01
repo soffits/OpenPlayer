@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "${mod_id}",
+  "version": "${mod_version}",
+  "name": "${mod_name}",
+  "description": "${mod_description}",
+  "authors": [
+    "Sakina",
+    "soffits"
+  ],
+  "contact": {},
+  "license": "${mod_license}",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "dev.soffits.openplayer.fabric.OpenPlayerFabric"
+    ],
+    "client": [
+      "dev.soffits.openplayer.fabric.OpenPlayerFabricClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=${fabric_loader_version}",
+    "minecraft": "${minecraft_version}",
+    "java": ">=17"
+  }
+}
