@@ -9,5 +9,7 @@ public interface AiPlayerNpcSession {
 
     CommandSubmissionResult submitCommand(AiPlayerNpcCommand command);
 
+    CommandSubmissionResult submitCommandText(String input);
+
     boolean despawn();
 }

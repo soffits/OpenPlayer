@@ -4,7 +4,7 @@ OpenPlayer is an open, multi-loader AI NPC framework for Minecraft. The project 
 
 ## Architecture
 
-- `common`: loader-neutral constants, lifecycle seams, public AI player NPC API contracts, runtime entity registration, pure Java command intent types, and an opt-in provider-backed intent parser seam.
+- `common`: loader-neutral constants, lifecycle seams, public AI player NPC API contracts, runtime entity registration, pure Java command intent types, runtime intent parser configuration, and an opt-in provider-backed intent parser seam.
 - `fabric`: Fabric entrypoints that delegate to common initialization.
 - `forge`: Forge entrypoints and client event wiring that delegate to common initialization.
 
@@ -12,7 +12,7 @@ The initial target is Minecraft 1.20.1 on Java 17 with an Architectury-style mul
 
 ## Milestone Status
 
-Current implementation includes runtime NPC sessions, duplicate prevention, basic command intents, item pickup with inventory persistence, owner lifecycle cleanup and restore, spawn/despawn networking, a minimal client control screen, a default player-shaped renderer, and an opt-in JDK-only OpenAI-compatible intent provider. Runtime provider wiring remains disabled by default, and pathfinding automation is not implemented.
+Current implementation includes runtime NPC sessions, duplicate prevention, basic command intents, item pickup with inventory persistence, owner lifecycle cleanup and restore, spawn/despawn networking, a minimal client control screen, a default player-shaped renderer, and a disabled-by-default runtime intent parser that can use an opt-in JDK-only OpenAI-compatible provider. Pathfinding automation is not implemented.
 
 ## Dependencies
 
@@ -20,11 +20,22 @@ Current implementation includes runtime NPC sessions, duplicate prevention, basi
 - The OpenAI-compatible intent provider uses only Java 17 `java.net.http.HttpClient` and adds no external dependency.
 - No pathfinding or automation dependency is included. Direct PlayerEngine vendoring remains forbidden, and any future Baritone or Automatone integration must first identify public coordinates, confirm Minecraft 1.20.1 loader compatibility, complete license and provenance review, and use a small adapter seam.
 
+## Runtime Intent Parser
+
+Raw command text submitted through the public NPC service is parsed by the runtime-owned intent parser before becoming an `AiPlayerNpcCommand`. The parser is disabled by default and returns unavailable intents without contacting a provider.
+
+Set safe JVM system properties or environment variables with these exact names to enable the OpenAI-compatible provider:
+
+- `OPENPLAYER_INTENT_PARSER_ENABLED=true`
+- `OPENPLAYER_INTENT_PROVIDER_ENDPOINT=https://example.invalid/v1/chat/completions`
+- `OPENPLAYER_INTENT_PROVIDER_API_KEY=...`
+- `OPENPLAYER_INTENT_PROVIDER_MODEL=...`
+
 ## Roadmap
 
 - Establish loader-neutral NPC domain contracts.
 - Add entity, persistence, and networking slices.
-- Wire safe command parsing and provider-backed LLM integration into runtime configuration.
+- Evaluate provider-backed command parsing behavior in runtime playtesting.
 - Evaluate Baritone and Automatone integrations for movement automation once public coordinates, loader/version compatibility, license posture, and adapter boundaries are clear.
 - Add player skin and profile support.
 

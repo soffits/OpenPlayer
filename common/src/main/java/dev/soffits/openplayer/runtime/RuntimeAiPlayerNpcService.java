@@ -13,6 +13,9 @@ import dev.soffits.openplayer.api.NpcSessionId;
 import dev.soffits.openplayer.api.NpcSessionStatus;
 import dev.soffits.openplayer.api.NpcSpawnLocation;
 import dev.soffits.openplayer.entity.OpenPlayerNpcEntity;
+import dev.soffits.openplayer.intent.CommandIntent;
+import dev.soffits.openplayer.intent.IntentParseException;
+import dev.soffits.openplayer.intent.IntentParser;
 import dev.soffits.openplayer.registry.OpenPlayerEntityTypes;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -29,14 +32,19 @@ import net.minecraft.world.level.Level;
 
 public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
     private final MinecraftServer server;
+    private final IntentParser intentParser;
     private final Map<NpcSessionId, RuntimeAiPlayerNpcSession> sessions = new LinkedHashMap<>();
     private final Map<RuntimeNpcIdentityKey, NpcSessionId> sessionIdsByIdentity = new LinkedHashMap<>();
 
-    public RuntimeAiPlayerNpcService(MinecraftServer server) {
+    public RuntimeAiPlayerNpcService(MinecraftServer server, IntentParser intentParser) {
         if (server == null) {
             throw new IllegalArgumentException("server cannot be null");
         }
+        if (intentParser == null) {
+            throw new IllegalArgumentException("intentParser cannot be null");
+        }
         this.server = server;
+        this.intentParser = intentParser;
     }
 
     public synchronized void restorePersistedSessions() {
@@ -145,6 +153,28 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         } catch (IllegalArgumentException exception) {
             return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, exception.getMessage());
         }
+    }
+
+    @Override
+    public CommandSubmissionResult submitCommandText(NpcSessionId sessionId, String input) {
+        if (sessionId == null) {
+            throw new IllegalArgumentException("sessionId cannot be null");
+        }
+        if (input == null) {
+            throw new IllegalArgumentException("input cannot be null");
+        }
+        synchronized (this) {
+            if (!sessions.containsKey(sessionId)) {
+                return new CommandSubmissionResult(CommandSubmissionStatus.UNKNOWN_SESSION, "Unknown NPC session");
+            }
+        }
+        CommandIntent intent;
+        try {
+            intent = intentParser.parse(input);
+        } catch (IntentParseException exception) {
+            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Unable to parse command text");
+        }
+        return submitCommand(sessionId, new AiPlayerNpcCommand(UUID.randomUUID(), intent));
     }
 
     @Override
