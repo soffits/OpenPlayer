@@ -2,8 +2,10 @@ package dev.soffits.openplayer.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.architectury.event.events.client.ClientTickEvent;
+import dev.architectury.registry.client.level.entity.EntityRendererRegistry;
 import dev.architectury.registry.client.keymappings.KeyMappingRegistry;
 import dev.soffits.openplayer.OpenPlayerConstants;
+import dev.soffits.openplayer.registry.OpenPlayerEntityTypes;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import org.lwjgl.glfw.GLFW;
@@ -28,6 +30,7 @@ public final class OpenPlayerClient {
             return;
         }
         initialized = true;
+        EntityRendererRegistry.register(OpenPlayerEntityTypes.AI_PLAYER_NPC, OpenPlayerNpcRenderer::new);
         KeyMappingRegistry.register(OPEN_CONTROLS);
         ClientTickEvent.CLIENT_POST.register(OpenPlayerClient::openControlsOnKeyPress);
     }
