@@ -33,5 +33,5 @@ remapJar {
 
 sourcesJar {
     dependsOn project(':common').sourcesJar
-    from project(':common').sourcesJar.map { zipTree(it) }
+    from project(':common').sourcesJar.archiveFile.map { zipTree(it) }
 }
