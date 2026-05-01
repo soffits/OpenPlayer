@@ -3,6 +3,7 @@ package dev.soffits.openplayer.entity;
 import dev.soffits.openplayer.api.AiPlayerNpcCommand;
 import dev.soffits.openplayer.api.CommandSubmissionResult;
 import dev.soffits.openplayer.api.NpcOwnerId;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -10,6 +11,9 @@ import net.minecraft.core.NonNullList;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.PathfinderMob;
@@ -26,6 +30,18 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
     private static final String PROFILE_NAME_TAG = "OpenPlayerProfileName";
     private static final int INVENTORY_SIZE = 36;
     private static final double ITEM_PICKUP_RANGE = 1.0D;
+    private static final EntityDataAccessor<Optional<UUID>> DATA_OWNER_ID = SynchedEntityData.defineId(
+            OpenPlayerNpcEntity.class,
+            EntityDataSerializers.OPTIONAL_UUID
+    );
+    private static final EntityDataAccessor<String> DATA_ROLE_ID = SynchedEntityData.defineId(
+            OpenPlayerNpcEntity.class,
+            EntityDataSerializers.STRING
+    );
+    private static final EntityDataAccessor<String> DATA_PROFILE_NAME = SynchedEntityData.defineId(
+            OpenPlayerNpcEntity.class,
+            EntityDataSerializers.STRING
+    );
 
     private final RuntimeCommandExecutor runtimeCommandExecutor = new RuntimeCommandExecutor(this);
     private final NonNullList<ItemStack> internalInventory = NonNullList.withSize(INVENTORY_SIZE, ItemStack.EMPTY);
@@ -35,6 +51,14 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
 
     public OpenPlayerNpcEntity(EntityType<? extends OpenPlayerNpcEntity> entityType, Level level) {
         super(entityType, level);
+    }
+
+    @Override
+    protected void defineSynchedData() {
+        super.defineSynchedData();
+        entityData.define(DATA_OWNER_ID, Optional.empty());
+        entityData.define(DATA_ROLE_ID, "");
+        entityData.define(DATA_PROFILE_NAME, "");
     }
 
     @Override
@@ -63,27 +87,45 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
         persistedOwnerId = ownerId.value();
         persistedRoleId = roleId;
         persistedProfileName = profileName;
+        syncPersistedIdentity();
         setRuntimeOwnerId(ownerId);
     }
 
     public Optional<UUID> persistedOwnerId() {
-        return Optional.ofNullable(persistedOwnerId);
+        return entityData.get(DATA_OWNER_ID).or(() -> Optional.ofNullable(persistedOwnerId));
     }
 
     public Optional<String> persistedRoleId() {
+        String syncedRoleId = entityData.get(DATA_ROLE_ID);
+        if (!syncedRoleId.isBlank()) {
+            return Optional.of(syncedRoleId);
+        }
         return Optional.ofNullable(persistedRoleId);
     }
 
     public Optional<String> persistedProfileName() {
+        String syncedProfileName = entityData.get(DATA_PROFILE_NAME);
+        if (!syncedProfileName.isBlank()) {
+            return Optional.of(syncedProfileName);
+        }
         return Optional.ofNullable(persistedProfileName);
     }
 
     public boolean hasValidPersistedIdentity() {
-        return persistedOwnerId != null
-                && persistedRoleId != null
-                && !persistedRoleId.isBlank()
-                && persistedProfileName != null
-                && !persistedProfileName.isBlank();
+        return persistedOwnerId().isPresent()
+                && persistedRoleId().isPresent()
+                && persistedProfileName().isPresent();
+    }
+
+    public UUID deterministicSkinId() {
+        Optional<UUID> ownerId = persistedOwnerId();
+        Optional<String> roleId = persistedRoleId();
+        Optional<String> profileName = persistedProfileName();
+        if (ownerId.isEmpty() || roleId.isEmpty() || profileName.isEmpty()) {
+            return getUUID();
+        }
+        String skinKey = ownerId.get() + "\n" + roleId.get() + "\n" + profileName.get();
+        return UUID.nameUUIDFromBytes(skinKey.getBytes(StandardCharsets.UTF_8));
     }
 
     public CommandSubmissionResult submitRuntimeCommand(AiPlayerNpcCommand command) {
@@ -143,9 +185,16 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
         persistedProfileName = compoundTag.contains(PROFILE_NAME_TAG, Tag.TAG_STRING)
                 ? compoundTag.getString(PROFILE_NAME_TAG)
                 : null;
+        syncPersistedIdentity();
         if (persistedOwnerId != null) {
             runtimeCommandExecutor.setOwnerId(new NpcOwnerId(persistedOwnerId));
         }
+    }
+
+    private void syncPersistedIdentity() {
+        entityData.set(DATA_OWNER_ID, Optional.ofNullable(persistedOwnerId));
+        entityData.set(DATA_ROLE_ID, persistedRoleId == null ? "" : persistedRoleId);
+        entityData.set(DATA_PROFILE_NAME, persistedProfileName == null ? "" : persistedProfileName);
     }
 
     private void collectNearbyItems() {
