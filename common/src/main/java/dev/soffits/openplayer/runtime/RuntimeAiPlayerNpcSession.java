@@ -46,6 +46,14 @@ final class RuntimeAiPlayerNpcSession implements AiPlayerNpcSession {
     }
 
     @Override
+    public CommandSubmissionResult submitCommandText(String input) {
+        if (input == null) {
+            throw new IllegalArgumentException("input cannot be null");
+        }
+        return service.submitCommandText(sessionId, input);
+    }
+
+    @Override
     public boolean despawn() {
         return service.despawn(sessionId);
     }

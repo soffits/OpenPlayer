@@ -11,5 +11,7 @@ public interface AiPlayerNpcService {
 
     CommandSubmissionResult submitCommand(NpcSessionId sessionId, AiPlayerNpcCommand command);
 
+    CommandSubmissionResult submitCommandText(NpcSessionId sessionId, String input);
+
     NpcSessionStatus status(NpcSessionId sessionId);
 }

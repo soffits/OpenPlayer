@@ -3,6 +3,7 @@ package dev.soffits.openplayer.runtime;
 import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.event.events.common.PlayerEvent;
 import dev.architectury.registry.level.entity.EntityAttributeRegistry;
+import dev.soffits.openplayer.OpenPlayerIntentParserConfig;
 import dev.soffits.openplayer.api.OpenPlayerApi;
 import dev.soffits.openplayer.entity.OpenPlayerNpcEntity;
 import dev.soffits.openplayer.registry.OpenPlayerEntityTypes;
@@ -24,7 +25,7 @@ public final class OpenPlayerRuntime {
     }
 
     private static void installServerService(MinecraftServer server) {
-        activeService = new RuntimeAiPlayerNpcService(server);
+        activeService = new RuntimeAiPlayerNpcService(server, OpenPlayerIntentParserConfig.createIntentParser());
         activeService.restorePersistedSessions();
         OpenPlayerApi.registerNpcService(activeService);
     }

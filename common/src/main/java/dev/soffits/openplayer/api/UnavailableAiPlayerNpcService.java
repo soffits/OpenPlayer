@@ -38,6 +38,17 @@ public final class UnavailableAiPlayerNpcService implements AiPlayerNpcService {
     }
 
     @Override
+    public CommandSubmissionResult submitCommandText(NpcSessionId sessionId, String input) {
+        if (sessionId == null) {
+            throw new IllegalArgumentException("sessionId cannot be null");
+        }
+        if (input == null) {
+            throw new IllegalArgumentException("input cannot be null");
+        }
+        return new CommandSubmissionResult(CommandSubmissionStatus.UNAVAILABLE, UNAVAILABLE_MESSAGE);
+    }
+
+    @Override
     public NpcSessionStatus status(NpcSessionId sessionId) {
         if (sessionId == null) {
             throw new IllegalArgumentException("sessionId cannot be null");
