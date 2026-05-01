@@ -29,6 +29,7 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
 
     private final MinecraftServer server;
     private final Map<NpcSessionId, RuntimeAiPlayerNpcSession> sessions = new LinkedHashMap<>();
+    private final Map<RuntimeNpcIdentityKey, NpcSessionId> sessionIdsByIdentity = new LinkedHashMap<>();
 
     public RuntimeAiPlayerNpcService(MinecraftServer server) {
         if (server == null) {
@@ -42,7 +43,38 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         if (spec == null) {
             throw new IllegalArgumentException("spec cannot be null");
         }
+        RuntimeNpcIdentityKey identityKey = RuntimeNpcIdentityKey.from(spec);
+        NpcSessionId existingSessionId = sessionIdsByIdentity.get(identityKey);
+        RuntimeAiPlayerNpcSession existingSession = existingSession(identityKey);
         ServerLevel level = levelFor(spec.spawnLocation());
+        if (existingSession != null) {
+            OpenPlayerNpcEntity existingEntity = entityFor(existingSession);
+            if (existingEntity != null) {
+                if (existingEntity.level().dimension().equals(level.dimension())) {
+                    relocate(existingEntity, spec.spawnLocation());
+                    existingSession.update(spec, existingEntity.getUUID());
+                    return existingSession;
+                }
+                OpenPlayerNpcEntity replacementEntity = spawnEntity(level, spec);
+                existingEntity.discard();
+                existingSession.update(spec, replacementEntity.getUUID());
+                sessionIdsByIdentity.put(identityKey, existingSession.sessionId());
+                return existingSession;
+            }
+            removeIndexes(existingSession.sessionId());
+        } else if (existingSessionId != null) {
+            sessionIdsByIdentity.remove(identityKey);
+        }
+
+        OpenPlayerNpcEntity entity = spawnEntity(level, spec);
+        NpcSessionId sessionId = new NpcSessionId(UUID.randomUUID());
+        RuntimeAiPlayerNpcSession session = new RuntimeAiPlayerNpcSession(this, sessionId, spec, entity.getUUID());
+        sessions.put(sessionId, session);
+        sessionIdsByIdentity.put(identityKey, sessionId);
+        return session;
+    }
+
+    private OpenPlayerNpcEntity spawnEntity(ServerLevel level, AiPlayerNpcSpec spec) {
         OpenPlayerNpcEntity entity = OpenPlayerEntityTypes.AI_PLAYER_NPC.get().create(level);
         if (entity == null) {
             throw new IllegalStateException("Unable to create OpenPlayer NPC entity");
@@ -55,11 +87,7 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         if (!level.addFreshEntity(entity)) {
             throw new IllegalStateException("Unable to spawn OpenPlayer NPC entity");
         }
-
-        NpcSessionId sessionId = new NpcSessionId(UUID.randomUUID());
-        RuntimeAiPlayerNpcSession session = new RuntimeAiPlayerNpcSession(this, sessionId, spec, entity.getUUID());
-        sessions.put(sessionId, session);
-        return session;
+        return entity;
     }
 
     @Override
@@ -67,10 +95,11 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         if (sessionId == null) {
             throw new IllegalArgumentException("sessionId cannot be null");
         }
-        RuntimeAiPlayerNpcSession session = sessions.remove(sessionId);
+        RuntimeAiPlayerNpcSession session = sessions.get(sessionId);
         if (session == null) {
             return false;
         }
+        removeIndexes(sessionId);
         Entity entity = entityFor(session);
         if (entity != null) {
             entity.discard();
@@ -114,6 +143,7 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         for (NpcSessionId sessionId : sessionIds) {
             despawn(sessionId);
         }
+        sessionIdsByIdentity.clear();
     }
 
     private ServerLevel levelFor(NpcSpawnLocation location) {
@@ -126,8 +156,30 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         return level;
     }
 
-    private Entity entityFor(RuntimeAiPlayerNpcSession session) {
+    private OpenPlayerNpcEntity entityFor(RuntimeAiPlayerNpcSession session) {
         ServerLevel level = levelFor(session.spec().spawnLocation());
-        return level.getEntity(session.entityUuid());
+        Entity entity = level.getEntity(session.entityUuid());
+        if (!(entity instanceof OpenPlayerNpcEntity npcEntity)) {
+            return null;
+        }
+        return npcEntity.isAlive() ? npcEntity : null;
+    }
+
+    private RuntimeAiPlayerNpcSession existingSession(RuntimeNpcIdentityKey identityKey) {
+        NpcSessionId sessionId = sessionIdsByIdentity.get(identityKey);
+        return sessionId == null ? null : sessions.get(sessionId);
+    }
+
+    private void removeIndexes(NpcSessionId sessionId) {
+        RuntimeAiPlayerNpcSession session = sessions.remove(sessionId);
+        if (session != null) {
+            sessionIdsByIdentity.remove(RuntimeNpcIdentityKey.from(session.spec()));
+        }
+    }
+
+    private void relocate(OpenPlayerNpcEntity entity, NpcSpawnLocation location) {
+        entity.teleportTo(location.x(), location.y(), location.z());
+        entity.setYRot(0.0F);
+        entity.setXRot(0.0F);
     }
 }

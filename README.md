@@ -12,7 +12,7 @@ The initial target is Minecraft 1.20.1 on Java 17 with an Architectury-style mul
 
 ## Milestone Status
 
-Phase 3 adds a minimal server-spawnable OpenPlayer NPC entity and runtime service for spawning, despawning, listing, and status checks when a `MinecraftServer` is active. Command execution is still explicitly rejected, and networking, GUI, skin loading, pathfinding automation, and LLM provider calls are not implemented.
+Phase 4 adds owner/profile-aware runtime session reuse and duplicate prevention for server-spawnable OpenPlayer NPC entities. Command execution is still explicitly rejected, and networking, GUI, skin loading, pathfinding automation, and LLM provider calls are not implemented.
 
 ## Dependencies
 

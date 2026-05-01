@@ -14,8 +14,8 @@ final class RuntimeAiPlayerNpcSession implements AiPlayerNpcSession {
 
     private final RuntimeAiPlayerNpcService service;
     private final NpcSessionId sessionId;
-    private final AiPlayerNpcSpec spec;
-    private final UUID entityUuid;
+    private AiPlayerNpcSpec spec;
+    private UUID entityUuid;
 
     RuntimeAiPlayerNpcSession(RuntimeAiPlayerNpcService service, NpcSessionId sessionId, AiPlayerNpcSpec spec,
                               UUID entityUuid) {
@@ -55,5 +55,10 @@ final class RuntimeAiPlayerNpcSession implements AiPlayerNpcSession {
 
     UUID entityUuid() {
         return entityUuid;
+    }
+
+    void update(AiPlayerNpcSpec spec, UUID entityUuid) {
+        this.spec = spec;
+        this.entityUuid = entityUuid;
     }
 }
