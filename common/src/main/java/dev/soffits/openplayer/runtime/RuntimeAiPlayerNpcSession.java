@@ -4,14 +4,11 @@ import dev.soffits.openplayer.api.AiPlayerNpcCommand;
 import dev.soffits.openplayer.api.AiPlayerNpcSession;
 import dev.soffits.openplayer.api.AiPlayerNpcSpec;
 import dev.soffits.openplayer.api.CommandSubmissionResult;
-import dev.soffits.openplayer.api.CommandSubmissionStatus;
 import dev.soffits.openplayer.api.NpcSessionId;
 import dev.soffits.openplayer.api.NpcSessionStatus;
 import java.util.UUID;
 
 final class RuntimeAiPlayerNpcSession implements AiPlayerNpcSession {
-    private static final String COMMANDS_NOT_AVAILABLE_MESSAGE = "NPC command execution is not available in this runtime slice";
-
     private final RuntimeAiPlayerNpcService service;
     private final NpcSessionId sessionId;
     private AiPlayerNpcSpec spec;
@@ -45,7 +42,7 @@ final class RuntimeAiPlayerNpcSession implements AiPlayerNpcSession {
         if (command == null) {
             throw new IllegalArgumentException("command cannot be null");
         }
-        return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, COMMANDS_NOT_AVAILABLE_MESSAGE);
+        return service.submitCommand(sessionId, command);
     }
 
     @Override
