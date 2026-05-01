@@ -16,6 +16,10 @@ subprojects {
     apply plugin: 'dev.architectury.loom'
     apply plugin: 'architectury-plugin'
 
+    repositories {
+        maven { url = 'https://maven.architectury.dev/' }
+    }
+
     base {
         archivesName = "${mod_id}-${project.name}"
     }
@@ -47,6 +51,7 @@ subprojects {
         inputs.property 'minecraft_version', minecraft_version
         inputs.property 'fabric_loader_version', fabric_loader_version
         inputs.property 'forge_version', forge_version
+        inputs.property 'architectury_api_version', architectury_api_version
 
         filesMatching(['fabric.mod.json', 'META-INF/mods.toml']) {
             expand(
@@ -58,7 +63,8 @@ subprojects {
                 mod_description: mod_description,
                 minecraft_version: minecraft_version,
                 fabric_loader_version: fabric_loader_version,
-                forge_version: forge_version
+                forge_version: forge_version,
+                architectury_api_version: architectury_api_version
             )
         }
     }
