@@ -5,6 +5,10 @@ import net.minecraft.resources.ResourceLocation;
 public final class OpenPlayerConstants {
     public static final String MOD_ID = "openplayer";
     public static final String MOD_NAME = "OpenPlayer";
+    public static final String DEFAULT_NETWORK_NPC_ROLE_ID = "network_request";
+    public static final String DEFAULT_NETWORK_NPC_PROFILE_SUFFIX = " OpenPlayer NPC";
+    public static final ResourceLocation SPAWN_REQUEST_PACKET_ID = id("spawn_request");
+    public static final ResourceLocation DESPAWN_REQUEST_PACKET_ID = id("despawn_request");
 
     private OpenPlayerConstants() {
     }
