@@ -14,7 +14,7 @@ OpenPlayer is an AGPL-3.0-only Minecraft mod developed as a legally clean, open 
 
 - Project code and metadata must declare `AGPL-3.0-only`.
 - Do not copy Player2NPC code line-for-line.
-- Do not decompile Player2NPC, PlayerEngine, or any opaque dependency jar.
+- Decompiled Player2NPC or PlayerEngine behavior may be inspected for reference ideas, but do not copy decompiled code line-for-line or paste it into this repository.
 - Do not vendor PlayerEngine or any other opaque jar.
 - Use dependencies only through documented package managers and public coordinates.
 - Document new dependency provenance and license posture before adding it.
