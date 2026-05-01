@@ -138,7 +138,7 @@ final class RuntimeCommandExecutor {
         return player;
     }
 
-    private void stopAll() {
+    void stopAll() {
         queuedCommands.clear();
         activeCommand = null;
         entity.getNavigation().stop();

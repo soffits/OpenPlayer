@@ -3,6 +3,9 @@ package dev.soffits.openplayer.entity;
 import dev.soffits.openplayer.api.AiPlayerNpcCommand;
 import dev.soffits.openplayer.api.CommandSubmissionResult;
 import dev.soffits.openplayer.api.NpcOwnerId;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import net.minecraft.core.NonNullList;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -15,16 +18,20 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
-import java.util.List;
-
 public final class OpenPlayerNpcEntity extends PathfinderMob {
     private static final String INVENTORY_TAG = "OpenPlayerInventory";
     private static final String INVENTORY_SLOT_TAG = "Slot";
+    private static final String OWNER_ID_TAG = "OpenPlayerOwnerId";
+    private static final String ROLE_ID_TAG = "OpenPlayerRoleId";
+    private static final String PROFILE_NAME_TAG = "OpenPlayerProfileName";
     private static final int INVENTORY_SIZE = 36;
     private static final double ITEM_PICKUP_RANGE = 1.0D;
 
     private final RuntimeCommandExecutor runtimeCommandExecutor = new RuntimeCommandExecutor(this);
     private final NonNullList<ItemStack> internalInventory = NonNullList.withSize(INVENTORY_SIZE, ItemStack.EMPTY);
+    private UUID persistedOwnerId;
+    private String persistedRoleId;
+    private String persistedProfileName;
 
     public OpenPlayerNpcEntity(EntityType<? extends OpenPlayerNpcEntity> entityType, Level level) {
         super(entityType, level);
@@ -43,8 +50,48 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
         runtimeCommandExecutor.setOwnerId(ownerId);
     }
 
+    public void setPersistedIdentity(NpcOwnerId ownerId, String roleId, String profileName) {
+        if (ownerId == null) {
+            throw new IllegalArgumentException("ownerId cannot be null");
+        }
+        if (roleId == null || roleId.isBlank()) {
+            throw new IllegalArgumentException("roleId cannot be blank");
+        }
+        if (profileName == null || profileName.isBlank()) {
+            throw new IllegalArgumentException("profileName cannot be blank");
+        }
+        persistedOwnerId = ownerId.value();
+        persistedRoleId = roleId;
+        persistedProfileName = profileName;
+        setRuntimeOwnerId(ownerId);
+    }
+
+    public Optional<UUID> persistedOwnerId() {
+        return Optional.ofNullable(persistedOwnerId);
+    }
+
+    public Optional<String> persistedRoleId() {
+        return Optional.ofNullable(persistedRoleId);
+    }
+
+    public Optional<String> persistedProfileName() {
+        return Optional.ofNullable(persistedProfileName);
+    }
+
+    public boolean hasValidPersistedIdentity() {
+        return persistedOwnerId != null
+                && persistedRoleId != null
+                && !persistedRoleId.isBlank()
+                && persistedProfileName != null
+                && !persistedProfileName.isBlank();
+    }
+
     public CommandSubmissionResult submitRuntimeCommand(AiPlayerNpcCommand command) {
         return runtimeCommandExecutor.submit(command);
+    }
+
+    public void stopRuntimeCommands() {
+        runtimeCommandExecutor.stopAll();
     }
 
     public static AttributeSupplier.Builder createAttributes() {
@@ -67,6 +114,11 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
             }
         }
         compoundTag.put(INVENTORY_TAG, inventoryTag);
+        if (hasValidPersistedIdentity()) {
+            compoundTag.putUUID(OWNER_ID_TAG, persistedOwnerId);
+            compoundTag.putString(ROLE_ID_TAG, persistedRoleId);
+            compoundTag.putString(PROFILE_NAME_TAG, persistedProfileName);
+        }
     }
 
     @Override
@@ -85,6 +137,14 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
                     internalInventory.set(slot, itemStack);
                 }
             }
+        }
+        persistedOwnerId = compoundTag.hasUUID(OWNER_ID_TAG) ? compoundTag.getUUID(OWNER_ID_TAG) : null;
+        persistedRoleId = compoundTag.contains(ROLE_ID_TAG, Tag.TAG_STRING) ? compoundTag.getString(ROLE_ID_TAG) : null;
+        persistedProfileName = compoundTag.contains(PROFILE_NAME_TAG, Tag.TAG_STRING)
+                ? compoundTag.getString(PROFILE_NAME_TAG)
+                : null;
+        if (persistedOwnerId != null) {
+            runtimeCommandExecutor.setOwnerId(new NpcOwnerId(persistedOwnerId));
         }
     }
 
