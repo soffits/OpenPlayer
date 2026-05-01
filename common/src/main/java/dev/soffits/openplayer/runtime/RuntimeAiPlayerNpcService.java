@@ -25,8 +25,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 
 public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
-    private static final String COMMANDS_NOT_AVAILABLE_MESSAGE = "NPC command execution is not available in this runtime slice";
-
     private final MinecraftServer server;
     private final Map<NpcSessionId, RuntimeAiPlayerNpcSession> sessions = new LinkedHashMap<>();
     private final Map<RuntimeNpcIdentityKey, NpcSessionId> sessionIdsByIdentity = new LinkedHashMap<>();
@@ -81,6 +79,7 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         }
         NpcSpawnLocation location = spec.spawnLocation();
         entity.moveTo(location.x(), location.y(), location.z(), 0.0F, 0.0F);
+        entity.setRuntimeOwnerId(spec.ownerId());
         entity.setCustomName(net.minecraft.network.chat.Component.literal(spec.profile().name()));
         entity.setCustomNameVisible(true);
 
@@ -123,7 +122,16 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         if (!sessions.containsKey(sessionId)) {
             return new CommandSubmissionResult(CommandSubmissionStatus.UNKNOWN_SESSION, "Unknown NPC session");
         }
-        return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, COMMANDS_NOT_AVAILABLE_MESSAGE);
+        RuntimeAiPlayerNpcSession session = sessions.get(sessionId);
+        OpenPlayerNpcEntity entity = entityFor(session);
+        if (entity == null) {
+            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "NPC session entity is unavailable");
+        }
+        try {
+            return entity.submitRuntimeCommand(command);
+        } catch (IllegalArgumentException exception) {
+            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, exception.getMessage());
+        }
     }
 
     @Override
