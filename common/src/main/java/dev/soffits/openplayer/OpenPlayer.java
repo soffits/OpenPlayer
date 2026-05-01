@@ -1,5 +1,7 @@
 package dev.soffits.openplayer;
 
+import dev.soffits.openplayer.api.OpenPlayerApi;
+
 public final class OpenPlayer {
     private static boolean initialized;
     private static boolean clientInitialized;
@@ -8,6 +10,7 @@ public final class OpenPlayer {
     }
 
     public static void initialize() {
+        OpenPlayerApi.registerUnavailableNpcService();
         initialized = true;
     }
 
