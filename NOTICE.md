@@ -5,7 +5,7 @@ OpenPlayer is an independent implementation. Player2NPC by Goodbird-git is treat
 ## Reference Posture
 
 - Player2NPC: reference and inspiration only; decompiled behavior may be inspected for ideas, but no copied implementation code.
-- PlayerEngine: not vendored and not required for this foundation slice; decompiled behavior may be inspected for ideas, but no copied implementation code.
+- PlayerEngine: not vendored and not required; direct vendoring of opaque PlayerEngine jars remains forbidden. Decompiled behavior may be inspected for ideas, but no copied implementation code.
 
 ## Dependency Posture
 
@@ -13,8 +13,8 @@ OpenPlayer is an independent implementation. Player2NPC by Goodbird-git is treat
 
 ## Planned Dependency Posture
 
-- LangChain4j: possible future LLM integration layer; not included in Phase 1.
-- Baritone: possible future pathfinding automation integration; not included in Phase 1.
-- Automatone: possible future automation integration; not included in Phase 1.
+- LangChain4j: possible future LLM integration layer; not included yet.
+- Baritone: possible future pathfinding automation integration; not included yet. GitHub metadata indicates `cabaletta/baritone` is LGPL-3.0, but stable public Maven Central or Modrinth coordinates were not identified in the quick check.
+- Automatone: possible future automation integration; not included yet. Stable public Maven Central or Modrinth coordinates were not identified in the quick check.
 
-Any dependency added later must be introduced from public coordinates with its license and provenance reviewed before use.
+Any dependency added later must be introduced from public coordinates with its license and provenance reviewed before use. Future Baritone or Automatone work also needs Minecraft 1.20.1 loader compatibility validation and a small adapter seam before implementation.
