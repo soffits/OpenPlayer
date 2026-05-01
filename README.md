@@ -4,7 +4,7 @@ OpenPlayer is an open, multi-loader AI NPC framework for Minecraft. The project 
 
 ## Architecture
 
-- `common`: loader-neutral constants, lifecycle seams, public AI player NPC API contracts, and pure Java command intent types.
+- `common`: loader-neutral constants, lifecycle seams, public AI player NPC API contracts, runtime entity registration, and pure Java command intent types.
 - `fabric`: Fabric entrypoints that delegate to common initialization.
 - `forge`: Forge entrypoints and client event wiring that delegate to common initialization.
 
@@ -12,7 +12,11 @@ The initial target is Minecraft 1.20.1 on Java 17 with an Architectury-style mul
 
 ## Milestone Status
 
-Phase 2 adds public API and domain contracts for AI player NPC roles, sessions, profiles, and command submission. It still does not implement playable NPC entities, networking, GUI, skin loading, pathfinding automation, or LLM provider calls.
+Phase 3 adds a minimal server-spawnable OpenPlayer NPC entity and runtime service for spawning, despawning, listing, and status checks when a `MinecraftServer` is active. Command execution is still explicitly rejected, and networking, GUI, skin loading, pathfinding automation, and LLM provider calls are not implemented.
+
+## Dependencies
+
+- Architectury API `9.2.14` is used from public Maven coordinates for shared Fabric and Forge entity registration and lifecycle hooks. Architectury API is LGPL-3.0-only.
 
 ## Roadmap
 
