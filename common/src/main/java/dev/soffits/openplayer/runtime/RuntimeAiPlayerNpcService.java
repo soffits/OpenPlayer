@@ -220,6 +220,7 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         String profileName = entity.persistedProfileName().orElseThrow();
         RuntimeNpcIdentityKey identityKey = RuntimeNpcIdentityKey.from(ownerId, roleId, profileName);
         if (sessionIdsByIdentity.containsKey(identityKey)) {
+            entity.discard();
             return;
         }
         NpcSpawnLocation location = new NpcSpawnLocation(
