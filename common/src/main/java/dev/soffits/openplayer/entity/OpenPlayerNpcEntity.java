@@ -15,6 +15,7 @@ import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
@@ -25,10 +26,21 @@ import net.minecraft.world.level.Level;
 public final class OpenPlayerNpcEntity extends PathfinderMob {
     private static final String INVENTORY_TAG = "OpenPlayerInventory";
     private static final String INVENTORY_SLOT_TAG = "Slot";
+    private static final String SELECTED_MAIN_HAND_SLOT_TAG = "OpenPlayerSelectedMainHandSlot";
     private static final String OWNER_ID_TAG = "OpenPlayerOwnerId";
     private static final String ROLE_ID_TAG = "OpenPlayerRoleId";
     private static final String PROFILE_NAME_TAG = "OpenPlayerProfileName";
     private static final int INVENTORY_SIZE = 36;
+    private static final int FIRST_NORMAL_INVENTORY_SLOT = 0;
+    private static final int NORMAL_INVENTORY_SLOT_COUNT = 31;
+    private static final int FIRST_EQUIPMENT_INVENTORY_SLOT = FIRST_NORMAL_INVENTORY_SLOT
+            + NORMAL_INVENTORY_SLOT_COUNT;
+    private static final int DEFAULT_SELECTED_MAIN_HAND_SLOT = 0;
+    private static final int ARMOR_FEET_SLOT = FIRST_EQUIPMENT_INVENTORY_SLOT;
+    private static final int ARMOR_LEGS_SLOT = 32;
+    private static final int ARMOR_CHEST_SLOT = 33;
+    private static final int ARMOR_HEAD_SLOT = 34;
+    private static final int OFFHAND_SLOT = 35;
     private static final double ITEM_PICKUP_RANGE = 1.0D;
     private static final EntityDataAccessor<Optional<UUID>> DATA_OWNER_ID = SynchedEntityData.defineId(
             OpenPlayerNpcEntity.class,
@@ -48,6 +60,7 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
     private UUID persistedOwnerId;
     private String persistedRoleId;
     private String persistedProfileName;
+    private int selectedMainHandSlot = DEFAULT_SELECTED_MAIN_HAND_SLOT;
 
     public OpenPlayerNpcEntity(EntityType<? extends OpenPlayerNpcEntity> entityType, Level level) {
         super(entityType, level);
@@ -144,6 +157,40 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
     }
 
     @Override
+    public Iterable<ItemStack> getHandSlots() {
+        return List.of(getItemBySlot(EquipmentSlot.MAINHAND), getItemBySlot(EquipmentSlot.OFFHAND));
+    }
+
+    @Override
+    public Iterable<ItemStack> getArmorSlots() {
+        return List.of(
+                getItemBySlot(EquipmentSlot.FEET),
+                getItemBySlot(EquipmentSlot.LEGS),
+                getItemBySlot(EquipmentSlot.CHEST),
+                getItemBySlot(EquipmentSlot.HEAD)
+        );
+    }
+
+    @Override
+    public ItemStack getItemBySlot(EquipmentSlot equipmentSlot) {
+        int inventorySlot = inventorySlotForEquipmentSlot(equipmentSlot);
+        if (inventorySlot >= 0) {
+            return internalInventory.get(inventorySlot);
+        }
+        return super.getItemBySlot(equipmentSlot);
+    }
+
+    @Override
+    public void setItemSlot(EquipmentSlot equipmentSlot, ItemStack itemStack) {
+        int inventorySlot = inventorySlotForEquipmentSlot(equipmentSlot);
+        if (inventorySlot >= 0) {
+            internalInventory.set(inventorySlot, itemStack.copy());
+            return;
+        }
+        super.setItemSlot(equipmentSlot, itemStack);
+    }
+
+    @Override
     public void addAdditionalSaveData(CompoundTag compoundTag) {
         super.addAdditionalSaveData(compoundTag);
         ListTag inventoryTag = new ListTag();
@@ -156,6 +203,7 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
             }
         }
         compoundTag.put(INVENTORY_TAG, inventoryTag);
+        compoundTag.putInt(SELECTED_MAIN_HAND_SLOT_TAG, selectedMainHandSlot);
         if (hasValidPersistedIdentity()) {
             compoundTag.putUUID(OWNER_ID_TAG, persistedOwnerId);
             compoundTag.putString(ROLE_ID_TAG, persistedRoleId);
@@ -180,6 +228,11 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
                 }
             }
         }
+        if (compoundTag.contains(SELECTED_MAIN_HAND_SLOT_TAG, Tag.TAG_INT)) {
+            selectedMainHandSlot = validatedMainHandSlot(compoundTag.getInt(SELECTED_MAIN_HAND_SLOT_TAG));
+        } else {
+            selectedMainHandSlot = DEFAULT_SELECTED_MAIN_HAND_SLOT;
+        }
         persistedOwnerId = compoundTag.hasUUID(OWNER_ID_TAG) ? compoundTag.getUUID(OWNER_ID_TAG) : null;
         persistedRoleId = compoundTag.contains(ROLE_ID_TAG, Tag.TAG_STRING) ? compoundTag.getString(ROLE_ID_TAG) : null;
         persistedProfileName = compoundTag.contains(PROFILE_NAME_TAG, Tag.TAG_STRING)
@@ -195,6 +248,24 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
         entityData.set(DATA_OWNER_ID, Optional.ofNullable(persistedOwnerId));
         entityData.set(DATA_ROLE_ID, persistedRoleId == null ? "" : persistedRoleId);
         entityData.set(DATA_PROFILE_NAME, persistedProfileName == null ? "" : persistedProfileName);
+    }
+
+    private int inventorySlotForEquipmentSlot(EquipmentSlot equipmentSlot) {
+        return switch (equipmentSlot) {
+            case MAINHAND -> selectedMainHandSlot;
+            case OFFHAND -> OFFHAND_SLOT;
+            case FEET -> ARMOR_FEET_SLOT;
+            case LEGS -> ARMOR_LEGS_SLOT;
+            case CHEST -> ARMOR_CHEST_SLOT;
+            case HEAD -> ARMOR_HEAD_SLOT;
+        };
+    }
+
+    private int validatedMainHandSlot(int slot) {
+        if (slot >= FIRST_NORMAL_INVENTORY_SLOT && slot < FIRST_EQUIPMENT_INVENTORY_SLOT) {
+            return slot;
+        }
+        return DEFAULT_SELECTED_MAIN_HAND_SLOT;
     }
 
     private void collectNearbyItems() {
@@ -224,7 +295,9 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
     }
 
     private void mergeIntoExistingStacks(ItemStack remainingStack) {
-        for (int slot = 0; slot < internalInventory.size() && !remainingStack.isEmpty(); slot++) {
+        for (int slot = FIRST_NORMAL_INVENTORY_SLOT;
+             slot < FIRST_EQUIPMENT_INVENTORY_SLOT && !remainingStack.isEmpty();
+             slot++) {
             ItemStack existingStack = internalInventory.get(slot);
             if (!existingStack.isEmpty() && ItemStack.isSameItemSameTags(existingStack, remainingStack)) {
                 int movableCount = Math.min(remainingStack.getCount(), existingStack.getMaxStackSize() - existingStack.getCount());
@@ -237,7 +310,9 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
     }
 
     private void fillEmptySlots(ItemStack remainingStack) {
-        for (int slot = 0; slot < internalInventory.size() && !remainingStack.isEmpty(); slot++) {
+        for (int slot = FIRST_NORMAL_INVENTORY_SLOT;
+             slot < FIRST_EQUIPMENT_INVENTORY_SLOT && !remainingStack.isEmpty();
+             slot++) {
             ItemStack existingStack = internalInventory.get(slot);
             if (existingStack.isEmpty()) {
                 ItemStack insertedStack = remainingStack.copy();
