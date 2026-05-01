@@ -1,6 +1,7 @@
 package dev.soffits.openplayer;
 
 import dev.soffits.openplayer.api.OpenPlayerApi;
+import dev.soffits.openplayer.client.OpenPlayerClient;
 import dev.soffits.openplayer.network.OpenPlayerNetworking;
 import dev.soffits.openplayer.runtime.OpenPlayerRuntime;
 
@@ -19,6 +20,7 @@ public final class OpenPlayer {
     }
 
     public static void initializeClient() {
+        OpenPlayerClient.initialize();
         clientInitialized = true;
     }
 
