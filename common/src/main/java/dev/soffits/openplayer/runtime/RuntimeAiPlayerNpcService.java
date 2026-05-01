@@ -6,6 +6,9 @@ import dev.soffits.openplayer.api.AiPlayerNpcSession;
 import dev.soffits.openplayer.api.AiPlayerNpcSpec;
 import dev.soffits.openplayer.api.CommandSubmissionResult;
 import dev.soffits.openplayer.api.CommandSubmissionStatus;
+import dev.soffits.openplayer.api.NpcOwnerId;
+import dev.soffits.openplayer.api.NpcProfileSpec;
+import dev.soffits.openplayer.api.NpcRoleId;
 import dev.soffits.openplayer.api.NpcSessionId;
 import dev.soffits.openplayer.api.NpcSessionStatus;
 import dev.soffits.openplayer.api.NpcSpawnLocation;
@@ -34,6 +37,16 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
             throw new IllegalArgumentException("server cannot be null");
         }
         this.server = server;
+    }
+
+    public synchronized void restorePersistedSessions() {
+        for (ServerLevel level : server.getAllLevels()) {
+            for (Entity entity : level.getAllEntities()) {
+                if (entity instanceof OpenPlayerNpcEntity npcEntity && npcEntity.hasValidPersistedIdentity()) {
+                    adoptPersistedEntity(level, npcEntity);
+                }
+            }
+        }
     }
 
     @Override
@@ -79,7 +92,7 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         }
         NpcSpawnLocation location = spec.spawnLocation();
         entity.moveTo(location.x(), location.y(), location.z(), 0.0F, 0.0F);
-        entity.setRuntimeOwnerId(spec.ownerId());
+        entity.setPersistedIdentity(spec.ownerId(), spec.roleId().value(), spec.profile().name());
         entity.setCustomName(net.minecraft.network.chat.Component.literal(spec.profile().name()));
         entity.setCustomNameVisible(true);
 
@@ -146,12 +159,56 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         return entityFor(session) == null ? NpcSessionStatus.DESPAWNED : NpcSessionStatus.ACTIVE;
     }
 
-    synchronized void despawnAll() {
-        List<NpcSessionId> sessionIds = new ArrayList<>(sessions.keySet());
-        for (NpcSessionId sessionId : sessionIds) {
-            despawn(sessionId);
+    public synchronized void stopOwnerRuntime(UUID ownerId) {
+        if (ownerId == null) {
+            throw new IllegalArgumentException("ownerId cannot be null");
         }
+        for (RuntimeAiPlayerNpcSession session : sessions.values()) {
+            if (session.spec().ownerId().value().equals(ownerId)) {
+                OpenPlayerNpcEntity entity = entityFor(session);
+                if (entity != null) {
+                    entity.stopRuntimeCommands();
+                }
+            }
+        }
+    }
+
+    synchronized void clearRuntimeSessions() {
+        for (RuntimeAiPlayerNpcSession session : sessions.values()) {
+            OpenPlayerNpcEntity entity = entityFor(session);
+            if (entity != null) {
+                entity.stopRuntimeCommands();
+            }
+        }
+        sessions.clear();
         sessionIdsByIdentity.clear();
+    }
+
+    private void adoptPersistedEntity(ServerLevel level, OpenPlayerNpcEntity entity) {
+        UUID ownerId = entity.persistedOwnerId().orElseThrow();
+        String roleId = entity.persistedRoleId().orElseThrow();
+        String profileName = entity.persistedProfileName().orElseThrow();
+        RuntimeNpcIdentityKey identityKey = RuntimeNpcIdentityKey.from(ownerId, roleId, profileName);
+        if (sessionIdsByIdentity.containsKey(identityKey)) {
+            return;
+        }
+        NpcSpawnLocation location = new NpcSpawnLocation(
+                level.dimension().location().toString(),
+                entity.getX(),
+                entity.getY(),
+                entity.getZ()
+        );
+        AiPlayerNpcSpec spec = new AiPlayerNpcSpec(
+                new NpcRoleId(roleId),
+                new NpcOwnerId(ownerId),
+                new NpcProfileSpec(profileName),
+                location
+        );
+        entity.setRuntimeOwnerId(spec.ownerId());
+        NpcSessionId sessionId = new NpcSessionId(UUID.randomUUID());
+        RuntimeAiPlayerNpcSession session = new RuntimeAiPlayerNpcSession(this, sessionId, spec, entity.getUUID());
+        sessions.put(sessionId, session);
+        sessionIdsByIdentity.put(identityKey, sessionId);
     }
 
     private ServerLevel levelFor(NpcSpawnLocation location) {

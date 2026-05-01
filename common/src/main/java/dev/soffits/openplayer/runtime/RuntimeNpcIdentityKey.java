@@ -19,4 +19,8 @@ record RuntimeNpcIdentityKey(UUID ownerId, String roleId, String profileName) {
     static RuntimeNpcIdentityKey from(AiPlayerNpcSpec spec) {
         return new RuntimeNpcIdentityKey(spec.ownerId().value(), spec.roleId().value(), spec.profile().name());
     }
+
+    static RuntimeNpcIdentityKey from(UUID ownerId, String roleId, String profileName) {
+        return new RuntimeNpcIdentityKey(ownerId, roleId, profileName);
+    }
 }
