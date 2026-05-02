@@ -9,6 +9,8 @@ public final class OpenPlayerControlScreen extends Screen {
     private static final Component TITLE = Component.literal("OpenPlayer Controls");
     private static final Component SPAWN_BUTTON = Component.literal("Spawn NPC");
     private static final Component DESPAWN_BUTTON = Component.literal("Despawn NPC");
+    private static final Component FOLLOW_OWNER_BUTTON = Component.literal("Follow Me");
+    private static final Component STOP_BUTTON = Component.literal("Stop");
     private static final int BUTTON_WIDTH = 160;
     private static final int BUTTON_HEIGHT = 20;
     private static final int BUTTON_SPACING = 8;
@@ -20,12 +22,18 @@ public final class OpenPlayerControlScreen extends Screen {
     @Override
     protected void init() {
         int left = (this.width - BUTTON_WIDTH) / 2;
-        int top = (this.height - (BUTTON_HEIGHT * 2 + BUTTON_SPACING)) / 2;
+        int top = (this.height - (BUTTON_HEIGHT * 4 + BUTTON_SPACING * 3)) / 2;
         this.addRenderableWidget(Button.builder(SPAWN_BUTTON, button -> OpenPlayerRequestSender.sendSpawnRequest())
                 .bounds(left, top, BUTTON_WIDTH, BUTTON_HEIGHT)
                 .build());
         this.addRenderableWidget(Button.builder(DESPAWN_BUTTON, button -> OpenPlayerRequestSender.sendDespawnRequest())
                 .bounds(left, top + BUTTON_HEIGHT + BUTTON_SPACING, BUTTON_WIDTH, BUTTON_HEIGHT)
+                .build());
+        this.addRenderableWidget(Button.builder(FOLLOW_OWNER_BUTTON, button -> OpenPlayerRequestSender.sendFollowOwnerRequest())
+                .bounds(left, top + (BUTTON_HEIGHT + BUTTON_SPACING) * 2, BUTTON_WIDTH, BUTTON_HEIGHT)
+                .build());
+        this.addRenderableWidget(Button.builder(STOP_BUTTON, button -> OpenPlayerRequestSender.sendStopRequest())
+                .bounds(left, top + (BUTTON_HEIGHT + BUTTON_SPACING) * 3, BUTTON_WIDTH, BUTTON_HEIGHT)
                 .build());
     }
 
