@@ -12,7 +12,7 @@ The initial target is Minecraft 1.20.1 on Java 17 with an Architectury-style mul
 
 ## Milestone Status
 
-Current implementation includes runtime NPC sessions, duplicate prevention, basic command intents, item pickup with inventory persistence, owner lifecycle cleanup and restore, spawn/despawn networking, a minimal client control screen with safe runtime status, a default player-shaped renderer, a default vanilla automation backend, an optional reflective Baritone command bridge, and a disabled-by-default runtime intent parser that can use an opt-in JDK-only OpenAI-compatible provider. Automatone is not directly integrated yet.
+Current implementation includes runtime NPC sessions, duplicate prevention, basic command intents, item pickup with inventory persistence, owner lifecycle cleanup and restore, spawn/despawn networking, a minimal client control screen with safe runtime status, a default player-shaped renderer, a vanilla NPC-backed task backend, an optional reflective Baritone command bridge, and a disabled-by-default runtime intent parser that can use an opt-in JDK-only OpenAI-compatible provider. Automatone is not directly integrated yet.
 
 ## Dependencies
 
@@ -35,7 +35,11 @@ Set safe JVM system properties or environment variables with these exact names t
 
 ## Automation Backend
 
-Runtime command execution goes through a small automation backend seam. The default backend is `vanilla`, which preserves the current Minecraft navigation behavior for move, look, follow owner, and stop commands. Set `OPENPLAYER_AUTOMATION_BACKEND=disabled` to reject automation commands without adding any external automation dependency.
+Runtime command execution goes through a small automation backend seam. The default backend is `vanilla`, which runs server-side tasks against `OpenPlayerNpcEntity` through vanilla Minecraft APIs. It supports `STOP`, `MOVE`, `LOOK`, `FOLLOW_OWNER`, `COLLECT_ITEMS`, and disabled-by-default world actions for `BREAK_BLOCK`, `PLACE_BLOCK`, and `ATTACK_NEAREST`.
+
+The vanilla backend is a focused NPC task layer, not full PlayerEngine or Baritone parity. `COLLECT_ITEMS` navigates to nearby visible item entities and relies on the NPC inventory pickup path when close, with a bounded close-range attempt so a full inventory cannot keep it active forever. Set `OPENPLAYER_AUTOMATION_ALLOW_WORLD_ACTIONS=true` or JVM property `openplayer.automation.allowWorldActions=true` to allow world-mutating and violent vanilla actions. When enabled, `BREAK_BLOCK` accepts `x y z`, navigates near the loaded target block, rejects air or unbreakable blocks, then uses server block destruction with drops. `PLACE_BLOCK` accepts `x y z`, requires a main-hand `BlockItem`, rejects occupied targets, checks simple vanilla survival and collision rules, and places the block's default state when close. `ATTACK_NEAREST` accepts a blank instruction or radius number, avoids the owner and other OpenPlayer NPCs, and attacks the nearest visible living target within the original command radius while stopping if the NPC leaves that bound. These tasks are bounded by simple radii and reach checks, but they are not fully deterministic pathfinding plans and do not include inventory planning, tool selection, crafting, container interaction, digging pathfinding, or complete automation parity.
+
+Set `OPENPLAYER_AUTOMATION_BACKEND=disabled` to reject automation commands without adding any external automation dependency.
 
 Set `OPENPLAYER_AUTOMATION_BACKEND=baritone` to try the optional Baritone command bridge. The bridge reflects `baritone.api.BaritoneAPI` at runtime and reports `baritone (unavailable)` if Baritone classes, the primary Baritone instance, or the Baritone command manager are unavailable. Supported commands are currently limited to `stop`, `goto x y z`, and `follow players` after owner availability is checked.
 
@@ -46,7 +50,7 @@ The Baritone backend is intentionally honest about scope: stock Baritone control
 - Establish loader-neutral NPC domain contracts.
 - Add entity, persistence, and networking slices.
 - Evaluate provider-backed command parsing behavior in runtime playtesting.
-- Expand Baritone support from the current optional local-player command bridge into real NPC-backed pathfinding if a clean adapter boundary is identified.
+- Expand NPC-backed automation beyond the current vanilla task layer if a clean pathfinding and action adapter boundary is identified.
 - Evaluate Automatone integration for movement automation once public coordinates, loader/version compatibility, license posture, and adapter boundaries are clear.
 - Add player skin and profile support.
 

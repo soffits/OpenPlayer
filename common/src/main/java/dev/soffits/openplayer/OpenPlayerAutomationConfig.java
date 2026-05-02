@@ -10,6 +10,8 @@ import java.util.Locale;
 
 public final class OpenPlayerAutomationConfig {
     public static final String BACKEND_KEY = "OPENPLAYER_AUTOMATION_BACKEND";
+    public static final String ALLOW_WORLD_ACTIONS_ENV_KEY = "OPENPLAYER_AUTOMATION_ALLOW_WORLD_ACTIONS";
+    public static final String ALLOW_WORLD_ACTIONS_PROPERTY_KEY = "openplayer.automation.allowWorldActions";
 
     private OpenPlayerAutomationConfig() {
     }
@@ -41,6 +43,12 @@ public final class OpenPlayerAutomationConfig {
             );
         }
         return new VanillaAutomationBackend().status();
+    }
+
+    public static boolean allowWorldActions() {
+        String propertyValue = System.getProperty(ALLOW_WORLD_ACTIONS_PROPERTY_KEY);
+        String value = propertyValue == null ? System.getenv(ALLOW_WORLD_ACTIONS_ENV_KEY) : propertyValue;
+        return value != null && value.trim().equalsIgnoreCase("true");
     }
 
     private static String configuredBackendName() {
