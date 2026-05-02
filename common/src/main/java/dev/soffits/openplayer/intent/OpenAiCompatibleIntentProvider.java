@@ -1,5 +1,6 @@
 package dev.soffits.openplayer.intent;
 
+import dev.soffits.openplayer.OpenPlayerAutomationConfig;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -75,9 +76,17 @@ public final class OpenAiCompatibleIntentProvider implements IntentProvider {
     }
 
     private static String systemPrompt() {
+        boolean allowWorldActions = OpenPlayerAutomationConfig.allowWorldActions();
+        String kinds = allowWorldActions
+            ? "UNAVAILABLE, OBSERVE, STOP, MOVE, LOOK, FOLLOW_OWNER, COLLECT_ITEMS, BREAK_BLOCK, PLACE_BLOCK, ATTACK_NEAREST, INTERACT, CHAT"
+            : "UNAVAILABLE, OBSERVE, STOP, MOVE, LOOK, FOLLOW_OWNER, COLLECT_ITEMS, INTERACT, CHAT";
+        String worldActionInstruction = allowWorldActions
+            ? "Use x y z for MOVE, LOOK, BREAK_BLOCK, and PLACE_BLOCK; blank instruction for COLLECT_ITEMS; blank or radius number for ATTACK_NEAREST."
+            : "BREAK_BLOCK, PLACE_BLOCK, and ATTACK_NEAREST require local world action config and must not be selected. Use x y z for MOVE and LOOK; blank instruction for COLLECT_ITEMS.";
         return "Parse the user command for an OpenPlayer NPC. Return only compact JSON with string fields kind, priority, and instruction. "
-            + "kind must be one of UNAVAILABLE, OBSERVE, STOP, MOVE, LOOK, FOLLOW_OWNER, INTERACT, CHAT. "
-            + "priority must be one of LOW, NORMAL, HIGH. Keep instruction short and actionable.";
+            + "kind must be one of " + kinds + ". "
+            + "priority must be one of LOW, NORMAL, HIGH. Keep instruction short and actionable. "
+            + worldActionInstruction;
     }
 
     private static ProviderIntent parseProviderResponse(String responseBody) throws IntentProviderException {

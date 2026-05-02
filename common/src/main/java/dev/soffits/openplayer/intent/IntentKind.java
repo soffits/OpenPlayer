@@ -7,6 +7,10 @@ public enum IntentKind {
     MOVE,
     LOOK,
     FOLLOW_OWNER,
+    COLLECT_ITEMS,
+    BREAK_BLOCK,
+    PLACE_BLOCK,
+    ATTACK_NEAREST,
     INTERACT,
     CHAT
 }
