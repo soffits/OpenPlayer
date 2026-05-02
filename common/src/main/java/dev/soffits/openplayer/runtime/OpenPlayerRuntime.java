@@ -3,7 +3,9 @@ package dev.soffits.openplayer.runtime;
 import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.event.events.common.PlayerEvent;
 import dev.architectury.registry.level.entity.EntityAttributeRegistry;
+import dev.soffits.openplayer.OpenPlayerAutomationConfig;
 import dev.soffits.openplayer.OpenPlayerIntentParserConfig;
+import dev.soffits.openplayer.OpenPlayerRuntimeStatus;
 import dev.soffits.openplayer.api.OpenPlayerApi;
 import dev.soffits.openplayer.entity.OpenPlayerNpcEntity;
 import dev.soffits.openplayer.registry.OpenPlayerEntityTypes;
@@ -22,6 +24,10 @@ public final class OpenPlayerRuntime {
         LifecycleEvent.SERVER_STARTED.register(OpenPlayerRuntime::installServerService);
         LifecycleEvent.SERVER_STOPPING.register(OpenPlayerRuntime::removeServerService);
         PlayerEvent.PLAYER_QUIT.register(OpenPlayerRuntime::stopOwnerRuntime);
+    }
+
+    public static OpenPlayerRuntimeStatus status() {
+        return new OpenPlayerRuntimeStatus(OpenPlayerIntentParserConfig.status(), OpenPlayerAutomationConfig.status());
     }
 
     private static void installServerService(MinecraftServer server) {

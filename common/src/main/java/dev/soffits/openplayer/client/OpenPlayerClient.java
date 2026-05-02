@@ -2,6 +2,7 @@ package dev.soffits.openplayer.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.architectury.event.events.client.ClientTickEvent;
+import dev.architectury.networking.NetworkManager;
 import dev.architectury.registry.client.level.entity.EntityRendererRegistry;
 import dev.architectury.registry.client.keymappings.KeyMappingRegistry;
 import dev.soffits.openplayer.OpenPlayerConstants;
@@ -32,7 +33,29 @@ public final class OpenPlayerClient {
         initialized = true;
         EntityRendererRegistry.register(OpenPlayerEntityTypes.AI_PLAYER_NPC, OpenPlayerNpcRenderer::new);
         KeyMappingRegistry.register(OPEN_CONTROLS);
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.S2C,
+                OpenPlayerConstants.STATUS_RESPONSE_PACKET_ID,
+                OpenPlayerClient::receiveStatusResponse
+        );
         ClientTickEvent.CLIENT_POST.register(OpenPlayerClient::openControlsOnKeyPress);
+    }
+
+    private static void receiveStatusResponse(net.minecraft.network.FriendlyByteBuf buffer, NetworkManager.PacketContext context) {
+        boolean parserEnabled = buffer.readBoolean();
+        String endpoint = buffer.readUtf(128);
+        boolean modelConfigured = buffer.readBoolean();
+        boolean apiKeyPresent = buffer.readBoolean();
+        String automationName = buffer.readUtf(64);
+        String automationState = buffer.readUtf(64);
+        context.queue(() -> OpenPlayerClientStatus.update(
+                parserEnabled,
+                endpoint,
+                modelConfigured,
+                apiKeyPresent,
+                automationName,
+                automationState
+        ));
     }
 
     private static void openControlsOnKeyPress(Minecraft minecraft) {

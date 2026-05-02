@@ -11,6 +11,9 @@ public final class OpenPlayerConstants {
     public static final ResourceLocation DESPAWN_REQUEST_PACKET_ID = id("despawn_request");
     public static final ResourceLocation FOLLOW_OWNER_REQUEST_PACKET_ID = id("follow_owner_request");
     public static final ResourceLocation STOP_REQUEST_PACKET_ID = id("stop_request");
+    public static final ResourceLocation COMMAND_TEXT_REQUEST_PACKET_ID = id("command_text_request");
+    public static final ResourceLocation STATUS_REQUEST_PACKET_ID = id("status_request");
+    public static final ResourceLocation STATUS_RESPONSE_PACKET_ID = id("status_response");
 
     private OpenPlayerConstants() {
     }
