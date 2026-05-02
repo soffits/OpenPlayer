@@ -3,6 +3,7 @@ package dev.soffits.openplayer;
 import dev.soffits.openplayer.automation.AutomationBackend;
 import dev.soffits.openplayer.automation.AutomationBackendStatus;
 import dev.soffits.openplayer.automation.AutomationBackendState;
+import dev.soffits.openplayer.automation.BaritoneAutomationBackend;
 import dev.soffits.openplayer.automation.DisabledAutomationBackend;
 import dev.soffits.openplayer.automation.VanillaAutomationBackend;
 import java.util.Locale;
@@ -18,6 +19,9 @@ public final class OpenPlayerAutomationConfig {
         if (backendName.equals(DisabledAutomationBackend.NAME)) {
             return new DisabledAutomationBackend();
         }
+        if (backendName.equals(BaritoneAutomationBackend.NAME)) {
+            return new BaritoneAutomationBackend();
+        }
         return new VanillaAutomationBackend();
     }
 
@@ -26,11 +30,14 @@ public final class OpenPlayerAutomationConfig {
         if (backendName.equals(DisabledAutomationBackend.NAME)) {
             return new DisabledAutomationBackend().status();
         }
+        if (backendName.equals(BaritoneAutomationBackend.NAME)) {
+            return new BaritoneAutomationBackend().status();
+        }
         if (!backendName.equals(VanillaAutomationBackend.NAME)) {
             return new AutomationBackendStatus(
-                    VanillaAutomationBackend.NAME,
-                    AutomationBackendState.AVAILABLE,
-                    "Unknown backend requested; using vanilla Minecraft navigation"
+                    backendName,
+                    AutomationBackendState.UNAVAILABLE,
+                    "Unknown automation backend requested; falling back to vanilla Minecraft navigation"
             );
         }
         return new VanillaAutomationBackend().status();
