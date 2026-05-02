@@ -28,6 +28,15 @@ public final class OpenPlayerIntentParserConfig {
         return new ProviderBackedIntentParser(new OpenAiCompatibleIntentProvider(endpointUri, apiKey, model));
     }
 
+    public static IntentParserRuntimeStatus status() {
+        return new IntentParserRuntimeStatus(
+                enabled(),
+                safeEndpointStatus(configValue(ENDPOINT_KEY)),
+                hasValue(configValue(MODEL_KEY)),
+                hasValue(configValue(API_KEY_KEY))
+        );
+    }
+
     private static boolean enabled() {
         String value = configValue(ENABLED_KEY);
         if (value == null || value.isBlank()) {
@@ -55,6 +64,29 @@ public final class OpenPlayerIntentParserConfig {
         } catch (URISyntaxException exception) {
             throw new IllegalStateException(ENDPOINT_KEY + " must be a valid URI", exception);
         }
+    }
+
+    private static String safeEndpointStatus(String value) {
+        if (!hasValue(value)) {
+            return "not configured";
+        }
+        try {
+            URI uri = new URI(value.trim());
+            String host = uri.getHost();
+            if (host == null || host.isBlank()) {
+                return "configured";
+            }
+            if (host.length() > 100) {
+                return "configured";
+            }
+            return host;
+        } catch (URISyntaxException exception) {
+            return "configured";
+        }
+    }
+
+    private static boolean hasValue(String value) {
+        return value != null && !value.isBlank();
     }
 
     private static String configValue(String key) {

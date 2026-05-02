@@ -2,6 +2,7 @@ package dev.soffits.openplayer.network;
 
 import dev.architectury.networking.NetworkManager;
 import dev.soffits.openplayer.OpenPlayerConstants;
+import dev.soffits.openplayer.OpenPlayerRuntimeStatus;
 import dev.soffits.openplayer.api.AiPlayerNpcCommand;
 import dev.soffits.openplayer.api.AiPlayerNpcService;
 import dev.soffits.openplayer.api.AiPlayerNpcSession;
@@ -14,11 +15,15 @@ import dev.soffits.openplayer.api.OpenPlayerApi;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentKind;
 import dev.soffits.openplayer.intent.IntentPriority;
+import dev.soffits.openplayer.runtime.OpenPlayerRuntime;
+import io.netty.buffer.Unpooled;
 import java.util.UUID;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
 public final class OpenPlayerNetworking {
+    private static final int MAX_COMMAND_TEXT_LENGTH = 512;
+
     private OpenPlayerNetworking() {
     }
 
@@ -42,6 +47,16 @@ public final class OpenPlayerNetworking {
                 NetworkManager.Side.C2S,
                 OpenPlayerConstants.STOP_REQUEST_PACKET_ID,
                 OpenPlayerNetworking::receiveStopRequest
+        );
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.C2S,
+                OpenPlayerConstants.COMMAND_TEXT_REQUEST_PACKET_ID,
+                OpenPlayerNetworking::receiveCommandTextRequest
+        );
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.C2S,
+                OpenPlayerConstants.STATUS_REQUEST_PACKET_ID,
+                OpenPlayerNetworking::receiveStatusRequest
         );
     }
 
@@ -73,6 +88,23 @@ public final class OpenPlayerNetworking {
         context.queue(() -> {
             if (context.getPlayer() instanceof ServerPlayer player) {
                 submitDefaultNetworkNpcCommand(player, IntentKind.STOP);
+            }
+        });
+    }
+
+    private static void receiveCommandTextRequest(FriendlyByteBuf buffer, NetworkManager.PacketContext context) {
+        String commandText = buffer.readUtf(MAX_COMMAND_TEXT_LENGTH);
+        context.queue(() -> {
+            if (context.getPlayer() instanceof ServerPlayer player) {
+                submitDefaultNetworkNpcCommandText(player, commandText);
+            }
+        });
+    }
+
+    private static void receiveStatusRequest(FriendlyByteBuf ignoredBuffer, NetworkManager.PacketContext context) {
+        context.queue(() -> {
+            if (context.getPlayer() instanceof ServerPlayer player) {
+                sendStatusResponse(player);
             }
         });
     }
@@ -113,6 +145,30 @@ public final class OpenPlayerNetworking {
                 service.submitCommand(session.sessionId(), command);
             }
         }
+    }
+
+    private static void submitDefaultNetworkNpcCommandText(ServerPlayer sender, String commandText) {
+        if (commandText == null || commandText.isBlank() || commandText.length() > MAX_COMMAND_TEXT_LENGTH) {
+            return;
+        }
+        AiPlayerNpcService service = OpenPlayerApi.npcService();
+        for (AiPlayerNpcSession session : service.listSessions()) {
+            if (isSenderDefaultNetworkNpcSession(sender, session)) {
+                service.submitCommandText(session.sessionId(), commandText);
+            }
+        }
+    }
+
+    private static void sendStatusResponse(ServerPlayer player) {
+        OpenPlayerRuntimeStatus status = OpenPlayerRuntime.status();
+        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+        buffer.writeBoolean(status.intentParser().enabled());
+        buffer.writeUtf(status.intentParser().endpointStatus(), 128);
+        buffer.writeBoolean(status.intentParser().modelConfigured());
+        buffer.writeBoolean(status.intentParser().apiKeyPresent());
+        buffer.writeUtf(status.automationBackend().name(), 64);
+        buffer.writeUtf(status.automationBackend().state().name(), 64);
+        NetworkManager.sendToPlayer(player, OpenPlayerConstants.STATUS_RESPONSE_PACKET_ID, buffer);
     }
 
     private static boolean isSenderDefaultNetworkNpcSession(ServerPlayer sender, AiPlayerNpcSession session) {

@@ -4,7 +4,7 @@ OpenPlayer is an open, multi-loader AI NPC framework for Minecraft. The project 
 
 ## Architecture
 
-- `common`: loader-neutral constants, lifecycle seams, public AI player NPC API contracts, runtime entity registration, pure Java command intent types, runtime intent parser configuration, and an opt-in provider-backed intent parser seam.
+- `common`: loader-neutral constants, lifecycle seams, public AI player NPC API contracts, runtime entity registration, pure Java command intent types, runtime intent parser configuration, an opt-in provider-backed intent parser seam, and an automation backend seam.
 - `fabric`: Fabric entrypoints that delegate to common initialization.
 - `forge`: Forge entrypoints and client event wiring that delegate to common initialization.
 
@@ -12,7 +12,7 @@ The initial target is Minecraft 1.20.1 on Java 17 with an Architectury-style mul
 
 ## Milestone Status
 
-Current implementation includes runtime NPC sessions, duplicate prevention, basic command intents, item pickup with inventory persistence, owner lifecycle cleanup and restore, spawn/despawn networking, a minimal client control screen, a default player-shaped renderer, and a disabled-by-default runtime intent parser that can use an opt-in JDK-only OpenAI-compatible provider. Pathfinding automation is not implemented.
+Current implementation includes runtime NPC sessions, duplicate prevention, basic command intents, item pickup with inventory persistence, owner lifecycle cleanup and restore, spawn/despawn networking, a minimal client control screen with safe runtime status, a default player-shaped renderer, a default vanilla automation backend, and a disabled-by-default runtime intent parser that can use an opt-in JDK-only OpenAI-compatible provider. Baritone and Automatone are not directly integrated yet.
 
 ## Dependencies
 
@@ -30,6 +30,10 @@ Set safe JVM system properties or environment variables with these exact names t
 - `OPENPLAYER_INTENT_PROVIDER_ENDPOINT=https://example.invalid/v1/chat/completions`
 - `OPENPLAYER_INTENT_PROVIDER_API_KEY=...`
 - `OPENPLAYER_INTENT_PROVIDER_MODEL=...`
+
+## Automation Backend
+
+Runtime command execution goes through a small automation backend seam. The default backend is `vanilla`, which preserves the current Minecraft navigation behavior for move, look, follow owner, and stop commands. Set `OPENPLAYER_AUTOMATION_BACKEND=disabled` to reject automation commands without adding any external automation dependency.
 
 ## Roadmap
 
