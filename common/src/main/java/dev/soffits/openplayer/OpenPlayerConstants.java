@@ -9,6 +9,8 @@ public final class OpenPlayerConstants {
     public static final String DEFAULT_NETWORK_NPC_PROFILE_SUFFIX = " OpenPlayer NPC";
     public static final ResourceLocation SPAWN_REQUEST_PACKET_ID = id("spawn_request");
     public static final ResourceLocation DESPAWN_REQUEST_PACKET_ID = id("despawn_request");
+    public static final ResourceLocation FOLLOW_OWNER_REQUEST_PACKET_ID = id("follow_owner_request");
+    public static final ResourceLocation STOP_REQUEST_PACKET_ID = id("stop_request");
 
     private OpenPlayerConstants() {
     }

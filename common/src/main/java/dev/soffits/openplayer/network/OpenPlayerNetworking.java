@@ -2,6 +2,7 @@ package dev.soffits.openplayer.network;
 
 import dev.architectury.networking.NetworkManager;
 import dev.soffits.openplayer.OpenPlayerConstants;
+import dev.soffits.openplayer.api.AiPlayerNpcCommand;
 import dev.soffits.openplayer.api.AiPlayerNpcService;
 import dev.soffits.openplayer.api.AiPlayerNpcSession;
 import dev.soffits.openplayer.api.AiPlayerNpcSpec;
@@ -10,6 +11,10 @@ import dev.soffits.openplayer.api.NpcProfileSpec;
 import dev.soffits.openplayer.api.NpcRoleId;
 import dev.soffits.openplayer.api.NpcSpawnLocation;
 import dev.soffits.openplayer.api.OpenPlayerApi;
+import dev.soffits.openplayer.intent.CommandIntent;
+import dev.soffits.openplayer.intent.IntentKind;
+import dev.soffits.openplayer.intent.IntentPriority;
+import java.util.UUID;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -28,6 +33,16 @@ public final class OpenPlayerNetworking {
                 OpenPlayerConstants.DESPAWN_REQUEST_PACKET_ID,
                 OpenPlayerNetworking::receiveDespawnRequest
         );
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.C2S,
+                OpenPlayerConstants.FOLLOW_OWNER_REQUEST_PACKET_ID,
+                OpenPlayerNetworking::receiveFollowOwnerRequest
+        );
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.C2S,
+                OpenPlayerConstants.STOP_REQUEST_PACKET_ID,
+                OpenPlayerNetworking::receiveStopRequest
+        );
     }
 
     private static void receiveSpawnRequest(FriendlyByteBuf ignoredBuffer, NetworkManager.PacketContext context) {
@@ -42,6 +57,22 @@ public final class OpenPlayerNetworking {
         context.queue(() -> {
             if (context.getPlayer() instanceof ServerPlayer player) {
                 handleDespawnRequest(player);
+            }
+        });
+    }
+
+    private static void receiveFollowOwnerRequest(FriendlyByteBuf ignoredBuffer, NetworkManager.PacketContext context) {
+        context.queue(() -> {
+            if (context.getPlayer() instanceof ServerPlayer player) {
+                submitDefaultNetworkNpcCommand(player, IntentKind.FOLLOW_OWNER);
+            }
+        });
+    }
+
+    private static void receiveStopRequest(FriendlyByteBuf ignoredBuffer, NetworkManager.PacketContext context) {
+        context.queue(() -> {
+            if (context.getPlayer() instanceof ServerPlayer player) {
+                submitDefaultNetworkNpcCommand(player, IntentKind.STOP);
             }
         });
     }
@@ -69,5 +100,23 @@ public final class OpenPlayerNetworking {
                 service.despawn(session.sessionId());
             }
         }
+    }
+
+    private static void submitDefaultNetworkNpcCommand(ServerPlayer sender, IntentKind intentKind) {
+        AiPlayerNpcService service = OpenPlayerApi.npcService();
+        AiPlayerNpcCommand command = new AiPlayerNpcCommand(
+                UUID.randomUUID(),
+                new CommandIntent(intentKind, IntentPriority.HIGH, intentKind.name())
+        );
+        for (AiPlayerNpcSession session : service.listSessions()) {
+            if (isSenderDefaultNetworkNpcSession(sender, session)) {
+                service.submitCommand(session.sessionId(), command);
+            }
+        }
+    }
+
+    private static boolean isSenderDefaultNetworkNpcSession(ServerPlayer sender, AiPlayerNpcSession session) {
+        return session.spec().ownerId().value().equals(sender.getUUID())
+                && session.spec().roleId().value().equals(OpenPlayerConstants.DEFAULT_NETWORK_NPC_ROLE_ID);
     }
 }
