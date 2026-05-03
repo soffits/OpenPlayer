@@ -68,7 +68,7 @@ public final class OpenAiCompatibleIntentProviderTest {
 
     private static void systemPromptIncludesPlannedUnsupportedInstruction() {
         String prompt = OpenAiCompatibleIntentProvider.systemPrompt();
-        require(prompt.contains("Smelting and online/commercial-service features are unavailable"),
+        require(prompt.contains("Online/commercial-service features are unavailable"),
                 "system prompt must include deterministic unavailable feature instruction");
         require(prompt.contains("use UNAVAILABLE when the vanilla runtime cannot perform the requested action"),
                 "system prompt must tell providers not to overclaim unsupported planned actions");
@@ -113,6 +113,20 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must not group finite tag-backed ingredients with unsupported NBT");
         require(prompt.contains("reports missing materials instead of searching indefinitely"),
                 "system prompt must document GET_ITEM missing material behavior");
+        require(prompt.contains("For SMELT_ITEM, instruction must contain only exact item id syntax <output_item_id> [count]"),
+                "system prompt must document smelt output syntax");
+        require(!prompt.contains("SMELT_ITEM <output_item_id> [count]"),
+                "system prompt must not tell providers to include the literal SMELT_ITEM token in instruction");
+        require(prompt.contains("loaded nearby vanilla furnace block"),
+                "system prompt must document nearby loaded furnace limitation");
+        require(prompt.contains("NPC-carried recipe input plus NPC-carried fuel"),
+                "system prompt must document carried input and fuel requirement");
+        require(prompt.contains("It is asynchronous"),
+                "system prompt must document async smelting behavior");
+        require(prompt.contains("REPORT_STATUS observes progress"),
+                "system prompt must document status observation for smelting");
+        require(prompt.contains("completion is only after requested output is transferred into NPC normal inventory"),
+                "system prompt must prevent fake smelting success");
     }
 
     private static String normalize(String value) throws Exception {

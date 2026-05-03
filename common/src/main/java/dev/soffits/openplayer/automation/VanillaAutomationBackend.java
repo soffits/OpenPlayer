@@ -8,8 +8,11 @@ import dev.soffits.openplayer.automation.resource.ResourceDependencyPlanner;
 import dev.soffits.openplayer.automation.resource.ResourcePlanningCapabilities;
 import dev.soffits.openplayer.automation.resource.ResourcePlanResult;
 import dev.soffits.openplayer.automation.resource.RuntimeCraftingRecipeIndex;
+import dev.soffits.openplayer.automation.resource.RuntimeSmeltingRecipeIndex;
+import dev.soffits.openplayer.automation.resource.SmeltingPlan;
 import dev.soffits.openplayer.debug.OpenPlayerDebugEvents;
 import dev.soffits.openplayer.debug.OpenPlayerRawTrace;
+import dev.soffits.openplayer.entity.NpcInventoryTransfer;
 import dev.soffits.openplayer.entity.OpenPlayerNpcEntity;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentKind;
@@ -36,6 +39,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
@@ -72,6 +76,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private static final double BLOCK_INTERACTION_DISTANCE = 4.0D;
         private static final double OWNER_ITEM_TRANSFER_DISTANCE = 4.0D;
         private static final int CONTAINER_SCAN_RADIUS = 4;
+        private static final int FURNACE_SCAN_RADIUS = 4;
         private static final int CRAFTING_TABLE_SCAN_RADIUS = 4;
         private static final double ATTACK_DEFAULT_RADIUS = 12.0D;
         private static final double ATTACK_MAX_RADIUS = 24.0D;
@@ -83,6 +88,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private static final int SHORT_TASK_MAX_TICKS = 20 * 30;
         private static final int COLLECT_MAX_TICKS = 20 * 45;
         private static final int LONG_TASK_MAX_TICKS = 20 * 120;
+        private static final int FURNACE_START_MARGIN_TICKS = 20 * 30;
+        private static final int FURNACE_OUTPUT_MARGIN_TICKS = 20 * 60;
         private static final int STUCK_CHECK_INTERVAL_TICKS = 40;
         private static final double STUCK_MIN_PROGRESS_DISTANCE = 0.15D;
         private static final int STUCK_MAX_CHECKS = 4;
@@ -401,6 +408,50 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return rejected("GET_ITEM unsupported for bounded inventory crafting: " + parsed.itemId()
                         + reasonSuffix(plan));
             }
+            if (kind == IntentKind.SMELT_ITEM) {
+                ParsedItemInstruction parsed = InventoryActionInstructionParser.parseItemCountOrNull(intent.instruction(), false);
+                if (parsed == null) {
+                    return rejected("SMELT_ITEM requires instruction: <output_item_id> [count]");
+                }
+                MinecraftServer server = entity.getServer();
+                if (server == null) {
+                    return rejected("SMELT_ITEM requires server recipe data for smelting");
+                }
+                RuntimeSmeltingRecipeIndex smeltingRecipeIndex = RuntimeSmeltingRecipeIndex.fromServer(server);
+                SmeltingPlan plan = smeltingRecipeIndex.planFor(
+                        parsed.itemId(), parsed.item(), parsed.count(), entity.inventorySnapshot()
+                );
+                if (plan == null) {
+                    return rejected("SMELT_ITEM requires a safe furnace smelting recipe and NPC-carried input");
+                }
+                if (!(entity.level() instanceof ServerLevel serverLevel)
+                        || !smeltingRecipeIndex.matchesResolvedRecipe(plan, serverLevel)) {
+                    return rejected("SMELT_ITEM server recipe resolution changed before start");
+                }
+                FuelPlan fuelPlan = fuelPlanFor(plan);
+                if (fuelPlan == null) {
+                    return rejected("SMELT_ITEM requires enough NPC-carried non-container fuel");
+                }
+                SafeFurnaceTarget target = nearestSafeFurnace();
+                if (target == null) {
+                    return rejected("SMELT_ITEM requires a loaded nearby vanilla furnace");
+                }
+                List<ItemStack> furnaceStacks = containerSnapshot(target.furnace());
+                if (!NpcInventoryTransfer.canInsertAll(
+                        entity.inventorySnapshot(), plan.requestedOutputStack(),
+                        NpcInventoryTransfer.FIRST_NORMAL_SLOT, NpcInventoryTransfer.FIRST_EQUIPMENT_SLOT
+                )) {
+                    return rejected("SMELT_ITEM requires NPC normal inventory output capacity");
+                }
+                if (!NpcInventoryTransfer.startFurnaceSmelt(
+                        entity.inventorySnapshot(), furnaceStacks,
+                        plan.inputItem(), plan.inputCount(), fuelPlan.item(), fuelPlan.count()
+                )) {
+                    return rejected("SMELT_ITEM requires compatible empty furnace input, fuel, and result slots");
+                }
+                queuedCommands.add(QueuedCommand.smelt(target.blockPos(), plan, fuelPlan));
+                return accepted("SMELT_ITEM accepted: queued furnace " + target.blockPos().toShortString());
+            }
             if (kind == IntentKind.BREAK_BLOCK) {
                 Coordinate coordinate = AutomationInstructionParser.parseCoordinateOrNull(intent.instruction());
                 if (coordinate == null) {
@@ -537,6 +588,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (command.kind() == IntentKind.COLLECT_ITEMS
                     || command.kind() == IntentKind.BREAK_BLOCK
                     || command.kind() == IntentKind.PLACE_BLOCK
+                    || command.kind() == IntentKind.SMELT_ITEM
                     || command.kind() == IntentKind.ATTACK_NEAREST
                     || command.kind() == IntentKind.GUARD_OWNER
                     || command.kind() == IntentKind.PATROL) {
@@ -572,6 +624,10 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             if (activeCommand.kind() == IntentKind.PLACE_BLOCK) {
                 placeBlock(activeCommand);
+                return;
+            }
+            if (activeCommand.kind() == IntentKind.SMELT_ITEM) {
+                smeltItem(activeCommand);
                 return;
             }
             if (activeCommand.kind() == IntentKind.ATTACK_NEAREST) {
@@ -695,6 +751,88 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 mainHandStack.shrink(1);
                 entity.swingMainHandAction();
             }
+            completeActiveCommand();
+        }
+
+        private void smeltItem(QueuedCommand command) {
+            ServerLevel serverLevel = serverLevel();
+            if (serverLevel == null) {
+                failActiveCommand("server_level_unavailable");
+                return;
+            }
+            SafeFurnaceTarget target = safeFurnaceAt(serverLevel, command.furnacePos());
+            if (target == null) {
+                failActiveCommand("furnace_target_unavailable");
+                return;
+            }
+            if (!isWithinStartDistance(command, Vec3.atCenterOf(command.furnacePos()), FURNACE_SCAN_RADIUS)) {
+                failActiveCommand("outside_furnace_radius");
+                return;
+            }
+            lookAtBlock(command.furnacePos());
+            if (!isWithinInteractionDistance(command.furnacePos())) {
+                moveNearBlock(command.furnacePos());
+                return;
+            }
+            entity.getNavigation().stop();
+            List<ItemStack> furnaceStacks = containerSnapshot(target.furnace());
+            SmeltingPlan plan = command.smeltingPlan();
+            if (!command.smeltStarted()) {
+                MinecraftServer server = entity.getServer();
+                if (server == null || !RuntimeSmeltingRecipeIndex.fromServer(server).matchesResolvedRecipe(plan, serverLevel)) {
+                    failActiveCommand("furnace_recipe_resolution_changed");
+                    return;
+                }
+                if (!canAcquireInteractionCooldown()) {
+                    return;
+                }
+                boolean started = acquireInteractionCooldown() && entity.startFurnaceSmelt(
+                        furnaceStacks,
+                        plan.inputItem(),
+                        plan.inputCount(),
+                        command.fuelPlan().item(),
+                        command.fuelPlan().count()
+                );
+                if (!started) {
+                    rollbackInteractionCooldown();
+                    failActiveCommand("furnace_start_state_changed");
+                    return;
+                }
+                restoreContainer(target.furnace(), furnaceStacks);
+                target.furnace().setChanged();
+                command.markSmeltStarted();
+                entity.swingMainHandAction();
+                return;
+            }
+            ItemStack resultStack = furnaceStacks.get(NpcInventoryTransfer.FURNACE_RESULT_SLOT);
+            if (!resultStack.isEmpty() && !resultStack.is(plan.outputItem())) {
+                failActiveCommand("furnace_result_incompatible");
+                return;
+            }
+            if (resultStack.isEmpty() || resultStack.getCount() < plan.outputCount()) {
+                return;
+            }
+            ItemStack requestedResult = resultStack.copy();
+            requestedResult.setCount(plan.outputCount());
+            if (!NpcInventoryTransfer.canInsertAll(
+                    entity.inventorySnapshot(), requestedResult,
+                    NpcInventoryTransfer.FIRST_NORMAL_SLOT, NpcInventoryTransfer.FIRST_EQUIPMENT_SLOT
+            )) {
+                return;
+            }
+            if (!canAcquireInteractionCooldown()) {
+                return;
+            }
+            boolean withdrawn = acquireInteractionCooldown()
+                    && entity.withdrawFurnaceOutput(furnaceStacks, plan.outputItem(), plan.outputCount());
+            if (!withdrawn) {
+                rollbackInteractionCooldown();
+                failActiveCommand("furnace_output_withdraw_failed");
+                return;
+            }
+            restoreContainer(target.furnace(), furnaceStacks);
+            target.furnace().setChanged();
+            entity.swingMainHandAction();
             completeActiveCommand();
         }
 
@@ -879,6 +1017,79 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             return true;
         }
 
+        private FuelPlan fuelPlanFor(SmeltingPlan plan) {
+            int requiredBurnTicks = plan.inputCount() * plan.cookingTimeTicks();
+            List<ItemStack> inventory = entity.inventorySnapshot();
+            FuelPlan best = null;
+            for (ItemStack stack : inventory) {
+                if (stack.isEmpty() || stack.hasTag() || stack.getItem().hasCraftingRemainingItem()) {
+                    continue;
+                }
+                int burnTicks = AbstractFurnaceBlockEntity.getFuel().getOrDefault(stack.getItem(), 0);
+                if (burnTicks <= 0 || !AbstractFurnaceBlockEntity.isFuel(stack)) {
+                    continue;
+                }
+                int available = untaggedNormalInventoryCount(inventory, stack.getItem());
+                int needed = (requiredBurnTicks + burnTicks - 1) / burnTicks;
+                if (needed < 1 || available < needed || needed > stack.getMaxStackSize()) {
+                    continue;
+                }
+                FuelPlan candidate = new FuelPlan(stack.getItem(), needed, burnTicks);
+                if (best == null
+                        || candidate.count() < best.count()
+                        || (candidate.count() == best.count() && candidate.burnTicksPerItem() < best.burnTicksPerItem())
+                        || (candidate.count() == best.count()
+                        && candidate.burnTicksPerItem() == best.burnTicksPerItem()
+                        && itemId(candidate.item()).compareTo(itemId(best.item())) < 0)) {
+                    best = candidate;
+                }
+            }
+            return best;
+        }
+
+        private SafeFurnaceTarget nearestSafeFurnace() {
+            ServerLevel serverLevel = serverLevel();
+            if (serverLevel == null) {
+                return null;
+            }
+            BlockPos center = entity.blockPosition();
+            List<SafeFurnaceTarget> targets = new ArrayList<>();
+            for (BlockPos candidate : BlockPos.betweenClosed(
+                    center.offset(-FURNACE_SCAN_RADIUS, -FURNACE_SCAN_RADIUS, -FURNACE_SCAN_RADIUS),
+                    center.offset(FURNACE_SCAN_RADIUS, FURNACE_SCAN_RADIUS, FURNACE_SCAN_RADIUS)
+            )) {
+                SafeFurnaceTarget target = safeFurnaceAt(serverLevel, candidate);
+                if (target != null) {
+                    targets.add(target);
+                }
+            }
+            return targets.stream()
+                    .min(Comparator
+                            .comparingDouble((SafeFurnaceTarget target) -> target.blockPos().distSqr(center))
+                            .thenComparingInt(target -> target.blockPos().getX())
+                            .thenComparingInt(target -> target.blockPos().getY())
+                            .thenComparingInt(target -> target.blockPos().getZ()))
+                    .orElse(null);
+        }
+
+        private SafeFurnaceTarget safeFurnaceAt(ServerLevel serverLevel, BlockPos blockPos) {
+            if (serverLevel == null || blockPos == null || !serverLevel.hasChunkAt(blockPos)) {
+                return null;
+            }
+            if (entity.distanceToSqr(Vec3.atCenterOf(blockPos)) > FURNACE_SCAN_RADIUS * FURNACE_SCAN_RADIUS) {
+                return null;
+            }
+            BlockState blockState = serverLevel.getBlockState(blockPos);
+            if (!blockState.is(Blocks.FURNACE)) {
+                return null;
+            }
+            BlockEntity blockEntity = serverLevel.getBlockEntity(blockPos);
+            if (!(blockEntity instanceof AbstractFurnaceBlockEntity furnace)) {
+                return null;
+            }
+            return new SafeFurnaceTarget(blockPos.immutable(), furnace);
+        }
+
         private SafeContainerTarget preferredStashContainer() {
             ServerLevel serverLevel = serverLevel();
             if (serverLevel == null) {
@@ -998,6 +1209,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                         "kind=" + activeCommand.kind().name() + " reason=" + activeMonitor.boundedReason());
                 OpenPlayerRawTrace.automationOperation(status.name(), activeCommand.kind().name(),
                         "reason=" + activeMonitor.boundedReason());
+                recoverActiveSmeltResources();
                 activeCommand = null;
             }
         }
@@ -1024,8 +1236,34 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (activeMonitor != null) {
                 activeMonitor.cancel(reason);
             }
+            recoverActiveSmeltResources();
             entity.getNavigation().stop();
             activeCommand = null;
+        }
+
+        private void recoverActiveSmeltResources() {
+            if (activeCommand == null || activeCommand.kind() != IntentKind.SMELT_ITEM || !activeCommand.smeltStarted()) {
+                return;
+            }
+            ServerLevel serverLevel = serverLevel();
+            if (serverLevel == null) {
+                return;
+            }
+            SafeFurnaceTarget target = safeFurnaceAt(serverLevel, activeCommand.furnacePos());
+            if (target == null) {
+                return;
+            }
+            List<ItemStack> furnaceStacks = containerSnapshot(target.furnace());
+            SmeltingPlan plan = activeCommand.smeltingPlan();
+            if (entity.recoverFurnaceSmeltResources(
+                    furnaceStacks,
+                    plan.inputItem(),
+                    activeCommand.fuelPlan().item(),
+                    plan.outputItem()
+            )) {
+                restoreContainer(target.furnace(), furnaceStacks);
+                target.furnace().setChanged();
+            }
         }
 
         private boolean requiresNavigationProgress(QueuedCommand command) {
@@ -1034,14 +1272,18 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
         private AutomationControllerMonitor newMonitor(QueuedCommand command) {
             return new AutomationControllerMonitor(
-                    maxTicks(command.kind()),
+                    maxTicks(command),
                     STUCK_CHECK_INTERVAL_TICKS,
                     STUCK_MIN_PROGRESS_DISTANCE,
                     STUCK_MAX_CHECKS
             );
         }
 
-        private int maxTicks(IntentKind kind) {
+        private int maxTicks(QueuedCommand command) {
+            IntentKind kind = command.kind();
+            if (command.maxTicks() > 0) {
+                return command.maxTicks();
+            }
             if (kind == IntentKind.MOVE) {
                 return MOVE_MAX_TICKS;
             }
@@ -1113,6 +1355,22 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             return String.join(", ", entries);
         }
 
+        private static int untaggedNormalInventoryCount(List<ItemStack> inventory, Item item) {
+            int count = 0;
+            int end = Math.min(NpcInventoryTransfer.FIRST_EQUIPMENT_SLOT, inventory.size());
+            for (int slot = NpcInventoryTransfer.FIRST_NORMAL_SLOT; slot < end; slot++) {
+                ItemStack stack = inventory.get(slot);
+                if (!stack.isEmpty() && stack.is(item) && !stack.hasTag()) {
+                    count += stack.getCount();
+                }
+            }
+            return count;
+        }
+
+        private static String itemId(Item item) {
+            return BuiltInRegistries.ITEM.getKey(item).toString();
+        }
+
         private static String reasonSuffix(ResourcePlanResult plan) {
             if (plan.reason().isEmpty()) {
                 return "";
@@ -1123,18 +1381,38 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private record SafeContainerTarget(BlockPos blockPos, Container container) {
         }
 
+        private record SafeFurnaceTarget(BlockPos blockPos, AbstractFurnaceBlockEntity furnace) {
+        }
+
+        private record FuelPlan(Item item, int count, int burnTicksPerItem) {
+        }
+
         private static final class QueuedCommand {
             private final IntentKind kind;
             private final Coordinate coordinate;
             private final double radius;
+            private final BlockPos furnacePos;
+            private final SmeltingPlan smeltingPlan;
+            private final FuelPlan fuelPlan;
+            private final int maxTicks;
             private BlockPos startPosition;
             private int reachTicks;
             private boolean patrolReturn;
+            private boolean smeltStarted;
 
             private QueuedCommand(IntentKind kind, Coordinate coordinate, double radius) {
+                this(kind, coordinate, radius, null, null, null, 0);
+            }
+
+            private QueuedCommand(IntentKind kind, Coordinate coordinate, double radius, BlockPos furnacePos,
+                                  SmeltingPlan smeltingPlan, FuelPlan fuelPlan, int maxTicks) {
                 this.kind = kind;
                 this.coordinate = coordinate;
                 this.radius = radius;
+                this.furnacePos = furnacePos;
+                this.smeltingPlan = smeltingPlan;
+                this.fuelPlan = fuelPlan;
+                this.maxTicks = maxTicks;
             }
 
             private static QueuedCommand move(Coordinate coordinate) {
@@ -1173,6 +1451,21 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return new QueuedCommand(IntentKind.PATROL, coordinate, 0.0D);
             }
 
+            private static QueuedCommand smelt(BlockPos furnacePos, SmeltingPlan smeltingPlan, FuelPlan fuelPlan) {
+                int maxTicks = FURNACE_START_MARGIN_TICKS
+                        + smeltingPlan.inputCount() * smeltingPlan.cookingTimeTicks()
+                        + FURNACE_OUTPUT_MARGIN_TICKS;
+                return new QueuedCommand(
+                        IntentKind.SMELT_ITEM,
+                        null,
+                        0.0D,
+                        furnacePos.immutable(),
+                        smeltingPlan,
+                        fuelPlan,
+                        maxTicks
+                );
+            }
+
             private IntentKind kind() {
                 return kind;
             }
@@ -1183,6 +1476,30 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
             private double radius() {
                 return radius;
+            }
+
+            private BlockPos furnacePos() {
+                return furnacePos;
+            }
+
+            private SmeltingPlan smeltingPlan() {
+                return smeltingPlan;
+            }
+
+            private FuelPlan fuelPlan() {
+                return fuelPlan;
+            }
+
+            private int maxTicks() {
+                return maxTicks;
+            }
+
+            private boolean smeltStarted() {
+                return smeltStarted;
+            }
+
+            private void markSmeltStarted() {
+                smeltStarted = true;
             }
 
             private int reachTicks() {

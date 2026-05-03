@@ -179,7 +179,7 @@ OpenPlayer already has:
 
 ### Phase 7: Container, Stash, and Smelting
 
-**Status:** Phase 7A implements bounded server-side `DEPOSIT_ITEM`, `STASH_ITEM`, and `WITHDRAW_ITEM` for exact item/count and deposit-all normal inventory transfers against loaded nearby vanilla chests and barrels only. Transfers are gated by `allowWorldActions`, ignore armor/offhand, use deterministic nearest-container ordering, and apply all-or-nothing snapshots for NPC inventory plus container slots. `STASH_ITEM` stores one local dimension/block-position stash memory on the NPC and `WITHDRAW_ITEM` prefers that valid stash before falling back nearby. `GET_ITEM` can now plan table-required crafting steps only when a loaded nearby crafting table is present; steps preserve table metadata so inventory-only execution rejects them. Smelting remains deferred and unavailable.
+**Status:** Phase 7B implements bounded server-side `DEPOSIT_ITEM`, `STASH_ITEM`, and `WITHDRAW_ITEM` for exact item/count and deposit-all normal inventory transfers against loaded nearby vanilla chests and barrels only, plus asynchronous `SMELT_ITEM <output_item_id> [count]` execution against loaded nearby vanilla furnaces. Transfers are gated by `allowWorldActions`, ignore armor/offhand, use deterministic nearest-container/furnace ordering, and apply all-or-nothing snapshots for NPC inventory plus container/furnace slots. `STASH_ITEM` stores one local dimension/block-position stash memory on the NPC and `WITHDRAW_ITEM` prefers that valid stash before falling back nearby. `GET_ITEM` can now plan table-required crafting steps only when a loaded nearby crafting table is present; steps preserve table metadata so inventory-only execution rejects them. `SMELT_ITEM` is furnace-only for Phase 7B, uses NPC-carried input and non-container fuel, and completes only after requested output is collected into NPC normal inventory.
 
 **Objective:** Add chest/barrel/furnace/smoker/crafting-table interactions.
 
@@ -189,7 +189,7 @@ OpenPlayer already has:
 - Deposit all normal inventory or exact item/count atomically.
 - Withdraw exact item/count atomically.
 - Remember one local stash location on the NPC entity.
-- Smelt in furnace/smoker with fuel checks remains deferred.
+- Smelt in vanilla furnace with fuel checks and asynchronous output collection; smoker and blast furnace remain deferred.
 - Use nearby loaded crafting table as a recipe planner capability gate.
 
 **Acceptance Criteria:**

@@ -150,6 +150,12 @@ tasks.register('runInteractionCooldownTest', JavaExec) {
     mainClass = 'dev.soffits.openplayer.automation.InteractionCooldownTest'
 }
 
+tasks.register('runAutomationRecoveryPathTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.automation.AutomationRecoveryPathTest'
+}
+
 tasks.register('runRuntimeContextFormatterTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
@@ -186,6 +192,12 @@ tasks.register('runRuntimeCraftingRecipeIndexTest', JavaExec) {
     mainClass = 'dev.soffits.openplayer.automation.resource.RuntimeCraftingRecipeIndexTest'
 }
 
+tasks.register('runRuntimeSmeltingRecipeIndexTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.automation.resource.RuntimeSmeltingRecipeIndexTest'
+}
+
 tasks.named('check') {
     dependsOn tasks.named('runLocalCharacterDefinitionTest')
     dependsOn tasks.named('runLocalAssignmentRepositoryTest')
@@ -211,10 +223,12 @@ tasks.named('check') {
     dependsOn tasks.named('runAutomationControllerMonitorTest')
     dependsOn tasks.named('runAutomationControllerSnapshotTest')
     dependsOn tasks.named('runInteractionCooldownTest')
+    dependsOn tasks.named('runAutomationRecoveryPathTest')
     dependsOn tasks.named('runRuntimeContextFormatterTest')
     dependsOn tasks.named('runRuntimeIntentValidatorTest')
     dependsOn tasks.named('runNpcEquipmentSelectionTest')
     dependsOn tasks.named('runNpcInventoryTransferTest')
     dependsOn tasks.named('runResourceDependencyPlannerTest')
     dependsOn tasks.named('runRuntimeCraftingRecipeIndexTest')
+    dependsOn tasks.named('runRuntimeSmeltingRecipeIndexTest')
 }

@@ -29,6 +29,7 @@ public enum IntentKind {
     STASH_ITEM,
     WITHDRAW_ITEM,
     GET_ITEM,
+    SMELT_ITEM,
     COLLECT_FOOD,
     FARM_NEARBY,
     FISH,

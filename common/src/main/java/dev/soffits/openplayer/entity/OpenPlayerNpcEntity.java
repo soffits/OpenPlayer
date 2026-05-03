@@ -309,6 +309,20 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
         return NpcInventoryTransfer.withdrawExactItem(internalInventory, containerStacks, item, count);
     }
 
+    public boolean startFurnaceSmelt(List<ItemStack> furnaceStacks, Item inputItem, int inputCount,
+                                     Item fuelItem, int fuelCount) {
+        return NpcInventoryTransfer.startFurnaceSmelt(internalInventory, furnaceStacks, inputItem, inputCount, fuelItem, fuelCount);
+    }
+
+    public boolean recoverFurnaceSmeltResources(List<ItemStack> furnaceStacks, Item inputItem,
+                                                Item fuelItem, Item outputItem) {
+        return NpcInventoryTransfer.recoverFurnaceSmeltResources(internalInventory, furnaceStacks, inputItem, fuelItem, outputItem);
+    }
+
+    public boolean withdrawFurnaceOutput(List<ItemStack> furnaceStacks, Item outputItem, int outputCount) {
+        return NpcInventoryTransfer.withdrawFurnaceOutput(internalInventory, furnaceStacks, outputItem, outputCount);
+    }
+
     public void rememberStash(String dimensionId, BlockPos blockPos) {
         if (dimensionId == null || dimensionId.isBlank() || blockPos == null) {
             stashMemory = null;

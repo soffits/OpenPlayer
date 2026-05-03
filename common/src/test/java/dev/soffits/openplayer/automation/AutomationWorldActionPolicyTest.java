@@ -24,6 +24,7 @@ public final class AutomationWorldActionPolicyTest {
                 IntentKind.STASH_ITEM,
                 IntentKind.WITHDRAW_ITEM,
                 IntentKind.GET_ITEM,
+                IntentKind.SMELT_ITEM,
                 IntentKind.COLLECT_FOOD,
                 IntentKind.FARM_NEARBY,
                 IntentKind.FISH,

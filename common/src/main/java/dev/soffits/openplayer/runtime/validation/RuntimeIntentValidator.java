@@ -40,6 +40,7 @@ public final class RuntimeIntentValidator {
             case DEPOSIT_ITEM, STASH_ITEM -> requireBlankOrItemCountInstruction(intent, kind.name());
             case WITHDRAW_ITEM -> requireItemCountInstruction(intent, "WITHDRAW_ITEM");
             case GET_ITEM -> requireItemCountInstruction(intent, "GET_ITEM");
+            case SMELT_ITEM -> requireItemCountInstruction(intent, "SMELT_ITEM");
             case INTERACT -> RuntimeIntentValidationResult.rejected("INTERACT is not implemented by the vanilla runtime");
             case CHAT -> RuntimeIntentValidationResult.rejected("CHAT cannot be submitted to automation");
             case UNAVAILABLE -> RuntimeIntentValidationResult.rejected("UNAVAILABLE cannot be submitted to automation");

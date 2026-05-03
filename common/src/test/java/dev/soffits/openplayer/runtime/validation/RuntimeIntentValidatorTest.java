@@ -21,6 +21,7 @@ public final class RuntimeIntentValidatorTest {
         validatesPhaseFiveInventoryInstructions();
         validatesContainerTransferInstructions();
         validatesGetItemInstruction();
+        validatesSmeltItemInstruction();
         validatesCoordinateInstructions();
         validatesRadiusInstructions();
         rejectsNonAutomationConversationKinds();
@@ -117,6 +118,23 @@ public final class RuntimeIntentValidatorTest {
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.GET_ITEM, "minecraft:stick 1 owner"), true),
                 "GET_ITEM requires instruction: <item_id> [count]");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.GET_ITEM, "minecraft:stick 1"), false),
+                "World actions are disabled for this OpenPlayer character");
+    }
+
+    private static void validatesSmeltItemInstruction() {
+        require(RuntimeIntentValidator.validate(intent(IntentKind.SMELT_ITEM, "minecraft:iron_ingot"), true).isAccepted(),
+                "SMELT_ITEM should accept exact item id with default count");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.SMELT_ITEM, "minecraft:iron_ingot 8"), true).isAccepted(),
+                "SMELT_ITEM should accept one-stack output count");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.SMELT_ITEM, ""), true),
+                "SMELT_ITEM requires instruction: <item_id> [count]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.SMELT_ITEM, "minecraft:iron_ingot 0"), true),
+                "SMELT_ITEM requires instruction: <item_id> [count]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.SMELT_ITEM, "iron_ingot 1"), true),
+                "SMELT_ITEM requires instruction: <item_id> [count]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.SMELT_ITEM, "minecraft:air"), true),
+                "SMELT_ITEM requires instruction: <item_id> [count]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.SMELT_ITEM, "minecraft:iron_ingot 1"), false),
                 "World actions are disabled for this OpenPlayer character");
     }
 
@@ -237,6 +255,7 @@ public final class RuntimeIntentValidatorTest {
             case EQUIP_ITEM -> "minecraft:iron_sword";
             case GIVE_ITEM -> "minecraft:bread 1 owner";
             case GET_ITEM -> "minecraft:stick 1";
+            case SMELT_ITEM -> "minecraft:iron_ingot 1";
             case DEPOSIT_ITEM, STASH_ITEM -> "";
             case WITHDRAW_ITEM -> "minecraft:bread 1";
             case COLLECT_FOOD,
