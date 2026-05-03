@@ -15,6 +15,7 @@ import dev.soffits.openplayer.character.LocalCharacterDefinition;
 import dev.soffits.openplayer.character.LocalCharacterRepositoryResult;
 import dev.soffits.openplayer.conversation.ConversationHistoryTrimmer;
 import dev.soffits.openplayer.conversation.ConversationLoop;
+import dev.soffits.openplayer.conversation.ConversationStatusRepository;
 import dev.soffits.openplayer.conversation.ConversationTurn;
 import dev.soffits.openplayer.intent.IntentParser;
 import dev.soffits.openplayer.OpenPlayerIntentParserConfig;
@@ -28,9 +29,11 @@ import java.util.function.Supplier;
 
 public final class CompanionLifecycleManager {
     private static final int MAX_ACTIVE_ASSIGNMENTS_PER_OWNER = 4;
+    private static final int MAX_CONVERSATION_HISTORY_KEYS = 64;
     private final Supplier<AiPlayerNpcService> npcServiceSupplier;
     private final Supplier<LocalAssignmentRepositoryResult> assignmentRepositoryResultSupplier;
     private final ConversationLoop conversationLoop;
+    private final ConversationStatusRepository conversationStatusRepository = new ConversationStatusRepository();
     private final Map<ConversationHistoryKey, List<ConversationTurn>> conversationHistory = new LinkedHashMap<>();
 
     public CompanionLifecycleManager(Supplier<AiPlayerNpcService> npcServiceSupplier,
@@ -107,11 +110,20 @@ public final class CompanionLifecycleManager {
             return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED,
                     "Active companion assignment limit reached");
         }
-        npcService().spawn(resolvedAssignment.get().assignment().toNpcSpec(
-                resolvedAssignment.get().character(),
+        LocalAssignmentDefinition assignment = resolvedAssignment.get().assignment();
+        LocalCharacterDefinition character = resolvedAssignment.get().character();
+        npcService().spawn(assignment.toNpcSpec(
+                character,
                 ownerId,
                 spawnLocation
         ));
+        if (hasConversationConfig(character)) {
+            conversationStatusRepository.recordGreeting(
+                    ownerId.value(),
+                    assignment.id(),
+                    assignment.resolvedDisplayName(character)
+            );
+        }
         return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED, "Companion spawned");
     }
 
@@ -158,11 +170,18 @@ public final class CompanionLifecycleManager {
         }
         LocalAssignmentDefinition assignment = resolvedAssignment.get().assignment();
         LocalCharacterDefinition character = resolvedAssignment.get().character();
+        boolean conversationConfigured = hasConversationConfig(character);
+        if (conversationConfigured) {
+            conversationStatusRepository.recordPlayerMessage(ownerId, assignment.id(), commandText);
+        }
         Optional<AiPlayerNpcSession> session = findActiveSession(ownerId, resolvedAssignment.get());
         if (session.isEmpty()) {
+            if (conversationConfigured) {
+                conversationStatusRepository.recordFailure(ownerId, assignment.id(), "Companion is not spawned");
+            }
             return new CommandSubmissionResult(CommandSubmissionStatus.UNKNOWN_SESSION, "Companion is not spawned");
         }
-        if (hasConversationConfig(character)) {
+        if (conversationConfigured) {
             ConversationHistoryKey historyKey = new ConversationHistoryKey(ownerId, assignment.id());
             List<ConversationTurn> history = conversationHistory.getOrDefault(historyKey, List.of());
             AiPlayerNpcCommand[] submittedCommand = new AiPlayerNpcCommand[1];
@@ -179,12 +198,25 @@ public final class CompanionLifecycleManager {
                 appendConversationTurn(historyKey, new ConversationTurn("player", commandText));
                 appendConversationTurn(historyKey, new ConversationTurn(
                         "openplayer",
-                        submittedCommand[0].intent().kind().name() + " " + submittedCommand[0].intent().instruction()
+                        "Action accepted: " + submittedCommand[0].intent().kind().name()
                 ));
+                conversationStatusRepository.recordAction(ownerId, assignment.id(), submittedCommand[0].intent());
+            } else if (result.status() != CommandSubmissionStatus.ACCEPTED) {
+                conversationStatusRepository.recordFailure(ownerId, assignment.id(), result.message());
             }
             return result;
         }
         return npcService().submitCommandText(session.get().sessionId(), commandText);
+    }
+
+    public List<String> conversationEventLines(UUID ownerId, LocalAssignmentDefinition assignment) {
+        if (ownerId == null) {
+            throw new IllegalArgumentException("ownerId cannot be null");
+        }
+        if (assignment == null) {
+            throw new IllegalArgumentException("assignment cannot be null");
+        }
+        return conversationStatusRepository.eventLines(ownerId, assignment.id());
     }
 
     public String lifecycleStatus(UUID ownerId, LocalCharacterDefinition character) {
@@ -296,6 +328,14 @@ public final class CompanionLifecycleManager {
                 ConversationLoop.MAX_HISTORY_TURNS,
                 ConversationLoop.MAX_HISTORY_CHARACTERS
         ));
+        trimConversationHistoryKeys();
+    }
+
+    private void trimConversationHistoryKeys() {
+        while (conversationHistory.size() > MAX_CONVERSATION_HISTORY_KEYS) {
+            ConversationHistoryKey oldestKey = conversationHistory.keySet().iterator().next();
+            conversationHistory.remove(oldestKey);
+        }
     }
 
     private Optional<LocalCharacterDefinition> findCharacter(String characterId) {

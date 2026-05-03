@@ -279,7 +279,8 @@ public final class OpenPlayerNetworking {
                 new LocalSkinPathResolver(OpenPlayerLocalCharacters.openPlayerDirectory()),
                 character -> OpenPlayerRuntime.status().intentParser().enabled()
                         ? "available"
-                        : "unavailable: parser disabled"
+                        : "unavailable: parser disabled",
+                (assignment, character) -> COMPANION_LIFECYCLE_MANAGER.conversationEventLines(player.getUUID(), assignment)
         );
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
         buffer.writeVarInt(view.characters().size());
@@ -292,6 +293,10 @@ public final class OpenPlayerNetworking {
             buffer.writeUtf(character.skinStatus(), 64);
             buffer.writeUtf(character.lifecycleStatus(), 64);
             buffer.writeUtf(character.conversationStatus(), 64);
+            buffer.writeVarInt(character.conversationEvents().size());
+            for (String event : character.conversationEvents()) {
+                buffer.writeUtf(event, 128);
+            }
         }
         buffer.writeVarInt(view.errors().size());
         for (String error : view.errors()) {

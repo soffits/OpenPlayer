@@ -16,6 +16,10 @@ import dev.soffits.openplayer.api.NpcSpawnLocation;
 import dev.soffits.openplayer.character.LocalAssignmentDefinition;
 import dev.soffits.openplayer.character.LocalAssignmentRepositoryResult;
 import dev.soffits.openplayer.character.LocalCharacterDefinition;
+import dev.soffits.openplayer.intent.CommandIntent;
+import dev.soffits.openplayer.intent.IntentKind;
+import dev.soffits.openplayer.intent.IntentParser;
+import dev.soffits.openplayer.intent.IntentPriority;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -50,6 +54,12 @@ public final class CompanionLifecycleManagerTest {
         rejectsOverActiveAssignmentLimit();
         despawnedAssignmentsDoNotConsumeActiveAssignmentLimit();
         matchingDespawnedAssignmentDoesNotBypassActiveAssignmentLimit();
+        spawnRecordsDeterministicGreetingForConversationAssignment();
+        disabledParserRecordsFailureWithoutProviderCall();
+        acceptedConversationCommandRecordsSafeActionSummary();
+        acceptedConversationHistoryDoesNotRetainProviderInstruction();
+        conversationHistoryEvictsOldOwnerKeysFromLaterPrompts();
+        conversationHistoryEvictsOldAssignmentKeysFromLaterPrompts();
     }
 
     private static void matchesByOwnerAndStableCharacterRole() {
@@ -205,17 +215,228 @@ public final class CompanionLifecycleManagerTest {
                 "over-limit spawn with only a matching despawned session must not reach the runtime service");
     }
 
+    private static void spawnRecordsDeterministicGreetingForConversationAssignment() {
+        TestNpcService service = new TestNpcService();
+        LocalCharacterDefinition character = conversationCharacter();
+        CompanionLifecycleManager manager = manager(service, character);
+
+        manager.spawnSelectedAssignment(new NpcOwnerId(OWNER_ID),
+                new NpcSpawnLocation("minecraft:overworld", 1.0D, 64.0D, 1.0D), character.id());
+
+        List<String> events = manager.conversationEventLines(OWNER_ID, LocalAssignmentDefinition.defaultFor(character));
+        require(events.size() == 1, "conversation spawn must record one local greeting");
+        require(events.get(0).contains("Hello, I am"), "conversation greeting must be deterministic local text");
+        require(events.get(0).contains(character.displayName()), "conversation greeting must use the resolved display name");
+    }
+
+    private static void disabledParserRecordsFailureWithoutProviderCall() {
+        TestNpcService service = new TestNpcService();
+        LocalCharacterDefinition character = conversationCharacter();
+        CountingIntentParser parser = new CountingIntentParser();
+        CompanionLifecycleManager manager = CompanionLifecycleManager.withAssignments(
+                () -> service,
+                () -> new LocalAssignmentRepositoryResult(List.of(LocalAssignmentDefinition.defaultFor(character)), List.of(character), List.of()),
+                () -> parser
+        );
+        manager.spawnSelectedAssignment(new NpcOwnerId(OWNER_ID),
+                new NpcSpawnLocation("minecraft:overworld", 1.0D, 64.0D, 1.0D), character.id());
+
+        CommandSubmissionResult result = manager.submitSelectedCommandText(OWNER_ID, character.id(), "follow me");
+
+        require(result.status() == CommandSubmissionStatus.UNAVAILABLE, "disabled parser must reject conversation command safely");
+        require(parser.parseCount == 0, "disabled parser status must prevent provider calls");
+        List<String> events = manager.conversationEventLines(OWNER_ID, LocalAssignmentDefinition.defaultFor(character));
+        require(events.stream().anyMatch(event -> event.contains("You: follow me")),
+                "conversation command must record sanitized player text");
+        require(events.stream().anyMatch(event -> event.contains("parser disabled")),
+                "disabled parser must record a safe failure event");
+    }
+
+    private static void acceptedConversationCommandRecordsSafeActionSummary() {
+        String previousEnabled = System.getProperty("OPENPLAYER_INTENT_PARSER_ENABLED");
+        System.setProperty("OPENPLAYER_INTENT_PARSER_ENABLED", "true");
+        try {
+            TestNpcService service = new TestNpcService();
+            LocalCharacterDefinition character = conversationCharacter();
+            CountingIntentParser parser = new CountingIntentParser();
+            CompanionLifecycleManager manager = CompanionLifecycleManager.withAssignments(
+                    () -> service,
+                    () -> new LocalAssignmentRepositoryResult(List.of(LocalAssignmentDefinition.defaultFor(character)), List.of(character), List.of()),
+                    () -> parser
+            );
+            manager.spawnSelectedAssignment(new NpcOwnerId(OWNER_ID),
+                    new NpcSpawnLocation("minecraft:overworld", 1.0D, 64.0D, 1.0D), character.id());
+
+            CommandSubmissionResult result = manager.submitSelectedCommandText(OWNER_ID, character.id(), "please follow me");
+
+            require(result.status() == CommandSubmissionStatus.ACCEPTED, "enabled parser must allow accepted command submission");
+            require(service.submittedCommandCount == 1, "accepted conversation intent must submit a command to the runtime service");
+            List<String> events = manager.conversationEventLines(OWNER_ID, LocalAssignmentDefinition.defaultFor(character));
+            require(events.stream().anyMatch(event -> event.contains("FOLLOW_OWNER")),
+                    "accepted command must record a safe intent summary");
+            require(events.stream().noneMatch(event -> event.length() > 128),
+                    "accepted command summary must stay bounded for client display");
+        } finally {
+            if (previousEnabled == null) {
+                System.clearProperty("OPENPLAYER_INTENT_PARSER_ENABLED");
+            } else {
+                System.setProperty("OPENPLAYER_INTENT_PARSER_ENABLED", previousEnabled);
+            }
+        }
+    }
+
+    private static void acceptedConversationHistoryDoesNotRetainProviderInstruction() {
+        String previousEnabled = System.getProperty("OPENPLAYER_INTENT_PARSER_ENABLED");
+        System.setProperty("OPENPLAYER_INTENT_PARSER_ENABLED", "true");
+        try {
+            TestNpcService service = new TestNpcService();
+            LocalCharacterDefinition character = conversationCharacter();
+            HistoryInspectingIntentParser parser = new HistoryInspectingIntentParser();
+            CompanionLifecycleManager manager = CompanionLifecycleManager.withAssignments(
+                    () -> service,
+                    () -> new LocalAssignmentRepositoryResult(List.of(LocalAssignmentDefinition.defaultFor(character)), List.of(character), List.of()),
+                    () -> parser
+            );
+            manager.spawnSelectedAssignment(new NpcOwnerId(OWNER_ID),
+                    new NpcSpawnLocation("minecraft:overworld", 1.0D, 64.0D, 1.0D), character.id());
+
+            CommandSubmissionResult first = manager.submitSelectedCommandText(OWNER_ID, character.id(), "please follow me");
+            CommandSubmissionResult second = manager.submitSelectedCommandText(OWNER_ID, character.id(), "keep following");
+
+            require(first.status() == CommandSubmissionStatus.ACCEPTED, "first accepted command must submit successfully");
+            require(second.status() == CommandSubmissionStatus.ACCEPTED, "second accepted command must submit successfully");
+            require(parser.prompts.size() == 2, "both conversation submits must call the parser");
+            String secondPrompt = parser.prompts.get(1);
+            require(!secondPrompt.contains(HistoryInspectingIntentParser.SECRET_TOKEN),
+                    "conversation history must not retain provider-derived tokens");
+            require(!secondPrompt.contains(HistoryInspectingIntentParser.SECRET_PATH),
+                    "conversation history must not retain provider-derived paths");
+            require(!secondPrompt.contains(HistoryInspectingIntentParser.RAW_TEXT),
+                    "conversation history must not retain raw provider text");
+            require(secondPrompt.contains("Action accepted: FOLLOW_OWNER"),
+                    "conversation history must retain only deterministic server-authored action summaries");
+        } finally {
+            if (previousEnabled == null) {
+                System.clearProperty("OPENPLAYER_INTENT_PARSER_ENABLED");
+            } else {
+                System.setProperty("OPENPLAYER_INTENT_PARSER_ENABLED", previousEnabled);
+            }
+        }
+    }
+
+    private static void conversationHistoryEvictsOldOwnerKeysFromLaterPrompts() {
+        String previousEnabled = System.getProperty("OPENPLAYER_INTENT_PARSER_ENABLED");
+        System.setProperty("OPENPLAYER_INTENT_PARSER_ENABLED", "true");
+        try {
+            TestNpcService service = new TestNpcService();
+            LocalCharacterDefinition character = conversationCharacter();
+            LocalAssignmentDefinition assignment = LocalAssignmentDefinition.defaultFor(character);
+            HistoryInspectingIntentParser parser = new HistoryInspectingIntentParser();
+            CompanionLifecycleManager manager = CompanionLifecycleManager.withAssignments(
+                    () -> service,
+                    () -> new LocalAssignmentRepositoryResult(List.of(assignment), List.of(character), List.of()),
+                    () -> parser
+            );
+            List<UUID> owners = new ArrayList<>();
+            for (int index = 0; index < 65; index++) {
+                UUID ownerId = UUID.fromString(String.format("00000000-0000-0000-0000-%012d", index + 100));
+                owners.add(ownerId);
+                service.sessions.add(new TestSession(
+                        new NpcSessionId(UUID.randomUUID()),
+                        spec(ownerId, OpenPlayerConstants.LOCAL_ASSIGNMENT_SESSION_ROLE_PREFIX + assignment.id(), "Talk Alex"),
+                        NpcSessionStatus.ACTIVE
+                ));
+            }
+
+            CommandSubmissionResult first = manager.submitSelectedCommandText(owners.get(0), assignment.id(), "evicted owner history");
+            for (int index = 1; index < owners.size(); index++) {
+                CommandSubmissionResult result = manager.submitSelectedCommandText(owners.get(index), assignment.id(), "owner filler " + index);
+                require(result.status() == CommandSubmissionStatus.ACCEPTED, "owner filler history must submit successfully");
+            }
+            CommandSubmissionResult later = manager.submitSelectedCommandText(owners.get(0), assignment.id(), "fresh owner request");
+
+            require(first.status() == CommandSubmissionStatus.ACCEPTED, "first owner history must submit successfully");
+            require(later.status() == CommandSubmissionStatus.ACCEPTED, "evicted owner key must accept a fresh request");
+            String laterPrompt = parser.prompts.get(parser.prompts.size() - 1);
+            require(!laterPrompt.contains("evicted owner history"),
+                    "old owner conversation history key must be evicted from later prompts");
+        } finally {
+            if (previousEnabled == null) {
+                System.clearProperty("OPENPLAYER_INTENT_PARSER_ENABLED");
+            } else {
+                System.setProperty("OPENPLAYER_INTENT_PARSER_ENABLED", previousEnabled);
+            }
+        }
+    }
+
+    private static void conversationHistoryEvictsOldAssignmentKeysFromLaterPrompts() {
+        String previousEnabled = System.getProperty("OPENPLAYER_INTENT_PARSER_ENABLED");
+        System.setProperty("OPENPLAYER_INTENT_PARSER_ENABLED", "true");
+        try {
+            TestNpcService service = new TestNpcService();
+            LocalCharacterDefinition character = conversationCharacter();
+            List<LocalAssignmentDefinition> assignments = new ArrayList<>();
+            for (int index = 0; index < 65; index++) {
+                LocalAssignmentDefinition assignment = new LocalAssignmentDefinition("talk_" + index, character.id(), "Talk " + index);
+                assignments.add(assignment);
+                service.sessions.add(new TestSession(
+                        new NpcSessionId(UUID.randomUUID()),
+                        spec(OWNER_ID, OpenPlayerConstants.LOCAL_ASSIGNMENT_SESSION_ROLE_PREFIX + assignment.id(), "Talk Alex"),
+                        NpcSessionStatus.ACTIVE
+                ));
+            }
+            HistoryInspectingIntentParser parser = new HistoryInspectingIntentParser();
+            CompanionLifecycleManager manager = CompanionLifecycleManager.withAssignments(
+                    () -> service,
+                    () -> new LocalAssignmentRepositoryResult(assignments, List.of(character), List.of()),
+                    () -> parser
+            );
+
+            CommandSubmissionResult first = manager.submitSelectedCommandText(OWNER_ID, assignments.get(0).id(), "evicted assignment history");
+            for (int index = 1; index < assignments.size(); index++) {
+                CommandSubmissionResult result = manager.submitSelectedCommandText(OWNER_ID, assignments.get(index).id(), "assignment filler " + index);
+                require(result.status() == CommandSubmissionStatus.ACCEPTED, "assignment filler history must submit successfully");
+            }
+            CommandSubmissionResult later = manager.submitSelectedCommandText(OWNER_ID, assignments.get(0).id(), "fresh assignment request");
+
+            require(first.status() == CommandSubmissionStatus.ACCEPTED, "first assignment history must submit successfully");
+            require(later.status() == CommandSubmissionStatus.ACCEPTED, "evicted assignment key must accept a fresh request");
+            String laterPrompt = parser.prompts.get(parser.prompts.size() - 1);
+            require(!laterPrompt.contains("evicted assignment history"),
+                    "old assignment conversation history key must be evicted from later prompts");
+        } finally {
+            if (previousEnabled == null) {
+                System.clearProperty("OPENPLAYER_INTENT_PARSER_ENABLED");
+            } else {
+                System.setProperty("OPENPLAYER_INTENT_PARSER_ENABLED", previousEnabled);
+            }
+        }
+    }
+
     private static CompanionLifecycleManager manager(TestNpcService service, LocalCharacterDefinition character) {
         return manager(service, List.of(LocalAssignmentDefinition.defaultFor(character)), character);
     }
 
     private static CompanionLifecycleManager manager(TestNpcService service, List<LocalAssignmentDefinition> assignments,
-                                                     LocalCharacterDefinition character) {
+                                                      LocalCharacterDefinition character) {
         LocalAssignmentRepositoryResult result = new LocalAssignmentRepositoryResult(assignments, List.of(character), List.of());
         return CompanionLifecycleManager.withAssignments(
                 () -> service,
                 () -> result,
                 dev.soffits.openplayer.intent.DisabledIntentParser::new
+        );
+    }
+
+    private static LocalCharacterDefinition conversationCharacter() {
+        return new LocalCharacterDefinition(
+                "alex_talk",
+                "Talk Alex",
+                null,
+                null,
+                null,
+                null,
+                "You are a local helper.",
+                null
         );
     }
 
@@ -253,6 +474,7 @@ public final class CompanionLifecycleManagerTest {
         private final List<AiPlayerNpcSession> sessions = new ArrayList<>();
         private final Map<String, TestSession> sessionsByIdentity = new LinkedHashMap<>();
         private int submittedCommandTextCount;
+        private int submittedCommandCount;
         private int spawnCount;
 
         @Override
@@ -284,6 +506,7 @@ public final class CompanionLifecycleManagerTest {
 
         @Override
         public CommandSubmissionResult submitCommand(NpcSessionId sessionId, AiPlayerNpcCommand command) {
+            submittedCommandCount++;
             return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED, "accepted");
         }
 
@@ -352,6 +575,33 @@ public final class CompanionLifecycleManagerTest {
         @Override
         public boolean despawn() {
             return true;
+        }
+    }
+
+    private static final class CountingIntentParser implements IntentParser {
+        private int parseCount;
+
+        @Override
+        public CommandIntent parse(String input) {
+            parseCount++;
+            return new CommandIntent(IntentKind.FOLLOW_OWNER, IntentPriority.HIGH,
+                    "follow owner safely");
+        }
+    }
+
+    private static final class HistoryInspectingIntentParser implements IntentParser {
+        private static final String SECRET_TOKEN = "sk-live-history-secret";
+        private static final String SECRET_PATH = "/home/alex/.ssh/id_rsa";
+        private static final String RAW_TEXT = "raw provider content";
+        private final List<String> prompts = new ArrayList<>();
+
+        @Override
+        public CommandIntent parse(String input) {
+            prompts.add(input);
+            String instruction = prompts.size() == 1
+                    ? "follow using token " + SECRET_TOKEN + " from " + SECRET_PATH + " " + RAW_TEXT.repeat(10)
+                    : "follow owner safely";
+            return new CommandIntent(IntentKind.FOLLOW_OWNER, IntentPriority.HIGH, instruction);
         }
     }
 }

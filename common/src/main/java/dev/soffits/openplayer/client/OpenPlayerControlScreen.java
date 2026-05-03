@@ -197,8 +197,20 @@ public final class OpenPlayerControlScreen extends Screen {
         graphics.drawString(this.font, "Skin: " + selected.skinStatus(), left, top + 56, 0xC0C0C0);
         graphics.drawString(this.font, "Lifecycle: " + selected.lifecycleStatus(), left, top + 70, lifecycleColor(selected.lifecycleStatus()));
         graphics.drawString(this.font, "Conversation: " + selected.conversationStatus(), left, top + 84, 0xC0C0C0);
-        graphics.drawString(this.font, "Actions: spawn, despawn, follow, stop, command.", left, top + 98, 0xA0A0A0);
-        graphics.drawString(this.font, "Files: export selected or type import file name.", left, top + 112, 0xA0A0A0);
+        int lineTop = top + 98;
+        if (selected.conversationEvents().isEmpty()) {
+            graphics.drawString(this.font, "Spoken status: no local lines yet.", left, lineTop, 0xA0A0A0);
+            lineTop += 14;
+        } else {
+            graphics.drawString(this.font, "Spoken status:", left, lineTop, 0xA0A0A0);
+            lineTop += 14;
+            for (String event : selected.conversationEvents()) {
+                graphics.drawString(this.font, fit(event, width), left, lineTop, 0xD0D0D0);
+                lineTop += 12;
+            }
+        }
+        graphics.drawString(this.font, "Actions: spawn, despawn, follow, stop, command.", left, lineTop, 0xA0A0A0);
+        graphics.drawString(this.font, "Files: export selected or type import file name.", left, lineTop + 14, 0xA0A0A0);
     }
 
     private void sendExportSelected() {
@@ -283,6 +295,7 @@ public final class OpenPlayerControlScreen extends Screen {
         parts.add(OpenPlayerClientStatus.characterListStatus());
         for (LocalCharacterListEntry character : OpenPlayerClientStatus.characters()) {
             parts.add(character.assignmentId() + ":" + character.lifecycleStatus() + ":" + character.conversationStatus());
+            parts.addAll(character.conversationEvents());
         }
         parts.addAll(OpenPlayerClientStatus.characterErrors());
         return String.join("|", parts);

@@ -33,6 +33,15 @@ public record LocalCharacterListView(List<LocalCharacterListEntry> characters, L
                                                                         AssignmentLifecycleResolver lifecycleResolver,
                                                                         LocalSkinPathResolver localSkinPathResolver,
                                                                         LocalCharacterListEntry.ConversationStatusResolver conversationStatusResolver) {
+        return fromAssignmentRepositoryResult(result, lifecycleResolver, localSkinPathResolver, conversationStatusResolver,
+                (ignoredAssignment, ignoredCharacter) -> List.of());
+    }
+
+    public static LocalCharacterListView fromAssignmentRepositoryResult(LocalAssignmentRepositoryResult result,
+                                                                        AssignmentLifecycleResolver lifecycleResolver,
+                                                                        LocalSkinPathResolver localSkinPathResolver,
+                                                                        LocalCharacterListEntry.ConversationStatusResolver conversationStatusResolver,
+                                                                        LocalCharacterListEntry.ConversationEventResolver conversationEventResolver) {
         if (result == null) {
             throw new IllegalArgumentException("result cannot be null");
         }
@@ -41,6 +50,9 @@ public record LocalCharacterListView(List<LocalCharacterListEntry> characters, L
         }
         if (conversationStatusResolver == null) {
             throw new IllegalArgumentException("conversationStatusResolver cannot be null");
+        }
+        if (conversationEventResolver == null) {
+            throw new IllegalArgumentException("conversationEventResolver cannot be null");
         }
         List<LocalCharacterListEntry> entries = new ArrayList<>();
         for (LocalAssignmentDefinition assignment : result.assignments()) {
@@ -51,7 +63,8 @@ public record LocalCharacterListView(List<LocalCharacterListEntry> characters, L
                         character,
                         lifecycleResolver.lifecycleStatus(assignment, character),
                         localSkinPathResolver,
-                        conversationStatusResolver
+                        conversationStatusResolver,
+                        conversationEventResolver
                 ));
             }
         }

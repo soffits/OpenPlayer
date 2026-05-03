@@ -451,11 +451,18 @@ Provide a small local conversation UX that shows companion greetings and spoken 
 - With an enabled provider, accepted output can show a bounded spoken response and submit only validated intents.
 - Rejected or unsafe output is visible as a safe status and performs no world action.
 
+### Current Implementation
+
+OpenPlayer now has a focused Phase K spoken-status slice for selected local assignments with conversation config. Spawning a configured assignment records a deterministic local greeting keyed by owner UUID plus assignment id; this greeting does not call the parser or any provider. Selected command text records a sanitized bounded player line before the conversation loop runs, records an accepted `CommandIntent` summary after validated submission, and records safe failure lines such as parser-disabled or unable-to-handle statuses when a request is rejected or unavailable.
+
+The spoken status surface is server-authoritative and sent to the client as bounded strings in the local character list response. `OpenPlayerControlScreen` shows the selected companion's recent lines in the detail pane. The in-memory status repository keeps only the last six events per owner plus assignment and does not persist logs. Provider output remains untrusted and is never displayed raw; only deterministic greetings, sanitized player input, accepted intent/action summaries, and safe status/failure text are shown.
+
 ### Non-Goals
 
-- No voice synthesis, speech recognition, remote memory service, or persisted private chat logs.
+- No voice synthesis, speech recognition, audio dependency, remote memory service, or persisted private chat logs.
 - No per-character API keys or provider credentials in character files.
 - No arbitrary command execution from free-form model text.
+- No raw provider response display or client-authoritative conversation state.
 
 ## Phase L: Expanded Intent And Action Vocabulary
 
