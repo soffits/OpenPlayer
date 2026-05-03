@@ -52,6 +52,11 @@ public final class OpenPlayerClient {
                 OpenPlayerConstants.CHARACTER_FILE_OPERATION_RESPONSE_PACKET_ID,
                 OpenPlayerClient::receiveCharacterFileOperationResponse
         );
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.S2C,
+                OpenPlayerConstants.PROVIDER_TEST_RESPONSE_PACKET_ID,
+                OpenPlayerClient::receiveProviderTestResponse
+        );
         ClientTickEvent.CLIENT_POST.register(OpenPlayerClient::openControlsOnKeyPress);
     }
 
@@ -136,6 +141,12 @@ public final class OpenPlayerClient {
     private static void receiveCharacterFileOperationResponse(net.minecraft.network.FriendlyByteBuf buffer, NetworkManager.PacketContext context) {
         String status = buffer.readUtf(256);
         context.queue(() -> OpenPlayerClientStatus.updateCharacterFileOperationStatus(status));
+    }
+
+    private static void receiveProviderTestResponse(net.minecraft.network.FriendlyByteBuf buffer, NetworkManager.PacketContext context) {
+        String code = buffer.readUtf(64);
+        String detail = buffer.readUtf(96);
+        context.queue(() -> OpenPlayerClientStatus.updateProviderTestResult(code, detail));
     }
 
     private static void openControlsOnKeyPress(Minecraft minecraft) {

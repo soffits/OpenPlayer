@@ -111,6 +111,10 @@ public final class OpenPlayerRequestSender {
         NetworkManager.sendToServer(OpenPlayerConstants.PROVIDER_CONFIG_SAVE_REQUEST_PACKET_ID, buffer);
     }
 
+    public static void sendProviderTestRequest() {
+        NetworkManager.sendToServer(OpenPlayerConstants.PROVIDER_TEST_REQUEST_PACKET_ID, emptyPayload());
+    }
+
     private static FriendlyByteBuf emptyPayload() {
         return new FriendlyByteBuf(Unpooled.buffer());
     }

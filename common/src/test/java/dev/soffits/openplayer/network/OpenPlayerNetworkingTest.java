@@ -12,6 +12,8 @@ import dev.soffits.openplayer.api.NpcRoleId;
 import dev.soffits.openplayer.api.NpcSessionId;
 import dev.soffits.openplayer.api.NpcSessionStatus;
 import dev.soffits.openplayer.api.NpcSpawnLocation;
+import dev.soffits.openplayer.intent.IntentParseException;
+import dev.soffits.openplayer.intent.IntentProviderException;
 import java.util.UUID;
 
 public final class OpenPlayerNetworkingTest {
@@ -31,6 +33,7 @@ public final class OpenPlayerNetworkingTest {
         acceptsSingleplayerOwnerLocalProfileManagement();
         acceptsPermittedLocalProfileManagement();
         rejectsUnauthorizedLocalProfileManagement();
+        classifiesProviderHttpFailure();
     }
 
     private static void matchesLegacyDefaultNetworkNpc() {
@@ -79,6 +82,15 @@ public final class OpenPlayerNetworkingTest {
 
     private static void rejectsUnauthorizedLocalProfileManagement() {
         require(!OpenPlayerNetworking.mayManageLocalProfiles(false, false), "unauthorized player must not manage local profiles");
+    }
+
+    private static void classifiesProviderHttpFailure() {
+        IntentParseException exception = new IntentParseException(
+                "intent provider failed",
+                new IntentProviderException("intent provider request failed with status 401")
+        );
+        require("http_status".equals(OpenPlayerNetworking.providerFailureCode(exception)), "HTTP provider failure must be classified");
+        require("401".equals(OpenPlayerNetworking.providerFailureDetail(exception)), "HTTP status must be preserved without response body");
     }
 
     private static AiPlayerNpcSession session(UUID ownerId, String roleId, String profileName) {

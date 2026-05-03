@@ -5,6 +5,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
@@ -26,10 +27,40 @@ public final class OpenAiCompatibleIntentProvider implements IntentProvider {
         if (model == null || model.isBlank()) {
             throw new IllegalArgumentException("model cannot be blank");
         }
-        this.endpointUri = endpointUri;
+        this.endpointUri = normalizeChatCompletionsEndpoint(endpointUri);
         this.apiKey = apiKey;
         this.model = model;
         this.httpClient = HttpClient.newHttpClient();
+    }
+
+    public static URI normalizeChatCompletionsEndpoint(URI endpointUri) {
+        if (endpointUri == null) {
+            throw new IllegalArgumentException("endpointUri cannot be null");
+        }
+        String path = endpointUri.getPath();
+        if (path == null) {
+            return endpointUri;
+        }
+        String normalizedPath = path.endsWith("/") && path.length() > 1 ? path.substring(0, path.length() - 1) : path;
+        if (normalizedPath.endsWith("/chat/completions")) {
+            return endpointUri;
+        }
+        if (!normalizedPath.endsWith("/v1")) {
+            return endpointUri;
+        }
+        try {
+            return new URI(
+                    endpointUri.getScheme(),
+                    endpointUri.getUserInfo(),
+                    endpointUri.getHost(),
+                    endpointUri.getPort(),
+                    normalizedPath + "/chat/completions",
+                    endpointUri.getQuery(),
+                    endpointUri.getFragment()
+            );
+        } catch (java.net.URISyntaxException exception) {
+            throw new IllegalArgumentException("endpointUri cannot be normalized", exception);
+        }
     }
 
     @Override
@@ -48,6 +79,8 @@ public final class OpenAiCompatibleIntentProvider implements IntentProvider {
         HttpResponse<String> response;
         try {
             response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        } catch (HttpTimeoutException exception) {
+            throw new IntentProviderException("intent provider request timed out", exception);
         } catch (IOException exception) {
             throw new IntentProviderException("intent provider request failed", exception);
         } catch (InterruptedException exception) {

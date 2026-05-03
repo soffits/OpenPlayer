@@ -1,5 +1,16 @@
 # Release Notes
 
+## v0.1.0-alpha.4
+
+- Resolves OpenAI-compatible provider base URLs ending in `/v1` or `/v1/` to `/v1/chat/completions` while preserving explicit `/chat/completions` and custom gateway endpoints.
+- Adds a permission-gated Provider page test action that performs a sanitized connectivity/parse check without exposing API keys or raw provider output.
+- Improves provider and conversation diagnostics with safe failure classes such as not configured, permission required, HTTP status, timeout, request failure, and parse rejection.
+
+Artifacts:
+
+- `openplayer-fabric-0.1.0-alpha.4.jar`
+- `openplayer-forge-0.1.0-alpha.4.jar`
+
 ## v0.1.0-alpha.3
 
 - Reworks the controls screen around real profile selection: profiles appear in the left list, unassigned profiles are selectable, and the protected `openplayer_default` profile can be edited but not deleted.

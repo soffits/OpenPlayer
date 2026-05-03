@@ -24,6 +24,8 @@ public final class OpenPlayerConstants {
     public static final ResourceLocation CHARACTER_DELETE_REQUEST_PACKET_ID = id("character_delete_request");
     public static final ResourceLocation CHARACTER_FILE_OPERATION_RESPONSE_PACKET_ID = id("character_file_operation_response");
     public static final ResourceLocation PROVIDER_CONFIG_SAVE_REQUEST_PACKET_ID = id("provider_config_save_request");
+    public static final ResourceLocation PROVIDER_TEST_REQUEST_PACKET_ID = id("provider_test_request");
+    public static final ResourceLocation PROVIDER_TEST_RESPONSE_PACKET_ID = id("provider_test_response");
 
     private OpenPlayerConstants() {
     }

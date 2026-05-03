@@ -8,6 +8,7 @@ import dev.soffits.openplayer.character.LocalCharacterDefinition;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentParseException;
 import dev.soffits.openplayer.intent.IntentParser;
+import dev.soffits.openplayer.intent.IntentProviderException;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -76,9 +77,30 @@ public final class ConversationLoop {
             }
             intent = ConversationIntentValidator.requireActionable(intentParser.parse(prompt));
         } catch (IntentParseException exception) {
-            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Conversation output rejected");
+            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, conversationFailureMessage(exception));
         }
         return submitter.submit(new AiPlayerNpcCommand(UUID.randomUUID(), intent));
+    }
+
+    private static String conversationFailureMessage(IntentParseException exception) {
+        Throwable cause = exception.getCause();
+        if (cause instanceof IntentProviderException providerException) {
+            String message = providerException.getMessage();
+            if (message != null && message.contains("status ")) {
+                String status = message.substring(message.lastIndexOf(' ') + 1);
+                if (status.matches("[0-9]{3}")) {
+                    return "Conversation provider request failed: HTTP " + status;
+                }
+            }
+            if (message != null && message.contains("timed out")) {
+                return "Conversation provider request timed out";
+            }
+            if (message != null && message.contains("interrupted")) {
+                return "Conversation provider request interrupted";
+            }
+            return "Conversation provider request failed";
+        }
+        return "Conversation provider response could not be parsed";
     }
 
     @FunctionalInterface

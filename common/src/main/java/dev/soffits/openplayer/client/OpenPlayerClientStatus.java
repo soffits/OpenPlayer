@@ -3,6 +3,7 @@ package dev.soffits.openplayer.client;
 import dev.soffits.openplayer.character.LocalCharacterListEntry;
 import dev.soffits.openplayer.character.LocalCharacterListView;
 import java.util.List;
+import net.minecraft.network.chat.Component;
 
 public final class OpenPlayerClientStatus {
     private static String parserStatus = "unknown";
@@ -11,6 +12,8 @@ public final class OpenPlayerClientStatus {
     private static String modelStatus = "unknown";
     private static String apiKeyStatus = "unknown";
     private static String automationStatus = "unknown";
+    private static String providerTestCode = "not_run";
+    private static String providerTestDetail = "";
     private static String characterListStatus = "loading";
     private static String characterFileOperationStatus = "none";
     private static LocalCharacterListView characterList = new LocalCharacterListView(List.of(), List.of());
@@ -60,6 +63,19 @@ public final class OpenPlayerClientStatus {
 
     public static String automationStatus() {
         return automationStatus;
+    }
+
+    public static void updateProviderTestResult(String code, String detail) {
+        providerTestCode = code == null || code.isBlank() ? "request_failed" : code;
+        providerTestDetail = detail == null ? "" : detail;
+    }
+
+    public static String providerTestStatus() {
+        String key = "screen.openplayer.controls.provider_test." + providerTestCode;
+        if (providerTestDetail.isBlank()) {
+            return Component.translatable(key).getString();
+        }
+        return Component.translatable(key, providerTestDetail).getString();
     }
 
     public static void updateCharacters(LocalCharacterListView value) {

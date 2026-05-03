@@ -22,7 +22,10 @@ import dev.soffits.openplayer.character.LocalSkinPathResolver;
 import dev.soffits.openplayer.character.OpenPlayerLocalCharacters;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentKind;
+import dev.soffits.openplayer.intent.IntentParseException;
 import dev.soffits.openplayer.intent.IntentPriority;
+import dev.soffits.openplayer.intent.IntentProviderException;
+import dev.soffits.openplayer.intent.IntentParser;
 import dev.soffits.openplayer.runtime.CompanionLifecycleManager;
 import dev.soffits.openplayer.runtime.OpenPlayerRuntime;
 import io.netty.buffer.Unpooled;
@@ -33,6 +36,7 @@ import net.minecraft.server.level.ServerPlayer;
 
 public final class OpenPlayerNetworking {
     private static final int MAX_COMMAND_TEXT_LENGTH = 512;
+    private static final String PROVIDER_TEST_PROMPT = "Test OpenPlayer provider connectivity. Return REPORT_STATUS with NORMAL priority and blank instruction.";
     private static final CompanionLifecycleManager COMPANION_LIFECYCLE_MANAGER = CompanionLifecycleManager.withAssignments(
             OpenPlayerApi::npcService,
             () -> OpenPlayerLocalCharacters.assignmentRepository().loadAll(OpenPlayerLocalCharacters.repository().loadAll()),
@@ -102,6 +106,11 @@ public final class OpenPlayerNetworking {
                 NetworkManager.Side.C2S,
                 OpenPlayerConstants.PROVIDER_CONFIG_SAVE_REQUEST_PACKET_ID,
                 OpenPlayerNetworking::receiveProviderConfigSaveRequest
+        );
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.C2S,
+                OpenPlayerConstants.PROVIDER_TEST_REQUEST_PACKET_ID,
+                OpenPlayerNetworking::receiveProviderTestRequest
         );
     }
 
@@ -264,6 +273,14 @@ public final class OpenPlayerNetworking {
         });
     }
 
+    private static void receiveProviderTestRequest(FriendlyByteBuf ignoredBuffer, NetworkManager.PacketContext context) {
+        context.queue(() -> {
+            if (context.getPlayer() instanceof ServerPlayer player) {
+                handleProviderTestRequest(player);
+            }
+        });
+    }
+
     private static void handleSpawnRequest(ServerPlayer sender, String characterId) {
         NpcSpawnLocation location = new NpcSpawnLocation(
                 sender.serverLevel().dimension().location().toString(),
@@ -372,6 +389,42 @@ public final class OpenPlayerNetworking {
         sendCharacterListResponse(sender);
     }
 
+    private static void handleProviderTestRequest(ServerPlayer sender) {
+        if (!canSaveProviderConfig(sender)) {
+            sendProviderTestResponse(sender, "permission_required", "");
+            sendStatusResponse(sender);
+            return;
+        }
+        if (!OpenPlayerRuntime.status().intentParser().enabled()) {
+            sendProviderTestResponse(sender, "not_configured", "");
+            sendStatusResponse(sender);
+            sendCharacterListResponse(sender);
+            return;
+        }
+        try {
+            OpenPlayerRuntime.reloadIntentParser();
+        } catch (IllegalStateException exception) {
+            sendProviderTestResponse(sender, "not_configured", "");
+            sendStatusResponse(sender);
+            sendCharacterListResponse(sender);
+            return;
+        }
+        IntentParser intentParser = OpenPlayerRuntime.intentParser();
+        try {
+            CommandIntent intent = intentParser.parse(PROVIDER_TEST_PROMPT);
+            if (intent == null || intent.kind() == null || intent.priority() == null) {
+                sendProviderTestResponse(sender, "invalid", "");
+                return;
+            }
+            sendProviderTestResponse(sender, "success", intent.kind().name());
+        } catch (IntentParseException exception) {
+            sendProviderTestResponse(sender, providerFailureCode(exception), providerFailureDetail(exception));
+        } finally {
+            sendStatusResponse(sender);
+            sendCharacterListResponse(sender);
+        }
+    }
+
     private static void sendStatusResponse(ServerPlayer player) {
         OpenPlayerRuntimeStatus status = OpenPlayerRuntime.status();
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
@@ -437,6 +490,13 @@ public final class OpenPlayerNetworking {
         NetworkManager.sendToPlayer(player, OpenPlayerConstants.CHARACTER_FILE_OPERATION_RESPONSE_PACKET_ID, buffer);
     }
 
+    private static void sendProviderTestResponse(ServerPlayer player, String code, String detail) {
+        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+        buffer.writeUtf(code == null ? "request_failed" : code, 64);
+        buffer.writeUtf(detail == null ? "" : detail, 96);
+        NetworkManager.sendToPlayer(player, OpenPlayerConstants.PROVIDER_TEST_RESPONSE_PACKET_ID, buffer);
+    }
+
     private static void sendSafeStatusMessage(ServerPlayer player, String message) {
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
         buffer.writeUtf(message, 256);
@@ -445,6 +505,36 @@ public final class OpenPlayerNetworking {
 
     private static boolean canSaveProviderConfig(ServerPlayer player) {
         return maySaveProviderConfig(player.server.isSingleplayerOwner(player.getGameProfile()), player.hasPermissions(2));
+    }
+
+    static String providerFailureCode(IntentParseException exception) {
+        Throwable cause = exception.getCause();
+        if (cause instanceof IntentProviderException providerException) {
+            String message = providerException.getMessage();
+            if (message != null && message.contains("status ")) {
+                return "http_status";
+            }
+            if (message != null && message.contains("timed out")) {
+                return "timed_out";
+            }
+            if (message != null && message.contains("interrupted")) {
+                return "interrupted";
+            }
+            return "request_failed";
+        }
+        return "invalid";
+    }
+
+    static String providerFailureDetail(IntentParseException exception) {
+        Throwable cause = exception.getCause();
+        if (cause instanceof IntentProviderException providerException) {
+            String message = providerException.getMessage();
+            if (message != null && message.contains("status ")) {
+                String status = message.substring(message.lastIndexOf(' ') + 1);
+                return status.matches("[0-9]{3}") ? status : "";
+            }
+        }
+        return "";
     }
 
     static boolean maySaveProviderConfig(boolean singleplayerOwner, boolean sufficientPermission) {

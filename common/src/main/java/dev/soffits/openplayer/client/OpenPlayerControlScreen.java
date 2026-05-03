@@ -274,6 +274,9 @@ public final class OpenPlayerControlScreen extends Screen {
         this.addRenderableWidget(Button.builder(Component.translatable("screen.openplayer.controls.save_provider_config"), button -> sendProviderConfig())
                 .bounds(controlsLeft, providerTop + rowStep * 4, buttonWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
                 .build());
+        this.addRenderableWidget(Button.builder(Component.translatable("screen.openplayer.controls.test_provider"), button -> sendProviderTest())
+                .bounds(controlsLeft, providerTop + rowStep * 5, buttonWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
+                .build());
     }
 
     private void addProfileWidgets(int rightLeft, int rightWidth) {
@@ -395,8 +398,9 @@ public final class OpenPlayerControlScreen extends Screen {
 
     private void renderProviderPage(GuiGraphics graphics, int left, int top, int width) {
         drawFitted(graphics, tr("screen.openplayer.controls.provider_config"), left, top, width, 0xFFFFFF);
-        drawFitted(graphics, tr("screen.openplayer.controls.provider_key_preserve_note"), left, top + 150, width, 0xA0A0A0);
-        drawFitted(graphics, tr("screen.openplayer.controls.provider_key_safe_note"), left, top + 164, width, 0xA0A0A0);
+        drawFitted(graphics, tr("screen.openplayer.controls.provider_test_status", OpenPlayerClientStatus.providerTestStatus()), left, top + 150, width, 0xC0C0C0);
+        drawFitted(graphics, tr("screen.openplayer.controls.provider_key_preserve_note"), left, top + 164, width, 0xA0A0A0);
+        drawFitted(graphics, tr("screen.openplayer.controls.provider_key_safe_note"), left, top + 178, width, 0xA0A0A0);
     }
 
     private void renderProfilePage(GuiGraphics graphics, int left, int top, int width) {
@@ -422,8 +426,9 @@ public final class OpenPlayerControlScreen extends Screen {
         drawFitted(graphics, tr("screen.openplayer.controls.status_endpoint", OpenPlayerClientStatus.endpointStatus()), left, top + 28, width, 0xC0C0C0);
         drawFitted(graphics, tr("screen.openplayer.controls.status_model", OpenPlayerClientStatus.modelStatus()), left, top + 42, width, 0xC0C0C0);
         drawFitted(graphics, tr("screen.openplayer.controls.status_api_key", OpenPlayerClientStatus.apiKeyStatus()), left, top + 56, width, 0xC0C0C0);
-        drawFitted(graphics, tr("screen.openplayer.controls.status_character_files", OpenPlayerClientStatus.characterFileOperationStatus()), left, top + 70, width, 0xC0C0C0);
-        drawFitted(graphics, tr("screen.openplayer.controls.provider_key_preserve_note"), left, top + 92, width, 0xA0A0A0);
+        drawFitted(graphics, tr("screen.openplayer.controls.provider_test_status", OpenPlayerClientStatus.providerTestStatus()), left, top + 70, width, 0xC0C0C0);
+        drawFitted(graphics, tr("screen.openplayer.controls.status_character_files", OpenPlayerClientStatus.characterFileOperationStatus()), left, top + 84, width, 0xC0C0C0);
+        drawFitted(graphics, tr("screen.openplayer.controls.provider_key_preserve_note"), left, top + 106, width, 0xA0A0A0);
         LocalCharacterListEntry selected = selectedCharacter();
         if (selected == null) {
             drawFitted(graphics, tr("screen.openplayer.controls.no_selected_assignment"), left, top + 114, width, 0xFFFFFF);
@@ -616,6 +621,11 @@ public final class OpenPlayerControlScreen extends Screen {
         clearApiKeyOnSave = false;
     }
 
+    private void sendProviderTest() {
+        OpenPlayerClientStatus.updateProviderTestResult("running", "");
+        OpenPlayerRequestSender.sendProviderTestRequest();
+    }
+
     private LocalCharacterListEntry selectedCharacter() {
         if (selectedAssignmentId == null) {
             return null;
@@ -636,6 +646,7 @@ public final class OpenPlayerControlScreen extends Screen {
         parts.add(OpenPlayerClientStatus.endpointStatus());
         parts.add(OpenPlayerClientStatus.modelStatus());
         parts.add(OpenPlayerClientStatus.apiKeyStatus());
+        parts.add(OpenPlayerClientStatus.providerTestStatus());
         for (LocalCharacterListEntry character : OpenPlayerClientStatus.characters()) {
             parts.add(character.assignmentId() + ":" + character.lifecycleStatus() + ":" + character.conversationStatus());
             parts.addAll(character.conversationEvents());
