@@ -1,5 +1,6 @@
 package dev.soffits.openplayer.automation;
 
+import dev.soffits.openplayer.automation.navigation.NavigationSnapshot;
 import dev.soffits.openplayer.intent.IntentKind;
 import java.util.List;
 
@@ -14,7 +15,8 @@ public record AutomationControllerSnapshot(
         int maxTicks,
         int queuedCommandCount,
         List<IntentKind> queuedKinds,
-        int interactionCooldownTicks
+        int interactionCooldownTicks,
+        NavigationSnapshot navigationSnapshot
 ) {
     public AutomationControllerSnapshot {
         if (health < 0) {
@@ -34,6 +36,9 @@ public record AutomationControllerSnapshot(
         }
         if (queuedKinds == null) {
             throw new IllegalArgumentException("queuedKinds cannot be null");
+        }
+        if (navigationSnapshot == null) {
+            throw new IllegalArgumentException("navigationSnapshot cannot be null");
         }
         if (elapsedTicks < 0) {
             throw new IllegalArgumentException("elapsedTicks must be non-negative");
@@ -73,7 +78,8 @@ public record AutomationControllerSnapshot(
                 0,
                 queuedKinds.size(),
                 queuedKinds,
-                interactionCooldownTicks
+                interactionCooldownTicks,
+                NavigationSnapshot.idle()
         );
     }
 
@@ -86,7 +92,8 @@ public record AutomationControllerSnapshot(
             int elapsedTicks,
             int maxTicks,
             List<IntentKind> queuedKinds,
-            int interactionCooldownTicks
+            int interactionCooldownTicks,
+            NavigationSnapshot navigationSnapshot
     ) {
         return new AutomationControllerSnapshot(
                 health,
@@ -99,7 +106,8 @@ public record AutomationControllerSnapshot(
                 maxTicks,
                 queuedKinds.size(),
                 queuedKinds,
-                interactionCooldownTicks
+                interactionCooldownTicks,
+                navigationSnapshot
         );
     }
 
@@ -113,7 +121,8 @@ public record AutomationControllerSnapshot(
                 + ", interactCd=" + interactionCooldownTicks
                 + ", ctrl=" + monitorStatus.name().toLowerCase()
                 + ", reason=" + monitorReason
-                + ", ticks=" + elapsedTicks + "/" + maxTicks;
+                + ", ticks=" + elapsedTicks + "/" + maxTicks
+                + ", " + navigationSnapshot.summary();
     }
 
     private String queuedKindsSummary() {

@@ -3,6 +3,8 @@ package dev.soffits.openplayer.automation;
 import dev.soffits.openplayer.api.NpcOwnerId;
 import dev.soffits.openplayer.automation.AutomationInstructionParser.Coordinate;
 import dev.soffits.openplayer.automation.InventoryActionInstructionParser.ParsedItemInstruction;
+import dev.soffits.openplayer.automation.navigation.NavigationRuntime;
+import dev.soffits.openplayer.automation.navigation.NavigationTarget;
 import dev.soffits.openplayer.automation.resource.GetItemRequest;
 import dev.soffits.openplayer.automation.resource.ResourceDependencyPlanner;
 import dev.soffits.openplayer.automation.resource.ResourcePlanningCapabilities;
@@ -27,6 +29,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -93,11 +96,13 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private static final int STUCK_CHECK_INTERVAL_TICKS = 40;
         private static final double STUCK_MIN_PROGRESS_DISTANCE = 0.15D;
         private static final int STUCK_MAX_CHECKS = 4;
+        private static final int NAVIGATION_MAX_RECOVERIES = 2;
         private static final int INTERACTION_COOLDOWN_TICKS = 10;
 
         private final OpenPlayerNpcEntity entity;
         private final Queue<QueuedCommand> queuedCommands = new ArrayDeque<>();
         private final InteractionCooldown interactionCooldown = new InteractionCooldown(INTERACTION_COOLDOWN_TICKS);
+        private final NavigationRuntime navigationRuntime = new NavigationRuntime(NAVIGATION_MAX_RECOVERIES);
         private QueuedCommand activeCommand;
         private AutomationControllerMonitor activeMonitor;
         private NpcOwnerId ownerId;
@@ -551,7 +556,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                     maxTicks,
                     queuedKinds.size(),
                     queuedKinds,
-                    interactionCooldown.remainingTicks()
+                    interactionCooldown.remainingTicks(),
+                    navigationRuntime.snapshot()
             );
         }
 
@@ -568,7 +574,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 activeMonitor.reset();
             }
             interactionCooldown.reset();
-            entity.getNavigation().stop();
+            navigationRuntime.reset();
+            resetAndStopNavigation();
             entity.setDeltaMovement(Vec3.ZERO);
             entity.getLookControl().setLookAt(entity.getX(), entity.getEyeY(), entity.getZ());
         }
@@ -576,7 +583,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private void start(QueuedCommand command) {
             if (command.kind() == IntentKind.MOVE) {
                 Coordinate coordinate = command.coordinate();
-                entity.getNavigation().moveTo(coordinate.x(), coordinate.y(), coordinate.z(), PLAYER_LIKE_NAVIGATION_SPEED);
+                moveToPosition(coordinate);
                 return;
             }
             if (command.kind() == IntentKind.LOOK) {
@@ -596,7 +603,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             if (command.kind() == IntentKind.PATROL) {
                 Coordinate coordinate = command.coordinate();
-                entity.getNavigation().moveTo(coordinate.x(), coordinate.y(), coordinate.z(), PLAYER_LIKE_NAVIGATION_SPEED);
+                moveToPosition(coordinate);
             }
         }
 
@@ -605,6 +612,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return;
             }
             if (activeCommand.kind() == IntentKind.MOVE) {
+                navigationRuntime.updateDistance(distanceTo(activeCommand.coordinate()));
                 if (entity.getNavigation().isDone()) {
                     completeActiveCommand();
                 }
@@ -655,17 +663,17 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             ItemEntity itemEntity = nearestItem(serverLevel, command);
             if (itemEntity == null) {
-                entity.getNavigation().stop();
+                stopNavigation();
                 completeActiveCommand();
                 return;
             }
             entity.getLookControl().setLookAt(itemEntity);
             if (entity.distanceToSqr(itemEntity) > COLLECT_REACH_DISTANCE * COLLECT_REACH_DISTANCE) {
-                entity.getNavigation().moveTo(itemEntity, PLAYER_LIKE_NAVIGATION_SPEED);
+                moveToEntity(itemEntity, NavigationTarget.entity(entityTypeId(itemEntity)));
                 command.resetReachTicks();
                 return;
             }
-            entity.getNavigation().stop();
+            stopNavigation();
             command.incrementReachTicks();
             if (command.reachTicks() >= COLLECT_REACH_TICKS) {
                 completeActiveCommand();
@@ -709,7 +717,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 moveNearBlock(blockPos);
                 return;
             }
-            entity.getNavigation().stop();
+            stopNavigation();
             entity.swingMainHandAction();
             serverLevel.destroyBlock(blockPos, true, entity);
             completeActiveCommand();
@@ -746,7 +754,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 failActiveCommand("block_cannot_survive");
                 return;
             }
-            entity.getNavigation().stop();
+            stopNavigation();
             if (serverLevel.setBlock(blockPos, placedState, Block.UPDATE_ALL)) {
                 mainHandStack.shrink(1);
                 entity.swingMainHandAction();
@@ -774,7 +782,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 moveNearBlock(command.furnacePos());
                 return;
             }
-            entity.getNavigation().stop();
+            stopNavigation();
             List<ItemStack> furnaceStacks = containerSnapshot(target.furnace());
             SmeltingPlan plan = command.smeltingPlan();
             if (!command.smeltStarted()) {
@@ -843,13 +851,13 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return;
             }
             if (!isWithinStartDistance(command, entity.position(), command.radius())) {
-                entity.getNavigation().stop();
+                stopNavigation();
                 failActiveCommand("outside_attack_radius");
                 return;
             }
             LivingEntity target = nearestAttackTarget(serverLevel, command.radius(), Vec3.atCenterOf(command.startPosition()));
             if (target == null) {
-                entity.getNavigation().stop();
+                stopNavigation();
                 completeActiveCommand();
                 return;
             }
@@ -901,10 +909,10 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             entity.getLookControl().setLookAt(target);
             entity.selectBestAttackItem();
             if (entity.distanceToSqr(target) > ATTACK_REACH_DISTANCE * ATTACK_REACH_DISTANCE) {
-                entity.getNavigation().moveTo(target, PLAYER_LIKE_NAVIGATION_SPEED);
+                moveToEntity(target, NavigationTarget.entity(entityTypeId(target)));
                 return false;
             }
-            entity.getNavigation().stop();
+            stopNavigation();
             entity.swingMainHandAction();
             entity.doHurtTarget(target);
             return true;
@@ -926,8 +934,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         }
 
         private void moveNearBlock(BlockPos blockPos) {
-            entity.getNavigation().moveTo(blockPos.getX() + 0.5D, blockPos.getY(), blockPos.getZ() + 0.5D,
-                    PLAYER_LIKE_NAVIGATION_SPEED);
+            moveToBlock(blockPos);
         }
 
         private void lookAtBlock(BlockPos blockPos) {
@@ -942,9 +949,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             double distanceSquared = entity.distanceToSqr(owner);
             if (distanceSquared > FOLLOW_START_DISTANCE * FOLLOW_START_DISTANCE) {
-                entity.getNavigation().moveTo(owner, PLAYER_LIKE_NAVIGATION_SPEED);
+                moveToEntity(owner, NavigationTarget.owner());
             } else if (distanceSquared <= FOLLOW_STOP_DISTANCE * FOLLOW_STOP_DISTANCE) {
-                entity.getNavigation().stop();
+                stopNavigation();
             }
             entity.getLookControl().setLookAt(owner);
         }
@@ -957,7 +964,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return;
             }
             if (!isWithinStartDistance(command, owner.position(), command.radius() + FOLLOW_START_DISTANCE)) {
-                entity.getNavigation().stop();
+                stopNavigation();
                 failActiveCommand("outside_guard_radius");
                 return;
             }
@@ -971,7 +978,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
         private void patrol(QueuedCommand command) {
             if (!isWithinStartDistance(command, entity.position(), PATROL_MAX_DISTANCE + FOLLOW_START_DISTANCE)) {
-                entity.getNavigation().stop();
+                stopNavigation();
                 failActiveCommand("outside_patrol_radius");
                 return;
             }
@@ -981,15 +988,10 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             command.togglePatrolReturn();
             if (command.returningToStart()) {
                 BlockPos startPosition = command.startPosition();
-                entity.getNavigation().moveTo(
-                        startPosition.getX() + 0.5D,
-                        startPosition.getY(),
-                        startPosition.getZ() + 0.5D,
-                        PLAYER_LIKE_NAVIGATION_SPEED
-                );
+                moveToBlock(startPosition);
             } else {
                 Coordinate coordinate = command.coordinate();
-                entity.getNavigation().moveTo(coordinate.x(), coordinate.y(), coordinate.z(), PLAYER_LIKE_NAVIGATION_SPEED);
+                moveToPosition(coordinate);
             }
         }
 
@@ -1203,8 +1205,16 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             AutomationControllerMonitorStatus status = activeMonitor.tick(
                     entity.getX(), entity.getY(), entity.getZ(), requiresNavigationProgress(activeCommand)
             );
+            if (status == AutomationControllerMonitorStatus.STUCK && tryRecoverActiveNavigation()) {
+                OpenPlayerDebugEvents.record("automation", "recovering", null, null, null,
+                        "kind=" + activeCommand.kind().name() + " reason=" + navigationRuntime.snapshot().lastReason());
+                OpenPlayerRawTrace.automationOperation("recovering", activeCommand.kind().name(),
+                        "reason=" + navigationRuntime.snapshot().lastReason());
+                activeMonitor.start(entity.getX(), entity.getY(), entity.getZ());
+                return;
+            }
             if (status == AutomationControllerMonitorStatus.TIMED_OUT || status == AutomationControllerMonitorStatus.STUCK) {
-                entity.getNavigation().stop();
+                cancelNavigation(activeMonitor.boundedReason());
                 OpenPlayerDebugEvents.record("automation", status.name(), null, null, null,
                         "kind=" + activeCommand.kind().name() + " reason=" + activeMonitor.boundedReason());
                 OpenPlayerRawTrace.automationOperation(status.name(), activeCommand.kind().name(),
@@ -1224,6 +1234,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (activeMonitor != null) {
                 activeMonitor.complete();
             }
+            navigationRuntime.complete();
             activeCommand = null;
         }
 
@@ -1237,7 +1248,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 activeMonitor.cancel(reason);
             }
             recoverActiveSmeltResources();
-            entity.getNavigation().stop();
+            cancelNavigation(reason);
             activeCommand = null;
         }
 
@@ -1268,6 +1279,119 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
         private boolean requiresNavigationProgress(QueuedCommand command) {
             return command.kind() != IntentKind.LOOK && !entity.getNavigation().isDone();
+        }
+
+        private boolean tryRecoverActiveNavigation() {
+            if (activeCommand == null || !navigationRuntime.tryRecover("stuck")) {
+                return false;
+            }
+            entity.getNavigation().stop();
+            Vec3 look = entity.getLookAngle();
+            entity.setDeltaMovement(entity.getDeltaMovement().add(look.x * 0.05D, 0.2D, look.z * 0.05D));
+            entity.getJumpControl().jump();
+            reissueActiveNavigation();
+            if (activeCommand == null) {
+                return false;
+            }
+            navigationRuntime.markActive("recovered");
+            return true;
+        }
+
+        private void reissueActiveNavigation() {
+            if (activeCommand == null) {
+                return;
+            }
+            IntentKind kind = activeCommand.kind();
+            if (kind == IntentKind.MOVE) {
+                moveToPosition(activeCommand.coordinate());
+                return;
+            }
+            if (kind == IntentKind.PATROL) {
+                if (activeCommand.returningToStart() && activeCommand.startPosition() != null) {
+                    moveToBlock(activeCommand.startPosition());
+                } else {
+                    moveToPosition(activeCommand.coordinate());
+                }
+                return;
+            }
+            if (kind == IntentKind.BREAK_BLOCK || kind == IntentKind.PLACE_BLOCK) {
+                moveNearBlock(activeCommand.blockPos());
+                return;
+            }
+            if (kind == IntentKind.SMELT_ITEM && activeCommand.furnacePos() != null) {
+                moveNearBlock(activeCommand.furnacePos());
+            }
+        }
+
+        private void moveToPosition(Coordinate coordinate) {
+            boolean loaded = isCoordinateLoaded(coordinate);
+            navigationRuntime.plan(NavigationTarget.position(coordinate.x(), coordinate.y(), coordinate.z()),
+                    distanceTo(coordinate), loaded);
+            if (!loaded) {
+                failActiveCommand("navigation_target_unloaded");
+                return;
+            }
+            boolean accepted = entity.getNavigation().moveTo(
+                    coordinate.x(), coordinate.y(), coordinate.z(), PLAYER_LIKE_NAVIGATION_SPEED
+            );
+            navigationRuntime.markReachable(accepted);
+        }
+
+        private void moveToBlock(BlockPos blockPos) {
+            boolean loaded = isBlockLoaded(blockPos);
+            navigationRuntime.plan(NavigationTarget.block(blockPos.getX(), blockPos.getY(), blockPos.getZ()),
+                    distanceTo(blockPos), loaded);
+            if (!loaded) {
+                failActiveCommand("navigation_target_unloaded");
+                return;
+            }
+            boolean accepted = entity.getNavigation().moveTo(
+                    blockPos.getX() + 0.5D, blockPos.getY(), blockPos.getZ() + 0.5D, PLAYER_LIKE_NAVIGATION_SPEED
+            );
+            navigationRuntime.markReachable(accepted);
+        }
+
+        private void moveToEntity(Entity target, NavigationTarget navigationTarget) {
+            boolean loaded = isBlockLoaded(target.blockPosition());
+            navigationRuntime.plan(navigationTarget, entity.distanceToSqr(target), loaded);
+            if (!loaded) {
+                failActiveCommand("navigation_target_unloaded");
+                return;
+            }
+            boolean accepted = entity.getNavigation().moveTo(target, PLAYER_LIKE_NAVIGATION_SPEED);
+            navigationRuntime.markReachable(accepted);
+        }
+
+        private void stopNavigation() {
+            entity.getNavigation().stop();
+            navigationRuntime.complete();
+        }
+
+        private void cancelNavigation(String reason) {
+            entity.getNavigation().stop();
+            navigationRuntime.fail(reason);
+        }
+
+        private void resetAndStopNavigation() {
+            entity.getNavigation().stop();
+            navigationRuntime.reset();
+        }
+
+        private double distanceTo(Coordinate coordinate) {
+            return entity.distanceToSqr(coordinate.x(), coordinate.y(), coordinate.z());
+        }
+
+        private double distanceTo(BlockPos blockPos) {
+            return entity.distanceToSqr(Vec3.atCenterOf(blockPos));
+        }
+
+        private boolean isBlockLoaded(BlockPos blockPos) {
+            ServerLevel serverLevel = serverLevel();
+            return serverLevel != null && serverLevel.hasChunkAt(blockPos);
+        }
+
+        private static String entityTypeId(Entity target) {
+            return BuiltInRegistries.ENTITY_TYPE.getKey(target.getType()).toString();
         }
 
         private AutomationControllerMonitor newMonitor(QueuedCommand command) {

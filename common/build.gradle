@@ -156,6 +156,12 @@ tasks.register('runAutomationRecoveryPathTest', JavaExec) {
     mainClass = 'dev.soffits.openplayer.automation.AutomationRecoveryPathTest'
 }
 
+tasks.register('runNavigationRuntimeTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.automation.navigation.NavigationRuntimeTest'
+}
+
 tasks.register('runRuntimeContextFormatterTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
@@ -224,6 +230,7 @@ tasks.named('check') {
     dependsOn tasks.named('runAutomationControllerSnapshotTest')
     dependsOn tasks.named('runInteractionCooldownTest')
     dependsOn tasks.named('runAutomationRecoveryPathTest')
+    dependsOn tasks.named('runNavigationRuntimeTest')
     dependsOn tasks.named('runRuntimeContextFormatterTest')
     dependsOn tasks.named('runRuntimeIntentValidatorTest')
     dependsOn tasks.named('runNpcEquipmentSelectionTest')

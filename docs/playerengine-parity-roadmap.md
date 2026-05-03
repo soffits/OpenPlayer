@@ -216,6 +216,11 @@ OpenPlayer already has:
 - Only add optional public pathfinding dependencies after license/provenance review.
 - Do not vendor opaque jars.
 
+**Progress:**
+
+- Phase 8 adds first-party navigation telemetry, replan, loaded-target checks, and bounded stuck recovery around the vanilla NPC navigation backend.
+- External pathfinder dependencies remain deferred pending license and provenance review; no Baritone, AltoClef, Automatone, PlayerEngine, or opaque jar dependency is included.
+
 ---
 
 ### Phase 9: Survival Automation Chains
