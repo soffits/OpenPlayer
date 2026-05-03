@@ -14,6 +14,12 @@ import dev.soffits.openplayer.automation.resource.ResourcePlanResult;
 import dev.soffits.openplayer.automation.resource.RuntimeCraftingRecipeIndex;
 import dev.soffits.openplayer.automation.resource.RuntimeSmeltingRecipeIndex;
 import dev.soffits.openplayer.automation.resource.SmeltingPlan;
+import dev.soffits.openplayer.automation.survival.SurvivalCooldownPolicy;
+import dev.soffits.openplayer.automation.survival.SurvivalDangerKind;
+import dev.soffits.openplayer.automation.survival.SurvivalDangerPolicy;
+import dev.soffits.openplayer.automation.survival.SurvivalFoodPolicy;
+import dev.soffits.openplayer.automation.survival.SurvivalHealthPolicy;
+import dev.soffits.openplayer.automation.survival.SurvivalTargetPolicy;
 import dev.soffits.openplayer.automation.workstation.WorkstationCapability;
 import dev.soffits.openplayer.automation.workstation.WorkstationDiagnostics;
 import dev.soffits.openplayer.automation.workstation.WorkstationKind;
@@ -31,6 +37,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Queue;
+import net.minecraft.core.Direction;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.MinecraftServer;
@@ -40,7 +47,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.item.ItemEntity;
-import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
@@ -80,6 +87,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private static final double FOLLOW_STOP_DISTANCE = 3.0D;
         private static final double FOLLOW_START_DISTANCE = 4.0D;
         private static final double COLLECT_RADIUS = 16.0D;
+        private static final double COLLECT_FOOD_DEFAULT_RADIUS = 16.0D;
+        private static final double COLLECT_FOOD_MAX_RADIUS = 24.0D;
         private static final double COLLECT_REACH_DISTANCE = 1.5D;
         private static final int COLLECT_REACH_TICKS = 20;
         private static final double BLOCK_TASK_MAX_DISTANCE = 24.0D;
@@ -93,6 +102,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private static final double ATTACK_REACH_DISTANCE = 2.5D;
         private static final double GUARD_DEFAULT_RADIUS = 12.0D;
         private static final double GUARD_MAX_RADIUS = 16.0D;
+        private static final double DEFEND_DEFAULT_RADIUS = 12.0D;
+        private static final double DEFEND_MAX_RADIUS = 16.0D;
         private static final double PATROL_MAX_DISTANCE = 32.0D;
         private static final double GOTO_DEFAULT_RADIUS = LoadedAreaNavigator.DEFAULT_RADIUS;
         private static final double GOTO_MAX_RADIUS = LoadedAreaNavigator.MAX_RADIUS;
@@ -108,16 +119,25 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private static final int STUCK_MAX_CHECKS = 4;
         private static final int NAVIGATION_MAX_RECOVERIES = 2;
         private static final int INTERACTION_COOLDOWN_TICKS = 10;
+        private static final int SURVIVAL_ACTION_COOLDOWN_TICKS = 20 * 4;
+        private static final int SURVIVAL_DIAGNOSTIC_COOLDOWN_TICKS = 20;
+        private static final double SURVIVAL_DANGER_RADIUS = 8.0D;
+        private static final double SURVIVAL_PROJECTILE_RADIUS = 6.0D;
 
         private final OpenPlayerNpcEntity entity;
         private final Queue<QueuedCommand> queuedCommands = new ArrayDeque<>();
         private final InteractionCooldown interactionCooldown = new InteractionCooldown(INTERACTION_COOLDOWN_TICKS);
+        private final SurvivalCooldownPolicy survivalCooldown = new SurvivalCooldownPolicy(
+                SURVIVAL_ACTION_COOLDOWN_TICKS,
+                SURVIVAL_DIAGNOSTIC_COOLDOWN_TICKS
+        );
         private final NavigationRuntime navigationRuntime = new NavigationRuntime(NAVIGATION_MAX_RECOVERIES);
         private final WorkstationLocator workstationLocator = new WorkstationLocator();
         private final LoadedAreaNavigator loadedAreaNavigator = new LoadedAreaNavigator();
         private QueuedCommand activeCommand;
         private AutomationControllerMonitor activeMonitor;
         private NpcOwnerId ownerId;
+        private String idleSurvivalReason = "idle";
 
         private VanillaAutomationController(OpenPlayerNpcEntity entity) {
             if (entity == null) {
@@ -211,6 +231,16 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (kind == IntentKind.COLLECT_ITEMS) {
                 queuedCommands.add(QueuedCommand.collectItems());
                 return accepted("COLLECT_ITEMS accepted");
+            }
+            if (kind == IntentKind.COLLECT_FOOD) {
+                double radius = AutomationInstructionParser.parseOptionalRadiusOrNegative(
+                        intent.instruction(), COLLECT_FOOD_DEFAULT_RADIUS, COLLECT_FOOD_MAX_RADIUS
+                );
+                if (radius < 0.0D) {
+                    return rejected("COLLECT_FOOD instruction must be blank or a positive radius number");
+                }
+                queuedCommands.add(QueuedCommand.collectFood(radius));
+                return accepted("COLLECT_FOOD accepted");
             }
             if (kind == IntentKind.EQUIP_BEST_ITEM) {
                 if (!AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
@@ -529,6 +559,22 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 queuedCommands.add(QueuedCommand.guardOwner(radius));
                 return accepted("GUARD_OWNER accepted");
             }
+            if (kind == IntentKind.DEFEND_OWNER) {
+                if (ownerId == null) {
+                    return rejected("DEFEND_OWNER requires an NPC owner");
+                }
+                if (owner() == null) {
+                    return rejected("NPC owner is unavailable in this dimension");
+                }
+                double radius = AutomationInstructionParser.parseOptionalRadiusOrNegative(
+                        intent.instruction(), DEFEND_DEFAULT_RADIUS, DEFEND_MAX_RADIUS
+                );
+                if (radius < 0.0D) {
+                    return rejected("DEFEND_OWNER instruction must be blank or a positive radius number");
+                }
+                queuedCommands.add(QueuedCommand.defendOwner(radius));
+                return accepted("DEFEND_OWNER accepted");
+            }
             return rejected("Unsupported intent: " + kind.name());
         }
 
@@ -606,9 +652,11 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return;
             }
             interactionCooldown.tick();
+            survivalCooldown.tick();
             if (activeCommand == null) {
                 activeCommand = queuedCommands.poll();
                 if (activeCommand == null) {
+                    monitorIdleSurvival();
                     return;
                 }
                 activeMonitor = newMonitor(activeCommand);
@@ -627,10 +675,14 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         @Override
         public AutomationControllerSnapshot snapshot() {
             List<IntentKind> queuedKinds = queuedKinds();
-            AutomationControllerMonitorStatus monitorStatus = activeMonitor == null
+            boolean showSurvivalReason = activeCommand == null && !"idle".equals(idleSurvivalReason);
+            AutomationControllerMonitorStatus monitorStatus = showSurvivalReason
+                    ? AutomationControllerMonitorStatus.IDLE
+                    : activeMonitor == null
                     ? AutomationControllerMonitorStatus.IDLE
                     : activeMonitor.status();
-            String monitorReason = activeMonitor == null ? "idle" : activeMonitor.boundedReason();
+            String monitorReason = showSurvivalReason ? idleSurvivalReason
+                    : activeMonitor == null ? "idle" : activeMonitor.boundedReason();
             int elapsedTicks = activeMonitor == null ? 0 : activeMonitor.elapsedTicks();
             int maxTicks = activeMonitor == null ? 0 : activeMonitor.maxTicks();
             return new AutomationControllerSnapshot(
@@ -662,6 +714,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 activeMonitor.reset();
             }
             interactionCooldown.reset();
+            survivalCooldown.reset();
+            idleSurvivalReason = "idle";
             navigationRuntime.reset();
             resetAndStopNavigation();
             entity.setDeltaMovement(Vec3.ZERO);
@@ -685,11 +739,13 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return;
             }
             if (command.kind() == IntentKind.COLLECT_ITEMS
+                    || command.kind() == IntentKind.COLLECT_FOOD
                     || command.kind() == IntentKind.BREAK_BLOCK
                     || command.kind() == IntentKind.PLACE_BLOCK
                     || command.kind() == IntentKind.SMELT_ITEM
                     || command.kind() == IntentKind.ATTACK_NEAREST
                     || command.kind() == IntentKind.GUARD_OWNER
+                    || command.kind() == IntentKind.DEFEND_OWNER
                     || command.kind() == IntentKind.PATROL) {
                 command.setStartPosition(entity.blockPosition());
             }
@@ -722,6 +778,10 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 collectItems(activeCommand);
                 return;
             }
+            if (activeCommand.kind() == IntentKind.COLLECT_FOOD) {
+                collectFood(activeCommand);
+                return;
+            }
             if (activeCommand.kind() == IntentKind.BREAK_BLOCK) {
                 breakBlock(activeCommand);
                 return;
@@ -742,9 +802,144 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 guardOwner(activeCommand);
                 return;
             }
+            if (activeCommand.kind() == IntentKind.DEFEND_OWNER) {
+                defendOwner(activeCommand);
+                return;
+            }
             if (activeCommand.kind() == IntentKind.PATROL) {
                 patrol(activeCommand);
             }
+        }
+
+        private void monitorIdleSurvival() {
+            if (!entity.allowWorldActions() || !survivalCooldown.ready() || activeCommand != null || !queuedCommands.isEmpty()) {
+                return;
+            }
+            ServerLevel serverLevel = serverLevel();
+            if (serverLevel == null || !entity.isAlive()) {
+                return;
+            }
+            SurvivalDangerKind dangerKind = SurvivalDangerPolicy.immediateDanger(
+                    entity.isOnFire(), entity.isInLava(), immediateProjectileDanger(serverLevel) != null
+            );
+            if (dangerKind != SurvivalDangerKind.NONE) {
+                if (tryMoveToSafeAdjacentBlock(serverLevel, dangerKind)) {
+                    noteIdleSurvivalAction("survival:avoid_" + dangerKind.name().toLowerCase());
+                    return;
+                }
+                noteIdleSurvivalDiagnostic("survival:unable_to_avoid_" + dangerKind.name().toLowerCase());
+                return;
+            }
+            if (SurvivalHealthPolicy.isLowHealth(entity.getHealth(), entity.getMaxHealth())) {
+                int foodSlot = entity.bestSafeFoodSlotForLocalUse();
+                if (foodSlot >= 0 && canAcquireInteractionCooldown() && acquireInteractionCooldown()) {
+                    if (entity.useSafeFoodSlotForLocalUse(foodSlot)) {
+                        noteIdleSurvivalAction("survival:eat_safe_food slot=" + foodSlot);
+                        return;
+                    }
+                    rollbackInteractionCooldown();
+                }
+                if (SurvivalHealthPolicy.isDangerouslyLowHealth(entity.getHealth(), entity.getMaxHealth())) {
+                    noteIdleSurvivalDiagnostic("survival:dangerously_low_health_no_safe_food");
+                    return;
+                }
+            }
+            if (nearestSelfDefenseTarget(serverLevel, DEFEND_DEFAULT_RADIUS) != null) {
+                queuedCommands.add(QueuedCommand.selfDefense(DEFEND_DEFAULT_RADIUS));
+                noteIdleSurvivalAction("survival:queued_self_defense");
+                return;
+            }
+            ServerPlayer owner = owner();
+            if (owner != null && nearestGuardTarget(serverLevel, owner, DEFEND_DEFAULT_RADIUS) != null) {
+                queuedCommands.add(QueuedCommand.defendOwner(DEFEND_DEFAULT_RADIUS));
+                noteIdleSurvivalAction("survival:queued_defend_owner");
+                return;
+            }
+            if (canAcquireInteractionCooldown() && acquireInteractionCooldown()) {
+                if (entity.equipBestAvailableArmor()) {
+                    entity.swingMainHandAction();
+                    noteIdleSurvivalAction("survival:equip_armor");
+                } else {
+                    rollbackInteractionCooldown();
+                }
+            }
+        }
+
+        private void noteIdleSurvivalAction(String reason) {
+            idleSurvivalReason = reason;
+            survivalCooldown.backoffAfterAction();
+            OpenPlayerDebugEvents.record("automation", "survival", null, null, null, reason);
+            OpenPlayerRawTrace.automationOperation("survival", "IDLE", "reason=" + reason);
+        }
+
+        private void noteIdleSurvivalDiagnostic(String reason) {
+            idleSurvivalReason = reason;
+            survivalCooldown.backoffAfterDiagnostic();
+            OpenPlayerDebugEvents.record("automation", "survival", null, null, null, reason);
+            OpenPlayerRawTrace.automationOperation("survival", "IDLE", "reason=" + reason);
+        }
+
+        private Projectile immediateProjectileDanger(ServerLevel serverLevel) {
+            List<Projectile> projectiles = serverLevel.getEntitiesOfClass(
+                    Projectile.class,
+                    entity.getBoundingBox().inflate(SURVIVAL_PROJECTILE_RADIUS),
+                    projectile -> projectile.isAlive()
+                            && entity.distanceToSqr(projectile) <= SURVIVAL_PROJECTILE_RADIUS * SURVIVAL_PROJECTILE_RADIUS
+                            && isBlockLoaded(projectile.blockPosition())
+                            && entity.hasLineOfSight(projectile)
+            );
+            return projectiles.stream()
+                    .min(Comparator.comparingDouble(projectile -> entity.distanceToSqr(projectile)))
+                    .orElse(null);
+        }
+
+        private boolean tryMoveToSafeAdjacentBlock(ServerLevel serverLevel, SurvivalDangerKind dangerKind) {
+            BlockPos origin = entity.blockPosition();
+            for (Direction direction : Direction.Plane.HORIZONTAL) {
+                BlockPos candidate = origin.relative(direction);
+                if (!isSafeAdjacentTarget(serverLevel, candidate)) {
+                    continue;
+                }
+                navigationRuntime.plan(
+                        NavigationTarget.block(candidate.getX(), candidate.getY(), candidate.getZ()),
+                        distanceTo(candidate),
+                        true
+                );
+                boolean accepted = entity.getNavigation().moveTo(
+                        candidate.getX() + 0.5D,
+                        candidate.getY(),
+                        candidate.getZ() + 0.5D,
+                        PLAYER_LIKE_NAVIGATION_SPEED
+                );
+                if (accepted) {
+                    navigationRuntime.markReachable(true);
+                    return true;
+                }
+            }
+            navigationRuntime.fail("unable_to_avoid_" + dangerKind.name().toLowerCase());
+            return false;
+        }
+
+        private boolean isSafeAdjacentTarget(ServerLevel serverLevel, BlockPos candidate) {
+            if (!serverLevel.hasChunkAt(candidate)) {
+                return false;
+            }
+            BlockPos feet = candidate;
+            BlockPos head = candidate.above();
+            BlockPos below = candidate.below();
+            BlockState feetState = serverLevel.getBlockState(feet);
+            BlockState headState = serverLevel.getBlockState(head);
+            BlockState belowState = serverLevel.getBlockState(below);
+            if (!feetState.getFluidState().isEmpty() || !headState.getFluidState().isEmpty()) {
+                return false;
+            }
+            if (feetState.is(Blocks.FIRE) || feetState.is(Blocks.LAVA) || headState.is(Blocks.FIRE) || headState.is(Blocks.LAVA)) {
+                return false;
+            }
+            if (belowState.isAir() || belowState.getFluidState().isSource()) {
+                return false;
+            }
+            return serverLevel.noCollision(entity, entity.getBoundingBox().move(Vec3.atCenterOf(candidate).subtract(entity.position())));
         }
 
         private void startGoto(QueuedCommand command) {
@@ -861,6 +1056,60 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             );
             return itemEntities.stream()
                     .min(Comparator.comparingDouble(itemEntity -> entity.distanceToSqr(itemEntity)))
+                    .orElse(null);
+        }
+
+        private void collectFood(QueuedCommand command) {
+            ServerLevel serverLevel = serverLevel();
+            if (serverLevel == null) {
+                failActiveCommand("server_level_unavailable");
+                return;
+            }
+            if (!isWithinStartDistance(command, entity.position(), command.radius())) {
+                failActiveCommand("outside_collect_food_radius");
+                return;
+            }
+            ItemEntity itemEntity = nearestFoodItem(serverLevel, command);
+            if (itemEntity == null) {
+                stopNavigation();
+                completeActiveCommand();
+                return;
+            }
+            if (!NpcInventoryTransfer.canInsertAll(
+                    entity.inventorySnapshot(), itemEntity.getItem(),
+                    NpcInventoryTransfer.FIRST_NORMAL_SLOT, NpcInventoryTransfer.FIRST_EQUIPMENT_SLOT
+            )) {
+                failActiveCommand("inventory_full_for_food");
+                return;
+            }
+            entity.getLookControl().setLookAt(itemEntity);
+            if (entity.distanceToSqr(itemEntity) > COLLECT_REACH_DISTANCE * COLLECT_REACH_DISTANCE) {
+                if (!moveToEntity(itemEntity, NavigationTarget.entity(entityTypeId(itemEntity)))) {
+                    return;
+                }
+                command.resetReachTicks();
+                return;
+            }
+            stopNavigation();
+            command.incrementReachTicks();
+            if (command.reachTicks() >= COLLECT_REACH_TICKS) {
+                failActiveCommand("food_pickup_not_observed");
+            }
+        }
+
+        private ItemEntity nearestFoodItem(ServerLevel serverLevel, QueuedCommand command) {
+            List<ItemEntity> itemEntities = serverLevel.getEntitiesOfClass(
+                    ItemEntity.class,
+                    entity.getBoundingBox().inflate(command.radius()),
+                    itemEntity -> itemEntity.isAlive()
+                            && !itemEntity.hasPickUpDelay()
+                            && SurvivalFoodPolicy.isSafeEdibleDrop(itemEntity.getItem())
+                            && entity.hasLineOfSight(itemEntity)
+                            && isWithinStartDistance(command, itemEntity.position(), command.radius())
+            );
+            return itemEntities.stream()
+                    .min(Comparator.comparingDouble((ItemEntity itemEntity) -> entity.distanceToSqr(itemEntity))
+                            .thenComparing(itemEntity -> itemEntity.getUUID().toString()))
                     .orElse(null);
         }
 
@@ -1025,7 +1274,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 failActiveCommand("outside_attack_radius");
                 return;
             }
-            LivingEntity target = nearestAttackTarget(serverLevel, command.radius(), Vec3.atCenterOf(command.startPosition()));
+            LivingEntity target = command.survivalOnly()
+                    ? nearestSelfDefenseTarget(serverLevel, command.radius())
+                    : nearestAttackTarget(serverLevel, command.radius(), Vec3.atCenterOf(command.startPosition()));
             if (target == null) {
                 stopNavigation();
                 completeActiveCommand();
@@ -1057,21 +1308,32 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                     .orElse(null);
         }
 
+        private LivingEntity nearestSelfDefenseTarget(ServerLevel serverLevel, double radius) {
+            ServerPlayer owner = owner();
+            List<LivingEntity> targets = serverLevel.getEntitiesOfClass(
+                    LivingEntity.class,
+                    entity.getBoundingBox().inflate(radius),
+                    target -> SurvivalTargetPolicy.isHostileOrDangerTarget(target, owner, entity)
+                            && entity.distanceToSqr(target) <= radius * radius
+                            && entity.hasLineOfSight(target)
+            );
+            return targets.stream()
+                    .min(Comparator.comparingDouble((LivingEntity target) -> entity.distanceToSqr(target))
+                            .thenComparing(target -> target.getUUID().toString()))
+                    .orElse(null);
+        }
+
         private LivingEntity nearestGuardTarget(ServerLevel serverLevel, ServerPlayer owner, double radius) {
             List<LivingEntity> targets = serverLevel.getEntitiesOfClass(
                     LivingEntity.class,
                     owner.getBoundingBox().inflate(radius),
-                    target -> target.isAlive()
-                            && target instanceof Enemy
-                            && target != entity
-                            && !(target instanceof Player)
-                            && !(target instanceof OpenPlayerNpcEntity)
-                            && !target.getUUID().equals(owner.getUUID())
+                    target -> SurvivalTargetPolicy.isHostileOrDangerTarget(target, owner, entity)
                             && owner.distanceToSqr(target) <= radius * radius
                             && entity.hasLineOfSight(target)
             );
             return targets.stream()
-                    .min(Comparator.comparingDouble(target -> owner.distanceToSqr(target)))
+                    .min(Comparator.comparingDouble((LivingEntity target) -> owner.distanceToSqr(target))
+                            .thenComparing(target -> target.getUUID().toString()))
                     .orElse(null);
         }
 
@@ -1146,6 +1408,37 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return;
             }
             followOwner();
+        }
+
+        private void defendOwner(QueuedCommand command) {
+            ServerLevel serverLevel = serverLevel();
+            ServerPlayer owner = owner();
+            if (serverLevel == null || owner == null) {
+                stopAll();
+                return;
+            }
+            if (!isWithinStartDistance(command, owner.position(), command.radius() + FOLLOW_START_DISTANCE)) {
+                stopNavigation();
+                failActiveCommand("outside_defend_radius");
+                return;
+            }
+            if (canAcquireInteractionCooldown() && acquireInteractionCooldown()) {
+                boolean equipped = entity.equipBestAvailableArmor() | entity.selectBestAttackItem();
+                if (equipped) {
+                    entity.swingMainHandAction();
+                } else {
+                    rollbackInteractionCooldown();
+                }
+            }
+            LivingEntity target = nearestGuardTarget(serverLevel, owner, command.radius());
+            if (target == null) {
+                stopNavigation();
+                completeActiveCommand();
+                return;
+            }
+            if (attackTarget(target)) {
+                completeActiveCommand();
+            }
         }
 
         private void patrol(QueuedCommand command) {
@@ -1569,7 +1862,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (kind == IntentKind.MOVE || kind == IntentKind.GOTO) {
                 return MOVE_MAX_TICKS;
             }
-            if (kind == IntentKind.COLLECT_ITEMS) {
+            if (kind == IntentKind.COLLECT_ITEMS || kind == IntentKind.COLLECT_FOOD) {
                 return COLLECT_MAX_TICKS;
             }
             if (kind == IntentKind.FOLLOW_OWNER || kind == IntentKind.GUARD_OWNER || kind == IntentKind.PATROL) {
@@ -1677,18 +1970,19 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             private final SmeltingPlan smeltingPlan;
             private final FuelPlan fuelPlan;
             private final int maxTicks;
+            private final boolean survivalOnly;
             private BlockPos startPosition;
             private int reachTicks;
             private boolean patrolReturn;
             private boolean smeltStarted;
 
             private QueuedCommand(IntentKind kind, Coordinate coordinate, double radius) {
-                this(kind, coordinate, radius, null, null, false, null, null, null, 0);
+                this(kind, coordinate, radius, null, null, false, null, null, null, 0, false);
             }
 
             private QueuedCommand(IntentKind kind, Coordinate coordinate, double radius, BlockPos blockTarget,
-                                  Entity entityTarget, boolean gotoOwner, BlockPos furnacePos,
-                                  SmeltingPlan smeltingPlan, FuelPlan fuelPlan, int maxTicks) {
+                                   Entity entityTarget, boolean gotoOwner, BlockPos furnacePos,
+                                   SmeltingPlan smeltingPlan, FuelPlan fuelPlan, int maxTicks, boolean survivalOnly) {
                 this.kind = kind;
                 this.coordinate = coordinate;
                 this.radius = radius;
@@ -1699,6 +1993,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 this.smeltingPlan = smeltingPlan;
                 this.fuelPlan = fuelPlan;
                 this.maxTicks = maxTicks;
+                this.survivalOnly = survivalOnly;
             }
 
             private static QueuedCommand move(Coordinate coordinate) {
@@ -1710,17 +2005,17 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
 
             private static QueuedCommand gotoOwnerCommand() {
-                return new QueuedCommand(IntentKind.GOTO, null, 0.0D, null, null, true, null, null, null, 0);
+                return new QueuedCommand(IntentKind.GOTO, null, 0.0D, null, null, true, null, null, null, 0, false);
             }
 
             private static QueuedCommand gotoBlock(BlockPos blockPos) {
                 return new QueuedCommand(
-                        IntentKind.GOTO, null, 0.0D, blockPos.immutable(), null, false, null, null, null, 0
+                        IntentKind.GOTO, null, 0.0D, blockPos.immutable(), null, false, null, null, null, 0, false
                 );
             }
 
             private static QueuedCommand gotoEntity(Entity entity) {
-                return new QueuedCommand(IntentKind.GOTO, null, 0.0D, null, entity, false, null, null, null, 0);
+                return new QueuedCommand(IntentKind.GOTO, null, 0.0D, null, entity, false, null, null, null, 0, false);
             }
 
             private static QueuedCommand look(Coordinate coordinate) {
@@ -1735,6 +2030,10 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return new QueuedCommand(IntentKind.COLLECT_ITEMS, null, 0.0D);
             }
 
+            private static QueuedCommand collectFood(double radius) {
+                return new QueuedCommand(IntentKind.COLLECT_FOOD, null, radius);
+            }
+
             private static QueuedCommand breakBlock(Coordinate coordinate) {
                 return new QueuedCommand(IntentKind.BREAK_BLOCK, coordinate, 0.0D);
             }
@@ -1747,8 +2046,18 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return new QueuedCommand(IntentKind.ATTACK_NEAREST, null, radius);
             }
 
+            private static QueuedCommand selfDefense(double radius) {
+                return new QueuedCommand(
+                        IntentKind.ATTACK_NEAREST, null, radius, null, null, false, null, null, null, 0, true
+                );
+            }
+
             private static QueuedCommand guardOwner(double radius) {
                 return new QueuedCommand(IntentKind.GUARD_OWNER, null, radius);
+            }
+
+            private static QueuedCommand defendOwner(double radius) {
+                return new QueuedCommand(IntentKind.DEFEND_OWNER, null, radius);
             }
 
             private static QueuedCommand patrol(Coordinate coordinate) {
@@ -1769,7 +2078,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                         furnacePos.immutable(),
                         smeltingPlan,
                         fuelPlan,
-                        maxTicks
+                        maxTicks,
+                        false
                 );
             }
 
@@ -1811,6 +2121,10 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
             private int maxTicks() {
                 return maxTicks;
+            }
+
+            private boolean survivalOnly() {
+                return survivalOnly;
             }
 
             private boolean smeltStarted() {

@@ -133,6 +133,22 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must document status observation for smelting");
         require(prompt.contains("completion is only after requested output is transferred into NPC normal inventory"),
                 "system prompt must prevent fake smelting success");
+        require(prompt.contains("For COLLECT_FOOD, instruction must be blank or only a positive radius number"),
+                "system prompt must document COLLECT_FOOD radius syntax");
+        require(prompt.contains("do not include the literal COLLECT_FOOD in instruction"),
+                "system prompt must prevent COLLECT_FOOD kind token in instruction");
+        require(prompt.contains("excluding potion, stew, and container-remainder items"),
+                "system prompt must document safe food limits");
+        require(prompt.contains("For DEFEND_OWNER, instruction must be blank or only a positive radius number"),
+                "system prompt must document DEFEND_OWNER radius syntax");
+        require(prompt.contains("do not include the literal DEFEND_OWNER in instruction"),
+                "system prompt must prevent DEFEND_OWNER kind token in instruction");
+        require(prompt.contains("not players, OpenPlayer NPCs, or passive animals by default"),
+                "system prompt must document defense target limits");
+        require(!prompt.contains("COLLECT_FOOD <"),
+                "system prompt must not tell providers to include COLLECT_FOOD token syntax");
+        require(!prompt.contains("DEFEND_OWNER <"),
+                "system prompt must not tell providers to include DEFEND_OWNER token syntax");
     }
 
     private static String normalize(String value) throws Exception {

@@ -487,7 +487,9 @@ public final class OpenPlayerNetworking {
                     SWAP_TO_OFFHAND,
                     DROP_ITEM,
                     ATTACK_NEAREST,
-                    GUARD_OWNER -> "";
+                    GUARD_OWNER,
+                    COLLECT_FOOD,
+                    DEFEND_OWNER -> "";
             case MOVE,
                     LOOK,
                     PATROL,
@@ -505,11 +507,9 @@ public final class OpenPlayerNetworking {
                     WITHDRAW_ITEM,
                     GET_ITEM,
                     SMELT_ITEM,
-                    COLLECT_FOOD,
                     FARM_NEARBY,
                     FISH,
                     ATTACK_TARGET,
-                    DEFEND_OWNER,
                     PAUSE,
                     UNPAUSE,
                     RESET_MEMORY,

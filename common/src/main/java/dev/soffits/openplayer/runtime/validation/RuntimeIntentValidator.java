@@ -35,6 +35,8 @@ public final class RuntimeIntentValidator {
             case PLACE_BLOCK -> requireCoordinateInstruction(intent, "PLACE_BLOCK");
             case ATTACK_NEAREST -> requireBlankOrPositiveRadius(intent, "ATTACK_NEAREST");
             case GUARD_OWNER -> requireBlankOrPositiveRadius(intent, "GUARD_OWNER");
+            case COLLECT_FOOD -> requireBlankOrPositiveRadius(intent, "COLLECT_FOOD");
+            case DEFEND_OWNER -> requireBlankOrPositiveRadius(intent, "DEFEND_OWNER");
             case INVENTORY_QUERY -> requireBlankInstruction(intent, "INVENTORY_QUERY");
             case EQUIP_ITEM -> requireItemOnlyInstruction(intent, "EQUIP_ITEM");
             case GIVE_ITEM -> requireGiveItemInstruction(intent);
@@ -46,11 +48,9 @@ public final class RuntimeIntentValidator {
             case CHAT -> RuntimeIntentValidationResult.rejected("CHAT cannot be submitted to automation");
             case UNAVAILABLE -> RuntimeIntentValidationResult.rejected("UNAVAILABLE cannot be submitted to automation");
             case OBSERVE -> RuntimeIntentValidationResult.rejected("OBSERVE cannot be submitted to automation");
-            case COLLECT_FOOD,
-                    FARM_NEARBY,
+            case FARM_NEARBY,
                     FISH,
                     ATTACK_TARGET,
-                    DEFEND_OWNER,
                     PAUSE,
                     UNPAUSE,
                     RESET_MEMORY,

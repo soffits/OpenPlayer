@@ -3,6 +3,7 @@ package dev.soffits.openplayer.entity;
 import dev.soffits.openplayer.api.AiPlayerNpcCommand;
 import dev.soffits.openplayer.api.CommandSubmissionResult;
 import dev.soffits.openplayer.api.NpcOwnerId;
+import dev.soffits.openplayer.automation.survival.SurvivalFoodPolicy;
 import dev.soffits.openplayer.automation.resource.ResourcePlanStep;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -447,7 +448,55 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
         return true;
     }
 
-    static boolean canUseSelectedMainHandItemLocally(ItemStack selectedStack) {
+    public int bestSafeFoodSlotForLocalUse() {
+        return bestSafeFoodSlotForLocalUse(internalInventory);
+    }
+
+    public boolean useSafeFoodSlotForLocalUse(int slot) {
+        if (!isSafeFoodSlotForLocalUse(internalInventory, slot)) {
+            return false;
+        }
+        List<ItemStack> snapshot = inventorySnapshot();
+        int previousSelectedMainHandSlot = selectedMainHandSlot;
+        if (!selectSafeFoodSlotForLocalUse(slot) || !useSelectedMainHandItemLocally()) {
+            restoreInternalInventory(snapshot);
+            selectedMainHandSlot = previousSelectedMainHandSlot;
+            return false;
+        }
+        return true;
+    }
+
+    public static int bestSafeFoodSlotForLocalUse(List<ItemStack> inventory) {
+        return SurvivalFoodPolicy.bestSafeFoodSlot(
+                inventory,
+                FIRST_NORMAL_INVENTORY_SLOT,
+                FIRST_EQUIPMENT_INVENTORY_SLOT
+        );
+    }
+
+    public static boolean isSafeFoodSlotForLocalUse(List<ItemStack> inventory, int slot) {
+        return slot >= FIRST_NORMAL_INVENTORY_SLOT
+                && slot < FIRST_EQUIPMENT_INVENTORY_SLOT
+                && inventory != null
+                && slot < inventory.size()
+                && SurvivalFoodPolicy.isSafeEdibleDrop(inventory.get(slot));
+    }
+
+    private boolean selectSafeFoodSlotForLocalUse(int slot) {
+        if (!isSafeFoodSlotForLocalUse(internalInventory, slot)) {
+            return false;
+        }
+        if (NpcHotbarSelection.isHotbarSlot(slot)) {
+            return selectHotbarSlot(slot);
+        }
+        ItemStack foodStack = internalInventory.get(slot).copy();
+        ItemStack selectedStack = internalInventory.get(selectedMainHandSlot).copy();
+        internalInventory.set(selectedMainHandSlot, foodStack);
+        internalInventory.set(slot, selectedStack);
+        return true;
+    }
+
+    public static boolean canUseSelectedMainHandItemLocally(ItemStack selectedStack) {
         if (selectedStack == null || selectedStack.isEmpty() || selectedStack.getUseDuration() <= 0) {
             return false;
         }

@@ -26,6 +26,7 @@ public final class RuntimeIntentValidatorTest {
         validatesGotoInstructions();
         validatesRadiusInstructions();
         rejectsNonAutomationConversationKinds();
+        validatesSurvivalRadiusInstructions();
         rejectsPlannedIntentKinds();
         gatesPlannedWorldActionKindsBeforeUnimplementedRejection();
         rejectsPlannedNonGatedKindsAsUnimplemented();
@@ -220,6 +221,24 @@ public final class RuntimeIntentValidatorTest {
         }
     }
 
+    private static void validatesSurvivalRadiusInstructions() {
+        IntentKind[] survivalKinds = {IntentKind.COLLECT_FOOD, IntentKind.DEFEND_OWNER};
+        for (IntentKind kind : survivalKinds) {
+            require(RuntimeIntentValidator.validate(intent(kind, ""), true).isAccepted(),
+                    kind + " should accept blank radius instruction");
+            require(RuntimeIntentValidator.validate(intent(kind, "12.5"), true).isAccepted(),
+                    kind + " should accept positive finite radius");
+            requireRejected(RuntimeIntentValidator.validate(intent(kind, "0"), true),
+                    kind.name() + " instruction must be blank or a positive radius number");
+            requireRejected(RuntimeIntentValidator.validate(intent(kind, "wide"), true),
+                    kind.name() + " instruction must be blank or a positive radius number");
+            requireRejected(RuntimeIntentValidator.validate(intent(kind, "12 extra"), true),
+                    kind.name() + " instruction must be blank or a positive radius number");
+            requireRejected(RuntimeIntentValidator.validate(intent(kind, "12"), false),
+                    "World actions are disabled for this OpenPlayer character");
+        }
+    }
+
     private static void rejectsNonAutomationConversationKinds() {
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.CHAT, "hello"), true),
                 "CHAT cannot be submitted to automation");
@@ -309,11 +328,9 @@ public final class RuntimeIntentValidatorTest {
 
     private static EnumSet<IntentKind> plannedGatedKinds() {
         return EnumSet.of(
-                IntentKind.COLLECT_FOOD,
                 IntentKind.FARM_NEARBY,
                 IntentKind.FISH,
                 IntentKind.ATTACK_TARGET,
-                IntentKind.DEFEND_OWNER,
                 IntentKind.BUILD_STRUCTURE
         );
     }
