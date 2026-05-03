@@ -13,23 +13,48 @@ public final class OpenPlayerRequestSender {
         NetworkManager.sendToServer(OpenPlayerConstants.SPAWN_REQUEST_PACKET_ID, emptyPayload());
     }
 
+    public static void sendSpawnRequest(String characterId) {
+        NetworkManager.sendToServer(OpenPlayerConstants.SPAWN_REQUEST_PACKET_ID, characterPayload(characterId));
+    }
+
     public static void sendDespawnRequest() {
         NetworkManager.sendToServer(OpenPlayerConstants.DESPAWN_REQUEST_PACKET_ID, emptyPayload());
+    }
+
+    public static void sendDespawnRequest(String characterId) {
+        NetworkManager.sendToServer(OpenPlayerConstants.DESPAWN_REQUEST_PACKET_ID, characterPayload(characterId));
     }
 
     public static void sendFollowOwnerRequest() {
         NetworkManager.sendToServer(OpenPlayerConstants.FOLLOW_OWNER_REQUEST_PACKET_ID, emptyPayload());
     }
 
+    public static void sendFollowOwnerRequest(String characterId) {
+        NetworkManager.sendToServer(OpenPlayerConstants.FOLLOW_OWNER_REQUEST_PACKET_ID, characterPayload(characterId));
+    }
+
     public static void sendStopRequest() {
         NetworkManager.sendToServer(OpenPlayerConstants.STOP_REQUEST_PACKET_ID, emptyPayload());
+    }
+
+    public static void sendStopRequest(String characterId) {
+        NetworkManager.sendToServer(OpenPlayerConstants.STOP_REQUEST_PACKET_ID, characterPayload(characterId));
     }
 
     public static void sendCommandTextRequest(String commandText) {
         if (commandText == null) {
             throw new IllegalArgumentException("commandText cannot be null");
         }
-        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+        FriendlyByteBuf buffer = characterPayload(null);
+        buffer.writeUtf(commandText);
+        NetworkManager.sendToServer(OpenPlayerConstants.COMMAND_TEXT_REQUEST_PACKET_ID, buffer);
+    }
+
+    public static void sendCommandTextRequest(String characterId, String commandText) {
+        if (commandText == null) {
+            throw new IllegalArgumentException("commandText cannot be null");
+        }
+        FriendlyByteBuf buffer = characterPayload(characterId);
         buffer.writeUtf(commandText);
         NetworkManager.sendToServer(OpenPlayerConstants.COMMAND_TEXT_REQUEST_PACKET_ID, buffer);
     }
@@ -38,7 +63,17 @@ public final class OpenPlayerRequestSender {
         NetworkManager.sendToServer(OpenPlayerConstants.STATUS_REQUEST_PACKET_ID, emptyPayload());
     }
 
+    public static void sendCharacterListRequest() {
+        NetworkManager.sendToServer(OpenPlayerConstants.CHARACTER_LIST_REQUEST_PACKET_ID, emptyPayload());
+    }
+
     private static FriendlyByteBuf emptyPayload() {
         return new FriendlyByteBuf(Unpooled.buffer());
+    }
+
+    private static FriendlyByteBuf characterPayload(String characterId) {
+        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+        buffer.writeUtf(characterId == null ? "" : characterId, 64);
+        return buffer;
     }
 }

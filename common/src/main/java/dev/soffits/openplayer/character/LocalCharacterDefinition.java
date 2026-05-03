@@ -78,11 +78,11 @@ public record LocalCharacterDefinition(String id, String displayName, String des
         if (spawnLocation == null) {
             throw new IllegalArgumentException("spawnLocation cannot be null");
         }
-        return new AiPlayerNpcSpec(toRoleId(), ownerId, toProfileSpec(), spawnLocation);
+        return new AiPlayerNpcSpec(toSessionRoleId(), ownerId, toProfileSpec(), spawnLocation);
     }
 
-    public NpcRoleId toRoleId() {
-        return new NpcRoleId(defaultRoleId == null ? OpenPlayerConstants.DEFAULT_NETWORK_NPC_ROLE_ID : defaultRoleId);
+    public NpcRoleId toSessionRoleId() {
+        return new NpcRoleId(OpenPlayerConstants.LOCAL_CHARACTER_SESSION_ROLE_PREFIX + id);
     }
 
     public static List<String> validate(String id, String displayName, String description, String skinTexture,

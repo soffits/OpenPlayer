@@ -1,11 +1,17 @@
 package dev.soffits.openplayer.client;
 
+import dev.soffits.openplayer.character.LocalCharacterListEntry;
+import dev.soffits.openplayer.character.LocalCharacterListView;
+import java.util.List;
+
 public final class OpenPlayerClientStatus {
     private static String parserStatus = "unknown";
     private static String endpointStatus = "unknown";
     private static String modelStatus = "unknown";
     private static String apiKeyStatus = "unknown";
     private static String automationStatus = "unknown";
+    private static String characterListStatus = "loading";
+    private static LocalCharacterListView characterList = new LocalCharacterListView(List.of(), List.of());
 
     private OpenPlayerClientStatus() {
     }
@@ -43,5 +49,28 @@ public final class OpenPlayerClientStatus {
 
     public static String automationStatus() {
         return automationStatus;
+    }
+
+    public static void updateCharacters(LocalCharacterListView value) {
+        characterList = value;
+        if (!value.errors().isEmpty()) {
+            characterListStatus = "validation errors";
+        } else if (value.characters().isEmpty()) {
+            characterListStatus = "empty";
+        } else {
+            characterListStatus = "loaded";
+        }
+    }
+
+    public static String characterListStatus() {
+        return characterListStatus;
+    }
+
+    public static List<LocalCharacterListEntry> characters() {
+        return characterList.characters();
+    }
+
+    public static List<String> characterErrors() {
+        return characterList.errors();
     }
 }

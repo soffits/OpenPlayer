@@ -1,5 +1,6 @@
 package dev.soffits.openplayer.runtime;
 
+import dev.soffits.openplayer.OpenPlayerConstants;
 import dev.soffits.openplayer.api.AiPlayerNpcSpec;
 import java.util.UUID;
 
@@ -17,10 +18,11 @@ record RuntimeNpcIdentityKey(UUID ownerId, String roleId, String profileName) {
     }
 
     static RuntimeNpcIdentityKey from(AiPlayerNpcSpec spec) {
-        return new RuntimeNpcIdentityKey(spec.ownerId().value(), spec.roleId().value(), spec.profile().name());
+        return from(spec.ownerId().value(), spec.roleId().value(), spec.profile().name());
     }
 
     static RuntimeNpcIdentityKey from(UUID ownerId, String roleId, String profileName) {
-        return new RuntimeNpcIdentityKey(ownerId, roleId, profileName);
+        String identityProfileName = roleId.startsWith(OpenPlayerConstants.LOCAL_CHARACTER_SESSION_ROLE_PREFIX) ? "" : profileName;
+        return new RuntimeNpcIdentityKey(ownerId, roleId, identityProfileName);
     }
 }
