@@ -37,8 +37,15 @@ public final class OpenPlayerRuntime {
         return activeIntentParser;
     }
 
-    private static void installServerService(MinecraftServer server) {
+    public static void reloadIntentParser() {
         activeIntentParser = OpenPlayerIntentParserConfig.createIntentParser();
+        if (activeService != null) {
+            activeService.updateIntentParser(activeIntentParser);
+        }
+    }
+
+    private static void installServerService(MinecraftServer server) {
+        reloadIntentParser();
         activeService = new RuntimeAiPlayerNpcService(server, activeIntentParser);
         activeService.restorePersistedSessions();
         OpenPlayerApi.registerNpcService(activeService);

@@ -21,6 +21,7 @@ public final class OpenPlayerConstants {
     public static final ResourceLocation CHARACTER_EXPORT_REQUEST_PACKET_ID = id("character_export_request");
     public static final ResourceLocation CHARACTER_IMPORT_REQUEST_PACKET_ID = id("character_import_request");
     public static final ResourceLocation CHARACTER_FILE_OPERATION_RESPONSE_PACKET_ID = id("character_file_operation_response");
+    public static final ResourceLocation PROVIDER_CONFIG_SAVE_REQUEST_PACKET_ID = id("provider_config_save_request");
 
     private OpenPlayerConstants() {
     }

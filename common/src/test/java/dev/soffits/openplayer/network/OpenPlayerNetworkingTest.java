@@ -25,6 +25,9 @@ public final class OpenPlayerNetworkingTest {
         matchesLegacyDefaultNetworkNpc();
         rejectsCharacterSessionUsingDefaultRole();
         rejectsOtherOwnerLegacyDefaultNetworkNpc();
+        acceptsSingleplayerOwnerProviderConfigSave();
+        acceptsPermittedProviderConfigSave();
+        rejectsUnauthorizedProviderConfigSave();
     }
 
     private static void matchesLegacyDefaultNetworkNpc() {
@@ -49,6 +52,18 @@ public final class OpenPlayerNetworkingTest {
                 "Alex",
                 session(OTHER_OWNER_ID, OpenPlayerConstants.DEFAULT_NETWORK_NPC_ROLE_ID, "Alex OpenPlayer NPC")
         ), "absent character id must not target another player's legacy default network NPC");
+    }
+
+    private static void acceptsSingleplayerOwnerProviderConfigSave() {
+        require(OpenPlayerNetworking.maySaveProviderConfig(true, false), "singleplayer owner must be allowed to save provider config");
+    }
+
+    private static void acceptsPermittedProviderConfigSave() {
+        require(OpenPlayerNetworking.maySaveProviderConfig(false, true), "permitted player must be allowed to save provider config");
+    }
+
+    private static void rejectsUnauthorizedProviderConfigSave() {
+        require(!OpenPlayerNetworking.maySaveProviderConfig(false, false), "unauthorized player must not save provider config");
     }
 
     private static AiPlayerNpcSession session(UUID ownerId, String roleId, String profileName) {

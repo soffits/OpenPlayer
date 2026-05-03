@@ -18,6 +18,12 @@ tasks.register('runOpenPlayerNetworkingTest', JavaExec) {
     mainClass = 'dev.soffits.openplayer.network.OpenPlayerNetworkingTest'
 }
 
+tasks.register('runOpenPlayerIntentParserConfigTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.OpenPlayerIntentParserConfigTest'
+}
+
 tasks.register('runLocalAssignmentRepositoryTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
@@ -107,6 +113,7 @@ tasks.named('check') {
     dependsOn tasks.named('runLocalAssignmentRepositoryTest')
     dependsOn tasks.named('runLocalCharacterRepositoryWriteTest')
     dependsOn tasks.named('runOpenPlayerNetworkingTest')
+    dependsOn tasks.named('runOpenPlayerIntentParserConfigTest')
     dependsOn tasks.named('runRuntimeNpcIdentityKeyTest')
     dependsOn tasks.named('runCompanionLifecycleManagerTest')
     dependsOn tasks.named('runLocalCharacterSkinTexturesTest')
