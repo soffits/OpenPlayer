@@ -8,12 +8,15 @@ import dev.soffits.openplayer.OpenPlayerIntentParserConfig;
 import dev.soffits.openplayer.OpenPlayerRuntimeStatus;
 import dev.soffits.openplayer.api.OpenPlayerApi;
 import dev.soffits.openplayer.entity.OpenPlayerNpcEntity;
+import dev.soffits.openplayer.intent.DisabledIntentParser;
+import dev.soffits.openplayer.intent.IntentParser;
 import dev.soffits.openplayer.registry.OpenPlayerEntityTypes;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
 public final class OpenPlayerRuntime {
     private static RuntimeAiPlayerNpcService activeService;
+    private static IntentParser activeIntentParser = new DisabledIntentParser();
 
     private OpenPlayerRuntime() {
     }
@@ -30,8 +33,13 @@ public final class OpenPlayerRuntime {
         return new OpenPlayerRuntimeStatus(OpenPlayerIntentParserConfig.status(), OpenPlayerAutomationConfig.status());
     }
 
+    public static IntentParser intentParser() {
+        return activeIntentParser;
+    }
+
     private static void installServerService(MinecraftServer server) {
-        activeService = new RuntimeAiPlayerNpcService(server, OpenPlayerIntentParserConfig.createIntentParser());
+        activeIntentParser = OpenPlayerIntentParserConfig.createIntentParser();
+        activeService = new RuntimeAiPlayerNpcService(server, activeIntentParser);
         activeService.restorePersistedSessions();
         OpenPlayerApi.registerNpcService(activeService);
     }
@@ -41,6 +49,7 @@ public final class OpenPlayerRuntime {
             activeService.clearRuntimeSessions();
             activeService = null;
         }
+        activeIntentParser = new DisabledIntentParser();
         OpenPlayerApi.registerUnavailableNpcService();
     }
 

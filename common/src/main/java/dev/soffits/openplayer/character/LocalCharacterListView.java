@@ -30,17 +30,32 @@ public record LocalCharacterListView(List<LocalCharacterListEntry> characters, L
     }
 
     public static LocalCharacterListView fromRepositoryResult(LocalCharacterRepositoryResult result,
-                                                              CharacterLifecycleResolver lifecycleResolver,
-                                                              LocalSkinPathResolver localSkinPathResolver) {
+                                                               CharacterLifecycleResolver lifecycleResolver,
+                                                               LocalSkinPathResolver localSkinPathResolver) {
+        return fromRepositoryResult(result, lifecycleResolver, localSkinPathResolver, ignored -> "unknown");
+    }
+
+    public static LocalCharacterListView fromRepositoryResult(LocalCharacterRepositoryResult result,
+                                                               CharacterLifecycleResolver lifecycleResolver,
+                                                               LocalSkinPathResolver localSkinPathResolver,
+                                                               LocalCharacterListEntry.ConversationStatusResolver conversationStatusResolver) {
         if (result == null) {
             throw new IllegalArgumentException("result cannot be null");
         }
         if (lifecycleResolver == null) {
             throw new IllegalArgumentException("lifecycleResolver cannot be null");
         }
+        if (conversationStatusResolver == null) {
+            throw new IllegalArgumentException("conversationStatusResolver cannot be null");
+        }
         List<LocalCharacterListEntry> entries = new ArrayList<>();
         for (LocalCharacterDefinition character : result.characters()) {
-            entries.add(LocalCharacterListEntry.from(character, lifecycleResolver.lifecycleStatus(character), localSkinPathResolver));
+            entries.add(LocalCharacterListEntry.from(
+                    character,
+                    lifecycleResolver.lifecycleStatus(character),
+                    localSkinPathResolver,
+                    conversationStatusResolver
+            ));
         }
         List<String> safeErrors = new ArrayList<>();
         for (LocalCharacterValidationError error : result.errors()) {

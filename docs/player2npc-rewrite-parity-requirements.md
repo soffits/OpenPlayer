@@ -260,6 +260,16 @@ Add an optional per-character conversation and intent loop that can translate pl
 - Invalid, unsafe, or unparsable provider output is rejected without executing actions.
 - No tests, logs, docs, or fixtures contain real provider credentials.
 
+### Current Implementation Notes
+
+OpenPlayer now has a focused selected-character conversation loop in `common` that reuses the existing runtime `IntentParser`; it does not add dependencies or a second provider path. The default runtime remains offline and safe. When `OPENPLAYER_INTENT_PARSER_ENABLED` is not enabled, configured character conversation reports `Conversation unavailable: intent parser disabled`, does not call the parser/provider, and does not execute fallback actions.
+
+`conversationPrompt` and `conversationSettings` are treated as bounded, non-secret, per-character prompt text only. Provider endpoint, model, and API key stay in environment variables or JVM properties through `OpenPlayerIntentParserConfig` and are never character fields. Selected-character command text enters the conversation loop only when those conversation fields are present and the parser is enabled; otherwise command text preserves the existing direct selected-character behavior.
+
+The loop has pure Java seams for prompt assembly, bounded in-memory history trimming, and untrusted parser output validation. Provider output must become a constrained `CommandIntent` through the existing parser, then submit through `CompanionLifecycleManager` selected-character command submission. Invalid, unavailable, oversized, or unparsable parser output rejects without action. Character list entries now expose safe conversation status text such as `not configured`, `unavailable: parser disabled`, or `available`.
+
+Remaining gaps are explicit: no separate NPC spoken-response UI, no persisted conversation memory, no per-character model/provider override, no character-file secrets, no dedicated rate-limit scheduler, and no broader action permission profiles beyond the current automation backend safety gates.
+
 ## Phase 8: Tests And Acceptance Criteria
 
 ### Goal

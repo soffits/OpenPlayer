@@ -16,14 +16,23 @@ public record LocalCharacterListEntry(String id, String displayName, String desc
     }
 
     public static LocalCharacterListEntry from(LocalCharacterDefinition character, String lifecycleStatus,
-                                              LocalSkinPathResolver localSkinPathResolver) {
+                                               LocalSkinPathResolver localSkinPathResolver) {
+        return from(character, lifecycleStatus, localSkinPathResolver, ignored -> "unknown");
+    }
+
+    public static LocalCharacterListEntry from(LocalCharacterDefinition character, String lifecycleStatus,
+                                               LocalSkinPathResolver localSkinPathResolver,
+                                               ConversationStatusResolver conversationStatusResolver) {
         if (character == null) {
             throw new IllegalArgumentException("character cannot be null");
+        }
+        if (conversationStatusResolver == null) {
+            throw new IllegalArgumentException("conversationStatusResolver cannot be null");
         }
         String skinStatus = skinStatus(character, localSkinPathResolver);
         String conversationStatus = character.conversationPrompt() == null && character.conversationSettings() == null
                 ? "not configured"
-                : "configured for later phases";
+                : conversationStatusResolver.conversationStatus(character);
         return new LocalCharacterListEntry(
                 character.id(),
                 character.displayName(),
@@ -58,5 +67,10 @@ public record LocalCharacterListEntry(String id, String displayName, String desc
 
     private static String normalize(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    @FunctionalInterface
+    public interface ConversationStatusResolver {
+        String conversationStatus(LocalCharacterDefinition character);
     }
 }

@@ -31,7 +31,8 @@ public final class OpenPlayerNetworking {
     private static final int MAX_COMMAND_TEXT_LENGTH = 512;
     private static final CompanionLifecycleManager COMPANION_LIFECYCLE_MANAGER = new CompanionLifecycleManager(
             OpenPlayerApi::npcService,
-            () -> OpenPlayerLocalCharacters.repository().loadAll()
+            () -> OpenPlayerLocalCharacters.repository().loadAll(),
+            OpenPlayerRuntime::intentParser
     );
 
     private OpenPlayerNetworking() {
@@ -240,7 +241,10 @@ public final class OpenPlayerNetworking {
         LocalCharacterListView view = LocalCharacterListView.fromRepositoryResult(
                 result,
                 character -> COMPANION_LIFECYCLE_MANAGER.lifecycleStatus(player.getUUID(), character),
-                new LocalSkinPathResolver(OpenPlayerLocalCharacters.openPlayerDirectory())
+                new LocalSkinPathResolver(OpenPlayerLocalCharacters.openPlayerDirectory()),
+                character -> OpenPlayerRuntime.status().intentParser().enabled()
+                        ? "available"
+                        : "unavailable: parser disabled"
         );
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
         buffer.writeVarInt(view.characters().size());

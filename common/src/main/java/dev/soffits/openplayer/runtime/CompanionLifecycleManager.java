@@ -10,7 +10,15 @@ import dev.soffits.openplayer.api.NpcSessionStatus;
 import dev.soffits.openplayer.api.NpcSpawnLocation;
 import dev.soffits.openplayer.character.LocalCharacterDefinition;
 import dev.soffits.openplayer.character.LocalCharacterRepositoryResult;
+import dev.soffits.openplayer.conversation.ConversationHistoryTrimmer;
+import dev.soffits.openplayer.conversation.ConversationLoop;
+import dev.soffits.openplayer.conversation.ConversationTurn;
+import dev.soffits.openplayer.intent.IntentParser;
+import dev.soffits.openplayer.OpenPlayerIntentParserConfig;
 import java.util.Locale;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -18,9 +26,23 @@ import java.util.function.Supplier;
 public final class CompanionLifecycleManager {
     private final Supplier<AiPlayerNpcService> npcServiceSupplier;
     private final Supplier<LocalCharacterRepositoryResult> characterRepositoryResultSupplier;
+    private final ConversationLoop conversationLoop;
+    private final Map<ConversationHistoryKey, List<ConversationTurn>> conversationHistory = new LinkedHashMap<>();
 
     public CompanionLifecycleManager(Supplier<AiPlayerNpcService> npcServiceSupplier,
-                                     Supplier<LocalCharacterRepositoryResult> characterRepositoryResultSupplier) {
+                                      Supplier<LocalCharacterRepositoryResult> characterRepositoryResultSupplier) {
+        this(npcServiceSupplier, characterRepositoryResultSupplier, new dev.soffits.openplayer.intent.DisabledIntentParser());
+    }
+
+    public CompanionLifecycleManager(Supplier<AiPlayerNpcService> npcServiceSupplier,
+                                     Supplier<LocalCharacterRepositoryResult> characterRepositoryResultSupplier,
+                                     IntentParser intentParser) {
+        this(npcServiceSupplier, characterRepositoryResultSupplier, () -> intentParser);
+    }
+
+    public CompanionLifecycleManager(Supplier<AiPlayerNpcService> npcServiceSupplier,
+                                     Supplier<LocalCharacterRepositoryResult> characterRepositoryResultSupplier,
+                                     Supplier<IntentParser> intentParserSupplier) {
         if (npcServiceSupplier == null) {
             throw new IllegalArgumentException("npcServiceSupplier cannot be null");
         }
@@ -29,6 +51,7 @@ public final class CompanionLifecycleManager {
         }
         this.npcServiceSupplier = npcServiceSupplier;
         this.characterRepositoryResultSupplier = characterRepositoryResultSupplier;
+        this.conversationLoop = new ConversationLoop(intentParserSupplier, OpenPlayerIntentParserConfig::status);
     }
 
     public CommandSubmissionResult spawnSelected(NpcOwnerId ownerId, NpcSpawnLocation spawnLocation,
@@ -80,9 +103,35 @@ public final class CompanionLifecycleManager {
         if (commandText == null) {
             throw new IllegalArgumentException("commandText cannot be null");
         }
-        Optional<AiPlayerNpcSession> session = findActiveSession(ownerId, characterId);
+        Optional<LocalCharacterDefinition> character = findCharacter(characterId);
+        if (character.isEmpty()) {
+            return rejectedUnknownCharacter();
+        }
+        Optional<AiPlayerNpcSession> session = findActiveSession(ownerId, character.get());
         if (session.isEmpty()) {
-            return unknownOrMissingSession(characterId);
+            return new CommandSubmissionResult(CommandSubmissionStatus.UNKNOWN_SESSION, "Companion is not spawned");
+        }
+        if (hasConversationConfig(character.get())) {
+            ConversationHistoryKey historyKey = new ConversationHistoryKey(ownerId, character.get().id());
+            List<ConversationTurn> history = conversationHistory.getOrDefault(historyKey, List.of());
+            AiPlayerNpcCommand[] submittedCommand = new AiPlayerNpcCommand[1];
+            CommandSubmissionResult result = conversationLoop.submit(
+                    character.get(),
+                    commandText,
+                    history,
+                    command -> {
+                        submittedCommand[0] = command;
+                        return submitSelectedCommand(ownerId, character.get().id(), command);
+                    }
+            );
+            if (result.status() == CommandSubmissionStatus.ACCEPTED && submittedCommand[0] != null) {
+                appendConversationTurn(historyKey, new ConversationTurn("player", commandText));
+                appendConversationTurn(historyKey, new ConversationTurn(
+                        "openplayer",
+                        submittedCommand[0].intent().kind().name() + " " + submittedCommand[0].intent().instruction()
+                ));
+            }
+            return result;
         }
         return npcService().submitCommandText(session.get().sessionId(), commandText);
     }
@@ -118,12 +167,31 @@ public final class CompanionLifecycleManager {
         if (character.isEmpty()) {
             return Optional.empty();
         }
+        return findActiveSession(ownerId, character.get());
+    }
+
+    private Optional<AiPlayerNpcSession> findActiveSession(UUID ownerId, LocalCharacterDefinition character) {
         for (AiPlayerNpcSession session : npcService().listSessions()) {
-            if (matchesLocalCharacterSession(ownerId, session, character.get())) {
+            if (matchesLocalCharacterSession(ownerId, session, character)) {
                 return Optional.of(session);
             }
         }
         return Optional.empty();
+    }
+
+    private static boolean hasConversationConfig(LocalCharacterDefinition character) {
+        return character.conversationPrompt() != null || character.conversationSettings() != null;
+    }
+
+    private void appendConversationTurn(ConversationHistoryKey historyKey, ConversationTurn turn) {
+        List<ConversationTurn> currentHistory = conversationHistory.getOrDefault(historyKey, List.of());
+        java.util.ArrayList<ConversationTurn> updatedHistory = new java.util.ArrayList<>(currentHistory);
+        updatedHistory.add(turn);
+        conversationHistory.put(historyKey, ConversationHistoryTrimmer.trim(
+                updatedHistory,
+                ConversationLoop.MAX_HISTORY_TURNS,
+                ConversationLoop.MAX_HISTORY_CHARACTERS
+        ));
     }
 
     private Optional<LocalCharacterDefinition> findCharacter(String characterId) {
@@ -153,5 +221,8 @@ public final class CompanionLifecycleManager {
 
     private CommandSubmissionResult rejectedUnknownCharacter() {
         return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Unknown local character");
+    }
+
+    private record ConversationHistoryKey(UUID ownerId, String characterId) {
     }
 }
