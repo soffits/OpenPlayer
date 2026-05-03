@@ -12,7 +12,35 @@ The initial target is Minecraft 1.20.1 on Java 17 with an Architectury-style mul
 
 ## Milestone Status
 
-Current implementation includes runtime NPC sessions, duplicate prevention, basic command intents, item pickup with inventory persistence, owner lifecycle cleanup and restore, spawn/despawn networking, a minimal client control screen with safe runtime status, a player-shaped renderer with optional profile skin resource support, a vanilla NPC-backed task backend, an optional reflective Baritone command bridge, and a disabled-by-default runtime intent parser that can use an opt-in JDK-only OpenAI-compatible provider. Automatone is not directly integrated yet.
+Current implementation includes runtime NPC sessions, duplicate prevention, local character definition parsing, basic command intents, item pickup with inventory persistence, owner lifecycle cleanup and restore, spawn/despawn networking, a minimal client control screen with safe runtime status, a player-shaped renderer with optional profile skin resource support, a vanilla NPC-backed task backend, an optional reflective Baritone command bridge, and a disabled-by-default runtime intent parser that can use an opt-in JDK-only OpenAI-compatible provider. Automatone is not directly integrated yet.
+
+## Local Character Config
+
+OpenPlayer local character definitions use dependency-free Java `.properties` files. The default mod-owned path is `<Minecraft config>/openplayer/characters`; loader wiring will call the repository slice with that path in a later UI/runtime phase. Missing directories return an empty character list.
+
+Each character is one `*.properties` file:
+
+```properties
+id=alex_helper
+displayName=Alex Helper
+description=Optional short description shown by future UI.
+skinTexture=openplayer:skins/alex_helper
+localSkinFile=skins/alex_helper.png
+defaultRoleId=helper
+conversationPrompt=Reserved for later role instructions.
+conversationSettings=Reserved for later non-sensitive preferences.
+```
+
+Supported fields are exactly `id`, `displayName`, `description`, `skinTexture`, `localSkinFile`, `defaultRoleId`, `conversationPrompt`, and `conversationSettings`. Unknown fields are validation errors.
+
+Validation rules:
+
+- `id` and `defaultRoleId` use 2-64 lowercase ASCII characters: letters, digits, underscore, or hyphen, starting with a letter or digit.
+- `displayName` is required, 1-32 characters, and must not contain control characters.
+- `description`, `conversationPrompt`, and `conversationSettings` are optional bounded text fields and must not contain secret-like labels or credentials.
+- `skinTexture` is an optional lowercase Minecraft resource id in `namespace:path` form.
+- `localSkinFile` is reserved for later PNG skin loading and must be a safe relative `.png` path using forward slashes. Absolute paths, drive prefixes, parent traversal, backslashes, empty path segments, and non-PNG paths are rejected.
+- Character files must not store provider API keys, access tokens, passwords, cookies, credentials, or other secrets.
 
 ## Dependencies
 
