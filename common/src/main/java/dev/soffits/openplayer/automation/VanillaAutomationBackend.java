@@ -66,9 +66,11 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private static final int STUCK_CHECK_INTERVAL_TICKS = 40;
         private static final double STUCK_MIN_PROGRESS_DISTANCE = 0.15D;
         private static final int STUCK_MAX_CHECKS = 4;
+        private static final int INTERACTION_COOLDOWN_TICKS = 10;
 
         private final OpenPlayerNpcEntity entity;
         private final Queue<QueuedCommand> queuedCommands = new ArrayDeque<>();
+        private final InteractionCooldown interactionCooldown = new InteractionCooldown(INTERACTION_COOLDOWN_TICKS);
         private QueuedCommand activeCommand;
         private AutomationControllerMonitor activeMonitor;
         private NpcOwnerId ownerId;
@@ -161,17 +163,66 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 if (!AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
                     return rejected("EQUIP_BEST_ITEM requires a blank instruction");
                 }
+                if (!canAcquireInteractionCooldown()) {
+                    return rejected(interactionCooldownMessage());
+                }
                 LivingEntity target = nearestAttackTarget(serverLevel(), ATTACK_DEFAULT_RADIUS, entity.position());
-                if (target != null && entity.selectBestAttackItem()) {
+                if (target != null && acquireInteractionCooldown() && entity.selectBestAttackItem()) {
                     return accepted("EQUIP_BEST_ITEM accepted");
                 }
+                rollbackInteractionCooldown();
                 return rejected("EQUIP_BEST_ITEM found no useful hotbar item for the nearby context");
+            }
+            if (kind == IntentKind.EQUIP_ARMOR) {
+                if (!AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
+                    return rejected("EQUIP_ARMOR requires a blank instruction");
+                }
+                if (!canAcquireInteractionCooldown()) {
+                    return rejected(interactionCooldownMessage());
+                }
+                if (!acquireInteractionCooldown() || !entity.equipBestAvailableArmor()) {
+                    rollbackInteractionCooldown();
+                    return rejected("EQUIP_ARMOR found no armor upgrade in NPC inventory");
+                }
+                entity.swingMainHandAction();
+                return accepted("EQUIP_ARMOR accepted");
+            }
+            if (kind == IntentKind.USE_SELECTED_ITEM) {
+                if (!AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
+                    return rejected("USE_SELECTED_ITEM requires a blank instruction");
+                }
+                if (!canAcquireInteractionCooldown()) {
+                    return rejected(interactionCooldownMessage());
+                }
+                if (!acquireInteractionCooldown() || !entity.useSelectedMainHandItemLocally()) {
+                    rollbackInteractionCooldown();
+                    return rejected("USE_SELECTED_ITEM requires a selected edible or drinkable main-hand item");
+                }
+                return accepted("USE_SELECTED_ITEM accepted");
+            }
+            if (kind == IntentKind.SWAP_TO_OFFHAND) {
+                if (!AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
+                    return rejected("SWAP_TO_OFFHAND requires a blank instruction");
+                }
+                if (!canAcquireInteractionCooldown()) {
+                    return rejected(interactionCooldownMessage());
+                }
+                if (!acquireInteractionCooldown() || !entity.swapSelectedHotbarStackToOffhand()) {
+                    rollbackInteractionCooldown();
+                    return rejected("SWAP_TO_OFFHAND requires a selected hotbar stack");
+                }
+                entity.swingMainHandAction();
+                return accepted("SWAP_TO_OFFHAND accepted");
             }
             if (kind == IntentKind.DROP_ITEM) {
                 if (!AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
                     return rejected("DROP_ITEM requires a blank instruction");
                 }
-                if (!entity.dropSelectedHotbarStack()) {
+                if (!canAcquireInteractionCooldown()) {
+                    return rejected(interactionCooldownMessage());
+                }
+                if (!acquireInteractionCooldown() || !entity.dropSelectedHotbarStack()) {
+                    rollbackInteractionCooldown();
                     return rejected("DROP_ITEM requires a selected hotbar stack");
                 }
                 entity.swingMainHandAction();
@@ -237,6 +288,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (entity.level().isClientSide) {
                 return;
             }
+            interactionCooldown.tick();
             if (activeCommand == null) {
                 activeCommand = queuedCommands.poll();
                 if (activeCommand == null) {
@@ -257,6 +309,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (activeMonitor != null) {
                 activeMonitor.reset();
             }
+            interactionCooldown.reset();
             entity.getNavigation().stop();
             entity.setDeltaMovement(Vec3.ZERO);
             entity.getLookControl().setLookAt(entity.getX(), entity.getEyeY(), entity.getZ());
@@ -602,6 +655,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                     + ", slot=" + entity.selectedHotbarSlot()
                     + ", active=" + activeKind
                     + ", queued=" + queuedCommands.size()
+                    + ", interactCd=" + interactionCooldown.remainingTicks()
                     + ", ctrl=" + controllerStatus
                     + ", reason=" + controllerReason;
         }
@@ -698,7 +752,26 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                     || kind == IntentKind.ATTACK_NEAREST
                     || kind == IntentKind.GUARD_OWNER
                     || kind == IntentKind.EQUIP_BEST_ITEM
+                    || kind == IntentKind.EQUIP_ARMOR
+                    || kind == IntentKind.USE_SELECTED_ITEM
+                    || kind == IntentKind.SWAP_TO_OFFHAND
                     || kind == IntentKind.DROP_ITEM;
+        }
+
+        private boolean acquireInteractionCooldown() {
+            return interactionCooldown.tryAcquire();
+        }
+
+        private boolean canAcquireInteractionCooldown() {
+            return interactionCooldown.canAcquire();
+        }
+
+        private void rollbackInteractionCooldown() {
+            interactionCooldown.rollbackAcquire();
+        }
+
+        private String interactionCooldownMessage() {
+            return "Interaction cooldown active for " + interactionCooldown.remainingTicks() + " ticks";
         }
 
         private static final class QueuedCommand {

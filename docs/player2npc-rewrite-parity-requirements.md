@@ -8,7 +8,7 @@ OpenPlayer remains an `AGPL-3.0-only` Minecraft 1.20.1 Java 17 mod using an Arch
 - `fabric`: Fabric entrypoints and loader-specific wiring.
 - `forge`: Forge entrypoints, client event wiring, and loader-specific wiring.
 
-Current implementation already includes runtime NPC sessions, duplicate prevention, owner lifecycle cleanup and restore, spawn/despawn networking, basic command intents, item pickup with inventory persistence, local assignment support for multiple companions per owner, a minimal client control screen, a player-shaped renderer with optional local resource id skin support, client-side local PNG skin loading, and vanilla feature layers for held items, armor, head-slot items, elytra, arrows, and bee stingers, a vanilla NPC-backed automation layer, an optional reflective Baritone command bridge, and a disabled-by-default provider-backed intent parser seam.
+Current implementation already includes runtime NPC sessions, duplicate prevention, owner lifecycle cleanup and restore, spawn/despawn networking, basic command intents, item pickup with inventory persistence, local assignment support for multiple companions per owner, a minimal client control screen, a player-shaped renderer with optional local resource id skin support, client-side local PNG skin loading, and vanilla feature layers for held items, armor, head-slot items, elytra, arrows, and bee stingers, a vanilla NPC-backed automation layer with focused player-like interaction helpers, an optional reflective Baritone command bridge, and a disabled-by-default provider-backed intent parser seam.
 
 ## Non-Goals And Legal Constraints
 
@@ -577,6 +577,12 @@ Expand player-like NPC interactions through a safe manager that centralizes inve
 - No full real-player emulation, commercial account session, client inventory authority, crafting automation, or container automation unless later approved.
 - No bypass of server permissions, protections, cooldowns, or reach checks.
 - No opaque helper jars or copied Player2NPC/PlayerEngine logic.
+
+### Current Phase N Slice
+
+OpenPlayer now includes a focused Phase N expansion without a broad container, crafting, trading, or block-entity interaction rewrite. The intent vocabulary includes `USE_SELECTED_ITEM`, `SWAP_TO_OFFHAND`, and `EQUIP_ARMOR` in addition to prior Phase L/M intents. These new intents are disabled unless local world/inventory actions are enabled with `OPENPLAYER_AUTOMATION_ALLOW_WORLD_ACTIONS=true` or `openplayer.automation.allowWorldActions=true`, require blank instructions, and return bounded deterministic accept/reject text.
+
+`USE_SELECTED_ITEM` is intentionally approximate rather than full player-equivalent item use: it only completes vanilla local eat/drink use for the currently selected NPC main-hand stack and rejects empty, non-consumable, player-only, unsupported, or cooldown-blocked items. `SWAP_TO_OFFHAND` swaps the selected hotbar stack with the NPC offhand and rejects an empty selected hotbar stack. `EQUIP_ARMOR` scans NPC inventory for armor pieces and swaps the best upgrade into empty or weaker armor slots while preserving the replaced stack in inventory. A small pure Java interaction cooldown is ticked by the vanilla automation controller and reset by `STOP`, so repeated immediate interaction intents reject deterministically until cooldown elapses. No containers, crafting, trading UI, arbitrary block entity mutation, online services, or dependencies were added.
 
 ## Phase O: Cross-Loader Manual QA And Release Packaging
 
