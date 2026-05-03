@@ -14,6 +14,7 @@ import dev.soffits.openplayer.api.NpcSpawnLocation;
 import dev.soffits.openplayer.api.OpenPlayerApi;
 import dev.soffits.openplayer.character.LocalCharacterListEntry;
 import dev.soffits.openplayer.character.LocalCharacterListView;
+import dev.soffits.openplayer.character.LocalCharacterFileOperationResult;
 import dev.soffits.openplayer.character.LocalCharacterRepositoryResult;
 import dev.soffits.openplayer.character.LocalSkinPathResolver;
 import dev.soffits.openplayer.character.OpenPlayerLocalCharacters;
@@ -73,6 +74,16 @@ public final class OpenPlayerNetworking {
                 NetworkManager.Side.C2S,
                 OpenPlayerConstants.CHARACTER_LIST_REQUEST_PACKET_ID,
                 OpenPlayerNetworking::receiveCharacterListRequest
+        );
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.C2S,
+                OpenPlayerConstants.CHARACTER_EXPORT_REQUEST_PACKET_ID,
+                OpenPlayerNetworking::receiveCharacterExportRequest
+        );
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.C2S,
+                OpenPlayerConstants.CHARACTER_IMPORT_REQUEST_PACKET_ID,
+                OpenPlayerNetworking::receiveCharacterImportRequest
         );
     }
 
@@ -141,6 +152,30 @@ public final class OpenPlayerNetworking {
     private static void receiveCharacterListRequest(FriendlyByteBuf ignoredBuffer, NetworkManager.PacketContext context) {
         context.queue(() -> {
             if (context.getPlayer() instanceof ServerPlayer player) {
+                sendCharacterListResponse(player);
+            }
+        });
+    }
+
+    private static void receiveCharacterExportRequest(FriendlyByteBuf buffer, NetworkManager.PacketContext context) {
+        String characterId = buffer.readUtf(64).trim();
+        context.queue(() -> {
+            if (context.getPlayer() instanceof ServerPlayer player) {
+                LocalCharacterFileOperationResult result = OpenPlayerLocalCharacters.repository()
+                        .exportToDirectory(OpenPlayerLocalCharacters.exportsDirectory(), characterId);
+                sendCharacterFileOperationResponse(player, result);
+                sendCharacterListResponse(player);
+            }
+        });
+    }
+
+    private static void receiveCharacterImportRequest(FriendlyByteBuf buffer, NetworkManager.PacketContext context) {
+        String fileName = buffer.readUtf(80).trim();
+        context.queue(() -> {
+            if (context.getPlayer() instanceof ServerPlayer player) {
+                LocalCharacterFileOperationResult result = OpenPlayerLocalCharacters.repository()
+                        .importFromDirectory(OpenPlayerLocalCharacters.importsDirectory(), fileName);
+                sendCharacterFileOperationResponse(player, result);
                 sendCharacterListResponse(player);
             }
         });
@@ -263,6 +298,12 @@ public final class OpenPlayerNetworking {
             buffer.writeUtf(error, 512);
         }
         NetworkManager.sendToPlayer(player, OpenPlayerConstants.CHARACTER_LIST_RESPONSE_PACKET_ID, buffer);
+    }
+
+    private static void sendCharacterFileOperationResponse(ServerPlayer player, LocalCharacterFileOperationResult result) {
+        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+        buffer.writeUtf(result.formatForClientStatus(), LocalCharacterFileOperationResult.NETWORK_RESPONSE_MAX_LENGTH);
+        NetworkManager.sendToPlayer(player, OpenPlayerConstants.CHARACTER_FILE_OPERATION_RESPONSE_PACKET_ID, buffer);
     }
 
     static boolean isLegacyDefaultNetworkNpcSession(UUID ownerId, String ownerProfileName, AiPlayerNpcSession session) {

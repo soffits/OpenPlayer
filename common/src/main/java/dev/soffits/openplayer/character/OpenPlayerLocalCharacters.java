@@ -15,6 +15,14 @@ public final class OpenPlayerLocalCharacters {
         return openPlayerDirectory().resolve("assignments");
     }
 
+    public static Path importsDirectory() {
+        return openPlayerDirectory().resolve("imports");
+    }
+
+    public static Path exportsDirectory() {
+        return openPlayerDirectory().resolve("exports");
+    }
+
     public static Path openPlayerDirectory() {
         return Platform.getConfigFolder().resolve("openplayer");
     }

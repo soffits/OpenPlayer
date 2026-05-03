@@ -12,7 +12,7 @@ The initial target is Minecraft 1.20.1 on Java 17 with an Architectury-style mul
 
 ## Milestone Status
 
-Current implementation includes runtime NPC sessions, duplicate prevention, a server-side companion lifecycle manager for selected local assignments, local character and assignment definition parsing, server-authoritative local companion selection from the OpenPlayer UI, basic command intents, item pickup with inventory persistence, explicit NPC hotbar and held-equipment helpers, owner lifecycle cleanup and restore, spawn/despawn networking, a paged local assignment gallery with safe runtime status, a player-shaped renderer with optional profile skin resource support, client-side local PNG skin loading, and vanilla feature layers for held items, armor, head-slot items, elytra, arrows, and bee stingers, a vanilla NPC-backed task backend, an optional reflective Baritone command bridge, a disabled-by-default runtime intent parser that can use an opt-in JDK-only OpenAI-compatible provider, and an optional per-character conversation loop on top of that parser. Automatone is not directly integrated yet.
+Current implementation includes runtime NPC sessions, duplicate prevention, a server-side companion lifecycle manager for selected local assignments, local character and assignment definition parsing, safe local character create/update/import/export repository foundations, server-authoritative local companion selection from the OpenPlayer UI, basic command intents, item pickup with inventory persistence, explicit NPC hotbar and held-equipment helpers, owner lifecycle cleanup and restore, spawn/despawn networking, a paged local assignment gallery with safe runtime status, a player-shaped renderer with optional profile skin resource support, client-side local PNG skin loading, and vanilla feature layers for held items, armor, head-slot items, elytra, arrows, and bee stingers, a vanilla NPC-backed task backend, an optional reflective Baritone command bridge, a disabled-by-default runtime intent parser that can use an opt-in JDK-only OpenAI-compatible provider, and an optional per-character conversation loop on top of that parser. Automatone is not directly integrated yet.
 
 ## Local Character Config
 
@@ -48,6 +48,20 @@ Validation rules:
 - `localSkinFile` is an optional local PNG skin path under `<Minecraft config>/openplayer/skins`, written relative to `<Minecraft config>/openplayer`. Use values like `skins/alex_helper.png`. Absolute paths, drive prefixes, parent traversal, backslashes, empty path segments, paths outside `skins/`, and non-PNG paths are rejected.
 - Character files must not store provider API keys, access tokens, passwords, cookies, credentials, or other secrets.
 
+## Local Character File Management
+
+OpenPlayer can safely write local character `.properties` files only under documented mod-owned directories beneath `<Minecraft config>/openplayer`:
+
+- `<Minecraft config>/openplayer/characters/<id>.properties` for active local character definitions.
+- `<Minecraft config>/openplayer/imports/<id>.properties` as the only accepted import source directory.
+- `<Minecraft config>/openplayer/exports/<id>.properties` as the only export destination directory.
+
+Create/update, import, and export use the same `LocalCharacterDefinition` validation as repository loading. Writes serialize only `id`, `displayName`, `description`, `skinTexture`, `localSkinFile`, `defaultRoleId`, `conversationPrompt`, and `conversationSettings`, omitting blank optional fields. File replacement writes a temp file in the same directory, then uses an atomic move when available with a replace fallback.
+
+The file-management path rejects absolute paths, parent traversal, backslashes, drive prefixes, hidden arbitrary files, non-`.properties` file names, unknown fields, unsafe ids, and secret-like labels or credentials. Import accepts only a safe file name from `imports`; export accepts only a loaded local character id and writes to `exports`. Result messages are safe English text and do not expose absolute filesystem paths to clients.
+
+The current in-game UI surface is intentionally small: reload the local list, export the selected character, or type a safe import file name such as `alex_helper.properties` into the command box and press `Import File Name`. Full form-based character editing remains a future UI polish task; the pure Java service already covers create/update/import/export for server-side use.
+
 ## Local Skin PNGs
 
 Local PNG skins are loaded only by the Minecraft client from its own `<Minecraft config>/openplayer/skins` directory. OpenPlayer does not download skins, query player accounts, cache external profile data, sync image bytes, or store raw image bytes in entity NBT.
@@ -70,7 +84,7 @@ Selecting a row shows its display name, assignment id, character id, description
 
 Despawning a runtime NPC stops its active runtime commands before the entity is discarded. Owner disconnect and server stop continue to use the runtime cleanup hooks so companion tasks are stopped without persisting transient session ids as long-term identity.
 
-The bottom status lines remain safe and presence-only for automation backend, parser state, endpoint, model, and API key status. Character list entries report conversation as `not configured`, `unavailable: parser disabled`, or `available`; they never include provider credentials, absolute paths, or raw provider responses.
+The bottom status lines remain safe and presence-only for automation backend, parser state, endpoint, model, API key status, and local character file operation results. Character list entries report conversation as `not configured`, `unavailable: parser disabled`, or `available`; they never include provider credentials, absolute paths, or raw provider responses.
 
 ## Dependencies
 
@@ -123,7 +137,7 @@ The Baritone backend is intentionally honest about scope: stock Baritone control
 - Establish loader-neutral NPC domain contracts.
 - Add entity, persistence, and networking slices.
 - Evaluate provider-backed command parsing behavior in runtime playtesting.
-- Continue near-1:1 local parity extension phases for gallery/detail UI polish, local character editing/import/export, spoken response UX, expanded safe intents, NPC-backed navigation, interaction management, and cross-loader packaging QA.
+- Continue near-1:1 local parity extension phases for full character editor UI polish, spoken response UX, expanded safe intents, NPC-backed navigation, interaction management, and cross-loader packaging QA.
 - Expand NPC-backed automation beyond the current vanilla task layer only through a clean pathfinding and action adapter boundary.
 - Evaluate Automatone integration for movement automation once public coordinates, loader/version compatibility, license posture, and adapter boundaries are clear.
 - Keep future parity work clean-room and local/offline by default: no account login, online character service, remote skin downloads, opaque jars, or secrets in character files.

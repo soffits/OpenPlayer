@@ -24,6 +24,12 @@ tasks.register('runLocalAssignmentRepositoryTest', JavaExec) {
     mainClass = 'dev.soffits.openplayer.character.LocalAssignmentRepositoryTest'
 }
 
+tasks.register('runLocalCharacterRepositoryWriteTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.character.LocalCharacterRepositoryWriteTest'
+}
+
 tasks.register('runRuntimeNpcIdentityKeyTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
@@ -63,6 +69,7 @@ tasks.register('runConversationLoopTest', JavaExec) {
 tasks.named('check') {
     dependsOn tasks.named('runLocalCharacterDefinitionTest')
     dependsOn tasks.named('runLocalAssignmentRepositoryTest')
+    dependsOn tasks.named('runLocalCharacterRepositoryWriteTest')
     dependsOn tasks.named('runOpenPlayerNetworkingTest')
     dependsOn tasks.named('runRuntimeNpcIdentityKeyTest')
     dependsOn tasks.named('runCompanionLifecycleManagerTest')

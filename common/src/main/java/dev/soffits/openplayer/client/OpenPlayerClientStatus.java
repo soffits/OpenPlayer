@@ -11,6 +11,7 @@ public final class OpenPlayerClientStatus {
     private static String apiKeyStatus = "unknown";
     private static String automationStatus = "unknown";
     private static String characterListStatus = "loading";
+    private static String characterFileOperationStatus = "none";
     private static LocalCharacterListView characterList = new LocalCharacterListView(List.of(), List.of());
 
     private OpenPlayerClientStatus() {
@@ -62,6 +63,10 @@ public final class OpenPlayerClientStatus {
         }
     }
 
+    public static void updateCharacterFileOperationStatus(String value) {
+        characterFileOperationStatus = value == null || value.isBlank() ? "none" : value;
+    }
+
     public static String characterListStatus() {
         return characterListStatus;
     }
@@ -72,5 +77,9 @@ public final class OpenPlayerClientStatus {
 
     public static List<String> characterErrors() {
         return characterList.errors();
+    }
+
+    public static String characterFileOperationStatus() {
+        return characterFileOperationStatus;
     }
 }

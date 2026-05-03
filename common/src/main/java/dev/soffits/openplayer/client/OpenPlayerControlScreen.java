@@ -105,21 +105,29 @@ public final class OpenPlayerControlScreen extends Screen {
         }
 
         this.addRenderableWidget(Button.builder(Component.literal(selectedCharacter() == null ? "Spawn Default NPC" : "Spawn Selected"), button -> sendSpawn())
-                .bounds(controlsLeft, top, controlWidth, BUTTON_HEIGHT)
-                .build());
-        this.addRenderableWidget(Button.builder(Component.literal(selectedCharacter() == null ? "Despawn Default" : "Despawn Selected"), button -> sendDespawn())
-                .bounds(controlsLeft, top + BUTTON_HEIGHT + BUTTON_SPACING, controlWidth, BUTTON_HEIGHT)
-                .build());
-        this.addRenderableWidget(Button.builder(Component.literal(selectedCharacter() == null ? "Default Follow" : "Selected Follow"), button -> sendFollow())
                 .bounds(controlsLeft, top + (BUTTON_HEIGHT + BUTTON_SPACING) * 2, controlWidth, BUTTON_HEIGHT)
                 .build());
-        this.addRenderableWidget(Button.builder(Component.literal(selectedCharacter() == null ? "Stop Default" : "Stop Selected"), button -> sendStop())
+        this.addRenderableWidget(Button.builder(Component.literal(selectedCharacter() == null ? "Despawn Default" : "Despawn Selected"), button -> sendDespawn())
                 .bounds(controlsLeft, top + (BUTTON_HEIGHT + BUTTON_SPACING) * 3, controlWidth, BUTTON_HEIGHT)
                 .build());
+        this.addRenderableWidget(Button.builder(Component.literal(selectedCharacter() == null ? "Default Follow" : "Selected Follow"), button -> sendFollow())
+                .bounds(controlsLeft, top + (BUTTON_HEIGHT + BUTTON_SPACING) * 4, controlWidth, BUTTON_HEIGHT)
+                .build());
+        this.addRenderableWidget(Button.builder(Component.literal(selectedCharacter() == null ? "Stop Default" : "Stop Selected"), button -> sendStop())
+                .bounds(controlsLeft, top + (BUTTON_HEIGHT + BUTTON_SPACING) * 5, controlWidth, BUTTON_HEIGHT)
+                .build());
+        this.addRenderableWidget(Button.builder(Component.literal("Reload Local List"), button -> OpenPlayerRequestSender.sendCharacterListRequest())
+                .bounds(controlsLeft, top, controlWidth, BUTTON_HEIGHT)
+                .build());
+        Button exportButton = Button.builder(Component.literal("Export Selected"), button -> sendExportSelected())
+                .bounds(controlsLeft, top + BUTTON_HEIGHT + BUTTON_SPACING, controlWidth, BUTTON_HEIGHT)
+                .build();
+        exportButton.active = selectedCharacter() != null;
+        this.addRenderableWidget(exportButton);
         commandInput = new EditBox(
                 this.font,
                 rightLeft + Math.max(0, (rightWidth - COMMAND_INPUT_WIDTH) / 2),
-                top + (BUTTON_HEIGHT + BUTTON_SPACING) * 4,
+                top + (BUTTON_HEIGHT + BUTTON_SPACING) * 6,
                 Math.min(COMMAND_INPUT_WIDTH, rightWidth),
                 BUTTON_HEIGHT,
                 COMMAND_INPUT
@@ -128,7 +136,10 @@ public final class OpenPlayerControlScreen extends Screen {
         commandInput.setHint(COMMAND_INPUT);
         this.addRenderableWidget(commandInput);
         this.addRenderableWidget(Button.builder(Component.literal(selectedCharacter() == null ? "Send to Default" : "Send to Selected"), button -> sendCommandText())
-                .bounds(controlsLeft, top + (BUTTON_HEIGHT + BUTTON_SPACING) * 5, controlWidth, BUTTON_HEIGHT)
+                .bounds(controlsLeft, top + (BUTTON_HEIGHT + BUTTON_SPACING) * 7, controlWidth, BUTTON_HEIGHT)
+                .build());
+        this.addRenderableWidget(Button.builder(Component.literal("Import File Name"), button -> sendImportFileName())
+                .bounds(controlsLeft, top + (BUTTON_HEIGHT + BUTTON_SPACING) * 8, controlWidth, BUTTON_HEIGHT)
                 .build());
     }
 
@@ -152,6 +163,7 @@ public final class OpenPlayerControlScreen extends Screen {
         graphics.drawString(this.font, "Endpoint: " + OpenPlayerClientStatus.endpointStatus(), statusLeft, statusTop + 24, 0xC0C0C0);
         graphics.drawString(this.font, "Model: " + OpenPlayerClientStatus.modelStatus(), statusLeft, statusTop + 36, 0xC0C0C0);
         graphics.drawString(this.font, "API key: " + OpenPlayerClientStatus.apiKeyStatus(), statusLeft, statusTop + 48, 0xC0C0C0);
+        graphics.drawString(this.font, "Character files: " + fit(OpenPlayerClientStatus.characterFileOperationStatus(), rightWidth - 88), statusLeft, statusTop + 60, 0xC0C0C0);
         super.render(graphics, mouseX, mouseY, partialTick);
     }
 
@@ -186,6 +198,22 @@ public final class OpenPlayerControlScreen extends Screen {
         graphics.drawString(this.font, "Lifecycle: " + selected.lifecycleStatus(), left, top + 70, lifecycleColor(selected.lifecycleStatus()));
         graphics.drawString(this.font, "Conversation: " + selected.conversationStatus(), left, top + 84, 0xC0C0C0);
         graphics.drawString(this.font, "Actions: spawn, despawn, follow, stop, command.", left, top + 98, 0xA0A0A0);
+        graphics.drawString(this.font, "Files: export selected or type import file name.", left, top + 112, 0xA0A0A0);
+    }
+
+    private void sendExportSelected() {
+        LocalCharacterListEntry selected = selectedCharacter();
+        if (selected != null) {
+            OpenPlayerRequestSender.sendCharacterExportRequest(selected.characterId());
+        }
+    }
+
+    private void sendImportFileName() {
+        String value = commandInput.getValue().trim();
+        if (!value.isEmpty()) {
+            OpenPlayerRequestSender.sendCharacterImportRequest(value);
+            commandInput.setValue("");
+        }
     }
 
     private void sendSpawn() {
