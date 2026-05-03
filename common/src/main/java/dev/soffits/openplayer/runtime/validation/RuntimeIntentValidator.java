@@ -1,6 +1,8 @@
 package dev.soffits.openplayer.runtime.validation;
 
 import dev.soffits.openplayer.automation.AutomationInstructionParser;
+import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser;
+import dev.soffits.openplayer.automation.advanced.AdvancedTaskPolicy;
 import dev.soffits.openplayer.automation.building.BuildPlanParser;
 import dev.soffits.openplayer.automation.work.FishingWorkPolicy;
 import dev.soffits.openplayer.automation.InventoryActionInstructionParser;
@@ -40,6 +42,21 @@ public final class RuntimeIntentValidator {
             case COLLECT_FOOD -> requireBlankOrPositiveRadius(intent, "COLLECT_FOOD");
             case FARM_NEARBY -> requireBlankOrPositiveRadius(intent, "FARM_NEARBY");
             case BUILD_STRUCTURE -> requireBuildStructureInstruction(intent);
+            case LOCATE_LOADED_BLOCK -> requireLoadedSearchInstruction(
+                    intent, AdvancedTaskInstructionParser.LOCATE_LOADED_BLOCK_USAGE
+            );
+            case LOCATE_LOADED_ENTITY -> requireLoadedSearchInstruction(
+                    intent, AdvancedTaskInstructionParser.LOCATE_LOADED_ENTITY_USAGE
+            );
+            case FIND_LOADED_BIOME -> requireLoadedSearchInstruction(
+                    intent, AdvancedTaskInstructionParser.FIND_LOADED_BIOME_USAGE
+            );
+            case LOCATE_STRUCTURE,
+                    EXPLORE_CHUNKS,
+                    USE_PORTAL,
+                    TRAVEL_NETHER,
+                    LOCATE_STRONGHOLD,
+                    END_GAME_TASK -> RuntimeIntentValidationResult.rejected(AdvancedTaskPolicy.unsupportedReason(kind));
             case FISH -> requireFishInstruction(intent);
             case DEFEND_OWNER -> requireBlankOrPositiveRadius(intent, "DEFEND_OWNER");
             case INVENTORY_QUERY -> requireBlankInstruction(intent, "INVENTORY_QUERY");
@@ -132,6 +149,13 @@ public final class RuntimeIntentValidator {
     private static RuntimeIntentValidationResult requireBuildStructureInstruction(CommandIntent intent) {
         if (BuildPlanParser.parseOrNull(intent.instruction()) == null) {
             return RuntimeIntentValidationResult.rejected(BuildPlanParser.USAGE);
+        }
+        return RuntimeIntentValidationResult.accepted();
+    }
+
+    private static RuntimeIntentValidationResult requireLoadedSearchInstruction(CommandIntent intent, String usage) {
+        if (AdvancedTaskInstructionParser.parseLoadedSearchOrNull(intent.instruction()) == null) {
+            return RuntimeIntentValidationResult.rejected(usage);
         }
         return RuntimeIntentValidationResult.accepted();
     }

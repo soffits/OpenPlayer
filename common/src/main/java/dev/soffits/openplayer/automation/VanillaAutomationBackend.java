@@ -4,6 +4,9 @@ import dev.soffits.openplayer.api.NpcOwnerId;
 import dev.soffits.openplayer.automation.AutomationInstructionParser.Coordinate;
 import dev.soffits.openplayer.automation.AutomationInstructionParser.GotoInstruction;
 import dev.soffits.openplayer.automation.InventoryActionInstructionParser.ParsedItemInstruction;
+import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser;
+import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser.LoadedSearchInstruction;
+import dev.soffits.openplayer.automation.advanced.AdvancedTaskPolicy;
 import dev.soffits.openplayer.automation.building.BuildPlan;
 import dev.soffits.openplayer.automation.building.BuildPlanParser;
 import dev.soffits.openplayer.automation.navigation.LoadedAreaNavigator;
@@ -607,6 +610,18 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 queuedCommands.add(QueuedCommand.defendOwner(radius));
                 return accepted("DEFEND_OWNER accepted");
             }
+            if (kind == IntentKind.LOCATE_LOADED_BLOCK) {
+                return reportLoadedBlock(intent.instruction());
+            }
+            if (kind == IntentKind.LOCATE_LOADED_ENTITY) {
+                return reportLoadedEntity(intent.instruction());
+            }
+            if (kind == IntentKind.FIND_LOADED_BIOME) {
+                return reportLoadedBiome(intent.instruction());
+            }
+            if (AdvancedTaskPolicy.isUnsupportedAdvancedKind(kind)) {
+                return rejected(AdvancedTaskPolicy.unsupportedReason(kind));
+            }
             return rejected("Unsupported intent: " + kind.name());
         }
 
@@ -708,6 +723,61 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             queuedCommands.add(QueuedCommand.gotoEntity(result.entity()));
             return accepted("GOTO accepted: entity " + entityTypeId
+                    + " diagnostics=" + result.diagnostics().summary());
+        }
+
+        private AutomationCommandResult reportLoadedBlock(String instruction) {
+            LoadedSearchInstruction loadedSearchInstruction = AdvancedTaskInstructionParser.parseLoadedSearchOrNull(instruction);
+            if (loadedSearchInstruction == null) {
+                return rejected(AdvancedTaskInstructionParser.LOCATE_LOADED_BLOCK_USAGE);
+            }
+            LoadedAreaNavigator.BlockSearchResult result = loadedAreaNavigator.nearestLoadedBlock(
+                    serverLevel(), entity.position(), loadedSearchInstruction.resourceId(), loadedSearchInstruction.radius()
+            );
+            if (!result.found()) {
+                return accepted("LOCATE_LOADED_BLOCK not found: target=" + loadedSearchInstruction.resourceId()
+                        + " diagnostics=" + result.diagnostics().summary());
+            }
+            return accepted("LOCATE_LOADED_BLOCK found: target=" + loadedSearchInstruction.resourceId()
+                    + " pos=" + result.blockPos().toShortString()
+                    + " diagnostics=" + result.diagnostics().summary());
+        }
+
+        private AutomationCommandResult reportLoadedEntity(String instruction) {
+            LoadedSearchInstruction loadedSearchInstruction = AdvancedTaskInstructionParser.parseLoadedSearchOrNull(instruction);
+            if (loadedSearchInstruction == null) {
+                return rejected(AdvancedTaskInstructionParser.LOCATE_LOADED_ENTITY_USAGE);
+            }
+            LoadedAreaNavigator.EntitySearchResult result = loadedAreaNavigator.nearestLoadedEntity(
+                    serverLevel(),
+                    entity.position(),
+                    loadedSearchInstruction.resourceId(),
+                    loadedSearchInstruction.radius(),
+                    candidate -> candidate != entity && candidate.isAlive()
+            );
+            if (!result.found()) {
+                return accepted("LOCATE_LOADED_ENTITY not found: target=" + loadedSearchInstruction.resourceId()
+                        + " diagnostics=" + result.diagnostics().summary());
+            }
+            return accepted("LOCATE_LOADED_ENTITY found: target=" + loadedSearchInstruction.resourceId()
+                    + " pos=" + result.entity().blockPosition().toShortString()
+                    + " diagnostics=" + result.diagnostics().summary());
+        }
+
+        private AutomationCommandResult reportLoadedBiome(String instruction) {
+            LoadedSearchInstruction loadedSearchInstruction = AdvancedTaskInstructionParser.parseLoadedSearchOrNull(instruction);
+            if (loadedSearchInstruction == null) {
+                return rejected(AdvancedTaskInstructionParser.FIND_LOADED_BIOME_USAGE);
+            }
+            LoadedAreaNavigator.BiomeSearchResult result = loadedAreaNavigator.nearestLoadedBiome(
+                    serverLevel(), entity.position(), loadedSearchInstruction.resourceId(), loadedSearchInstruction.radius()
+            );
+            if (!result.found()) {
+                return accepted("FIND_LOADED_BIOME not found: target=" + loadedSearchInstruction.resourceId()
+                        + " diagnostics=" + result.diagnostics().summary());
+            }
+            return accepted("FIND_LOADED_BIOME found: target=" + loadedSearchInstruction.resourceId()
+                    + " pos=" + result.blockPos().toShortString()
                     + " diagnostics=" + result.diagnostics().summary());
         }
 

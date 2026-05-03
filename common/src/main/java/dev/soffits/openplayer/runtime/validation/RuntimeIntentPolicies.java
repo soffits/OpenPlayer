@@ -29,7 +29,16 @@ public final class RuntimeIntentPolicies {
             IntentKind.FISH,
             IntentKind.ATTACK_TARGET,
             IntentKind.DEFEND_OWNER,
-            IntentKind.BUILD_STRUCTURE
+            IntentKind.BUILD_STRUCTURE,
+            IntentKind.LOCATE_LOADED_BLOCK,
+            IntentKind.LOCATE_LOADED_ENTITY,
+            IntentKind.FIND_LOADED_BIOME,
+            IntentKind.LOCATE_STRUCTURE,
+            IntentKind.EXPLORE_CHUNKS,
+            IntentKind.USE_PORTAL,
+            IntentKind.TRAVEL_NETHER,
+            IntentKind.LOCATE_STRONGHOLD,
+            IntentKind.END_GAME_TASK
     );
 
     private RuntimeIntentPolicies() {
@@ -62,7 +71,16 @@ public final class RuntimeIntentPolicies {
                     FISH,
                     ATTACK_TARGET,
                     DEFEND_OWNER,
-                    BUILD_STRUCTURE -> true;
+                    BUILD_STRUCTURE,
+                    LOCATE_LOADED_BLOCK,
+                    LOCATE_LOADED_ENTITY,
+                    FIND_LOADED_BIOME,
+                    LOCATE_STRUCTURE,
+                    EXPLORE_CHUNKS,
+                    USE_PORTAL,
+                    TRAVEL_NETHER,
+                    LOCATE_STRONGHOLD,
+                    END_GAME_TASK -> true;
             case UNAVAILABLE,
                     OBSERVE,
                     STOP,

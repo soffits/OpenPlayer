@@ -29,6 +29,8 @@ public final class RuntimeIntentValidatorTest {
         validatesSurvivalRadiusInstructions();
         validatesWorkLoopInstructions();
         validatesBuildStructureInstructions();
+        validatesAdvancedLoadedReconnaissanceInstructions();
+        rejectsUnsupportedAdvancedInstructionsWithDeterministicReasons();
         rejectsPlannedIntentKinds();
         gatesPlannedWorldActionKindsBeforeUnimplementedRejection();
         rejectsPlannedNonGatedKindsAsUnimplemented();
@@ -280,8 +282,16 @@ public final class RuntimeIntentValidatorTest {
 
     private static void rejectsPlannedIntentKinds() {
         for (IntentKind kind : plannedKinds()) {
-            requireRejected(RuntimeIntentValidator.validate(validIntent(kind), true),
-                    kind.name() + " is not implemented by the vanilla runtime");
+            String expectedMessage = switch (kind) {
+                case LOCATE_STRUCTURE -> "LOCATE_STRUCTURE is unsupported: vanilla runtime does not run long-range structure search or load chunks";
+                case EXPLORE_CHUNKS -> "EXPLORE_CHUNKS is unsupported: vanilla runtime does not explore or load chunks automatically";
+                case USE_PORTAL -> "USE_PORTAL is unsupported: portal construction/use needs a separate reviewed safe phase";
+                case TRAVEL_NETHER -> "TRAVEL_NETHER is unsupported: Nether travel needs a separate reviewed safe phase";
+                case LOCATE_STRONGHOLD -> "LOCATE_STRONGHOLD is unsupported: stronghold location needs a separate reviewed safe phase";
+                case END_GAME_TASK -> "END_GAME_TASK is unsupported: End/dragon/speedrun tasks need separate reviewed safe phases";
+                default -> kind.name() + " is not implemented by the vanilla runtime";
+            };
+            requireRejected(RuntimeIntentValidator.validate(validIntent(kind), true), expectedMessage);
         }
     }
 
@@ -302,6 +312,45 @@ public final class RuntimeIntentValidatorTest {
                 "BUILD_STRUCTURE requires instruction: primitive=<line|wall|floor|box|stairs> origin=<x,y,z> size=<x,y,z> material=<item_id>");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.BUILD_STRUCTURE,
                         "primitive=floor origin=0,64,0 size=3,1,3 material=minecraft:cobblestone"), false),
+                "World actions are disabled for this OpenPlayer character");
+    }
+
+    private static void validatesAdvancedLoadedReconnaissanceInstructions() {
+        require(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_LOADED_BLOCK, "minecraft:oak_log"), true).isAccepted(),
+                "LOCATE_LOADED_BLOCK should accept exact block id");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_LOADED_BLOCK, "minecraft:oak_log 32"), true).isAccepted(),
+                "LOCATE_LOADED_BLOCK should accept bounded radius");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_LOADED_BLOCK, "oak_log"), true),
+                "LOCATE_LOADED_BLOCK requires instruction: <block_or_item_id> [radius]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_LOADED_BLOCK, "minecraft:oak_log"), false),
+                "World actions are disabled for this OpenPlayer character");
+
+        require(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_LOADED_ENTITY, "minecraft:zombie"), true).isAccepted(),
+                "LOCATE_LOADED_ENTITY should accept exact entity id");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_LOADED_ENTITY, "minecraft:zombie 0"), true),
+                "LOCATE_LOADED_ENTITY requires instruction: <entity_type_id> [radius]");
+
+        require(RuntimeIntentValidator.validate(intent(IntentKind.FIND_LOADED_BIOME, "minecraft:plains 16"), true).isAccepted(),
+                "FIND_LOADED_BIOME should accept exact biome id and radius");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.FIND_LOADED_BIOME, "plains 16"), true),
+                "FIND_LOADED_BIOME requires instruction: <biome_id> [radius]");
+    }
+
+
+    private static void rejectsUnsupportedAdvancedInstructionsWithDeterministicReasons() {
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_STRUCTURE, "minecraft:village"), true),
+                "LOCATE_STRUCTURE is unsupported: vanilla runtime does not run long-range structure search or load chunks");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.EXPLORE_CHUNKS, "north"), true),
+                "EXPLORE_CHUNKS is unsupported: vanilla runtime does not explore or load chunks automatically");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.USE_PORTAL, "nether"), true),
+                "USE_PORTAL is unsupported: portal construction/use needs a separate reviewed safe phase");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.TRAVEL_NETHER, ""), true),
+                "TRAVEL_NETHER is unsupported: Nether travel needs a separate reviewed safe phase");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_STRONGHOLD, ""), true),
+                "LOCATE_STRONGHOLD is unsupported: stronghold location needs a separate reviewed safe phase");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.END_GAME_TASK, "dragon"), true),
+                "END_GAME_TASK is unsupported: End/dragon/speedrun tasks need separate reviewed safe phases");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.TRAVEL_NETHER, ""), false),
                 "World actions are disabled for this OpenPlayer character");
     }
 
@@ -349,6 +398,15 @@ public final class RuntimeIntentValidatorTest {
                     FARM_NEARBY,
                     FISH -> "";
             case BUILD_STRUCTURE -> "primitive=line origin=1,64,1 size=2,1,1 material=minecraft:cobblestone";
+            case LOCATE_LOADED_BLOCK -> "minecraft:oak_log";
+            case LOCATE_LOADED_ENTITY -> "minecraft:zombie";
+            case FIND_LOADED_BIOME -> "minecraft:plains";
+            case LOCATE_STRUCTURE -> "minecraft:village";
+            case EXPLORE_CHUNKS -> "north";
+            case USE_PORTAL -> "nether";
+            case TRAVEL_NETHER,
+                    LOCATE_STRONGHOLD,
+                    END_GAME_TASK -> "";
             case ATTACK_TARGET,
                     DEFEND_OWNER,
                     PAUSE,
@@ -377,7 +435,13 @@ public final class RuntimeIntentValidatorTest {
 
     private static EnumSet<IntentKind> plannedGatedKinds() {
         return EnumSet.of(
-                IntentKind.ATTACK_TARGET
+                IntentKind.ATTACK_TARGET,
+                IntentKind.LOCATE_STRUCTURE,
+                IntentKind.EXPLORE_CHUNKS,
+                IntentKind.USE_PORTAL,
+                IntentKind.TRAVEL_NETHER,
+                IntentKind.LOCATE_STRONGHOLD,
+                IntentKind.END_GAME_TASK
         );
     }
 

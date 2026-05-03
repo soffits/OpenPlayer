@@ -284,6 +284,8 @@ OpenPlayer already has:
 
 ### Phase 12: Advanced World Tasks
 
+**Status:** Phase 12 implements a strict advanced-task vocabulary and truthful safety layer. `LOCATE_LOADED_BLOCK <block_or_item_id> [radius]`, `LOCATE_LOADED_ENTITY <entity_type_id> [radius]`, and `FIND_LOADED_BIOME <biome_id> [radius]` are report-only reconnaissance commands capped to already-loaded server-visible area; they do not navigate, mutate blocks, generate chunks, or call long-range locate APIs. High-risk families `LOCATE_STRUCTURE`, `EXPLORE_CHUNKS`, `USE_PORTAL`, `TRAVEL_NETHER`, `LOCATE_STRONGHOLD`, and `END_GAME_TASK` are recognized but deterministically rejected with exact reasons until separate reviewed safe phases define bounded execution, cancellation, and diagnostics.
+
 **Objective:** Expand toward advanced AltoClef-style task families after the runtime is mature.
 
 **Candidates:**
@@ -328,4 +330,4 @@ For action/runtime phases:
 
 ## Immediate Next Step
 
-Implement Phase 1: `AutomationControllerSnapshot` and deterministic task/queue diagnostics.
+Review the next advanced family as its own bounded phase, starting with explicit safety/cancellation semantics before any chunk exploration, structure location, portal, Nether, stronghold, or End behavior is implemented.

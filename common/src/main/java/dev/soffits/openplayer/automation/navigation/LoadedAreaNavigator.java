@@ -5,8 +5,10 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
+import net.minecraft.core.Holder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -15,6 +17,7 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
@@ -110,6 +113,54 @@ public final class LoadedAreaNavigator {
             return EntitySearchResult.notFound(diagnostics);
         }
         return new EntitySearchResult(nearest.value(), diagnostics);
+    }
+
+    public BiomeSearchResult nearestLoadedBiome(ServerLevel serverLevel, Vec3 origin, String biomeId, double requestedRadius) {
+        if (serverLevel == null || origin == null) {
+            return BiomeSearchResult.notFound(SearchDiagnostics.invalid("server_or_origin_unavailable"));
+        }
+        ResourceLocation targetBiomeId = resourceLocationOrNull(biomeId);
+        if (targetBiomeId == null) {
+            return BiomeSearchResult.notFound(SearchDiagnostics.invalid("invalid_biome_id:" + safeId(biomeId)));
+        }
+        int radius = boundedRadius(requestedRadius);
+        BlockPos originPos = BlockPos.containing(origin);
+        List<SearchCandidate<BlockPos>> candidates = new ArrayList<>();
+        int scanned = 0;
+        int skippedUnloaded = 0;
+        int matched = 0;
+        int radiusSquared = radius * radius;
+        for (int y = originPos.getY() - radius; y <= originPos.getY() + radius && scanned < MAX_BLOCK_POSITIONS; y++) {
+            for (int x = originPos.getX() - radius; x <= originPos.getX() + radius && scanned < MAX_BLOCK_POSITIONS; x++) {
+                for (int z = originPos.getZ() - radius; z <= originPos.getZ() + radius && scanned < MAX_BLOCK_POSITIONS; z++) {
+                    int deltaX = x - originPos.getX();
+                    int deltaY = y - originPos.getY();
+                    int deltaZ = z - originPos.getZ();
+                    int blockDistanceSquared = deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ;
+                    if (blockDistanceSquared > radiusSquared) {
+                        continue;
+                    }
+                    BlockPos pos = new BlockPos(x, y, z);
+                    if (!serverLevel.hasChunkAt(pos)) {
+                        skippedUnloaded++;
+                        continue;
+                    }
+                    scanned++;
+                    Holder<Biome> biome = serverLevel.getBiome(pos);
+                    Optional<ResourceKey<Biome>> resourceKey = biome.unwrapKey();
+                    if (resourceKey.isPresent() && resourceKey.get().location().equals(targetBiomeId)) {
+                        matched++;
+                        candidates.add(new SearchCandidate<>(pos.immutable(), Vec3.atCenterOf(pos).distanceToSqr(origin), pos));
+                    }
+                }
+            }
+        }
+        SearchDiagnostics diagnostics = new SearchDiagnostics(radius, scanned, skippedUnloaded, matched, scanned >= MAX_BLOCK_POSITIONS);
+        SearchCandidate<BlockPos> nearest = nearestCandidate(candidates);
+        if (nearest == null) {
+            return BiomeSearchResult.notFound(diagnostics);
+        }
+        return new BiomeSearchResult(nearest.value(), diagnostics);
     }
 
     public static <T> SearchCandidate<T> nearestCandidate(List<SearchCandidate<T>> candidates) {
@@ -254,6 +305,22 @@ public final class LoadedAreaNavigator {
 
         public boolean found() {
             return entity != null;
+        }
+    }
+
+    public record BiomeSearchResult(BlockPos blockPos, SearchDiagnostics diagnostics) {
+        public BiomeSearchResult {
+            if (diagnostics == null) {
+                throw new IllegalArgumentException("diagnostics cannot be null");
+            }
+        }
+
+        public static BiomeSearchResult notFound(SearchDiagnostics diagnostics) {
+            return new BiomeSearchResult(null, diagnostics);
+        }
+
+        public boolean found() {
+            return blockPos != null;
         }
     }
 }

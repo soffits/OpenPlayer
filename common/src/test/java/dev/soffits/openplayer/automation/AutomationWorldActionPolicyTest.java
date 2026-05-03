@@ -30,7 +30,16 @@ public final class AutomationWorldActionPolicyTest {
                 IntentKind.FISH,
                 IntentKind.ATTACK_TARGET,
                 IntentKind.DEFEND_OWNER,
-                IntentKind.BUILD_STRUCTURE
+                IntentKind.BUILD_STRUCTURE,
+                IntentKind.LOCATE_LOADED_BLOCK,
+                IntentKind.LOCATE_LOADED_ENTITY,
+                IntentKind.FIND_LOADED_BIOME,
+                IntentKind.LOCATE_STRUCTURE,
+                IntentKind.EXPLORE_CHUNKS,
+                IntentKind.USE_PORTAL,
+                IntentKind.TRAVEL_NETHER,
+                IntentKind.LOCATE_STRONGHOLD,
+                IntentKind.END_GAME_TASK
         );
 
         for (IntentKind kind : IntentKind.values()) {
@@ -70,6 +79,10 @@ public final class AutomationWorldActionPolicyTest {
                 "RESET_MEMORY planned intent must not use the world-action gate yet");
         require(!RuntimeIntentPolicies.isLocalWorldOrInventoryAction(IntentKind.BODY_LANGUAGE),
                 "BODY_LANGUAGE planned intent must not use the world-action gate yet");
+        require(RuntimeIntentPolicies.isLocalWorldOrInventoryAction(IntentKind.LOCATE_LOADED_BLOCK),
+                "LOCATE_LOADED_BLOCK must use the world-action gate for loaded-world reconnaissance");
+        require(RuntimeIntentPolicies.isLocalWorldOrInventoryAction(IntentKind.TRAVEL_NETHER),
+                "TRAVEL_NETHER must use the world-action gate before unsupported rejection");
         require(VanillaAutomationBackend.PLAYER_LIKE_NAVIGATION_SPEED >= 1.2D,
                 "NPC navigation speed must be faster than the prior slow default");
         require(VanillaAutomationBackend.PLAYER_LIKE_NAVIGATION_SPEED <= 1.5D,

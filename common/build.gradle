@@ -186,6 +186,12 @@ tasks.register('runBuildPlanParserTest', JavaExec) {
     mainClass = 'dev.soffits.openplayer.automation.building.BuildPlanParserTest'
 }
 
+tasks.register('runAdvancedTaskInstructionParserTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParserTest'
+}
+
 tasks.register('runRuntimeContextFormatterTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
@@ -265,6 +271,7 @@ tasks.named('check') {
     dependsOn tasks.named('runSurvivalPolicyTest')
     dependsOn tasks.named('runWorkLoopPolicyTest')
     dependsOn tasks.named('runBuildPlanParserTest')
+    dependsOn tasks.named('runAdvancedTaskInstructionParserTest')
     dependsOn tasks.named('runRuntimeContextFormatterTest')
     dependsOn tasks.named('runRuntimeIntentValidatorTest')
     dependsOn tasks.named('runNpcEquipmentSelectionTest')

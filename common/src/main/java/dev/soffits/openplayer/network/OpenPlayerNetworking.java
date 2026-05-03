@@ -514,8 +514,17 @@ public final class OpenPlayerNetworking {
                     UNPAUSE,
                     RESET_MEMORY,
                     BODY_LANGUAGE,
-                    BUILD_STRUCTURE -> intentKind.name();
+                    BUILD_STRUCTURE,
+                    LOCATE_STRUCTURE,
+                    EXPLORE_CHUNKS,
+                    USE_PORTAL,
+                    TRAVEL_NETHER,
+                    LOCATE_STRONGHOLD,
+                    END_GAME_TASK -> intentKind.name();
             case GOTO -> "owner";
+            case LOCATE_LOADED_BLOCK -> "minecraft:oak_log";
+            case LOCATE_LOADED_ENTITY -> "minecraft:zombie";
+            case FIND_LOADED_BIOME -> "minecraft:plains";
         };
     }
 
