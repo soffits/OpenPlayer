@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Predicate;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.NonNullList;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -20,6 +21,8 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.ai.attributes.Attribute;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.InteractionHand;
@@ -27,7 +30,6 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.core.BlockPos;
 
 public final class OpenPlayerNpcEntity extends PathfinderMob {
     private static final String INVENTORY_TAG = "OpenPlayerInventory";
@@ -223,6 +225,25 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
         return slot >= 0 && selectHotbarSlot(slot);
     }
 
+    public boolean selectBestAttackItem() {
+        int slot = NpcHotbarSelection.bestScoredSlot(hotbarItems(), OpenPlayerNpcEntity::attackItemScore);
+        return slot >= 0 && selectHotbarSlot(slot);
+    }
+
+    public boolean dropSelectedHotbarStack() {
+        ItemStack selectedStack = getMainHandItem();
+        if (selectedStack.isEmpty()) {
+            return false;
+        }
+        ItemStack droppedStack = selectedStack.copy();
+        internalInventory.set(selectedMainHandSlot, ItemStack.EMPTY);
+        ItemEntity itemEntity = spawnAtLocation(droppedStack, 0.0F);
+        if (itemEntity != null) {
+            itemEntity.setPickUpDelay(40);
+        }
+        return true;
+    }
+
     public void swingMainHandAction() {
         swing(InteractionHand.MAIN_HAND);
     }
@@ -375,6 +396,28 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
             score += 1000.0D;
         }
         return score;
+    }
+
+    private static double attackItemScore(ItemStack itemStack) {
+        if (itemStack.isEmpty()) {
+            return 0.0D;
+        }
+        double attackDamage = attributeAmount(itemStack, Attributes.ATTACK_DAMAGE);
+        double attackSpeed = attributeAmount(itemStack, Attributes.ATTACK_SPEED);
+        if (attackDamage <= 0.0D && attackSpeed <= 0.0D) {
+            return 0.0D;
+        }
+        return attackDamage * 100.0D + attackSpeed;
+    }
+
+    private static double attributeAmount(ItemStack itemStack, Attribute attribute) {
+        double amount = 0.0D;
+        for (AttributeModifier modifier : itemStack.getAttributeModifiers(EquipmentSlot.MAINHAND).get(attribute)) {
+            if (modifier.getOperation() == AttributeModifier.Operation.ADDITION) {
+                amount += modifier.getAmount();
+            }
+        }
+        return amount;
     }
 
     private void collectNearbyItems() {

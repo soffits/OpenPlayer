@@ -68,6 +68,12 @@ public final class BaritoneAutomationBackend implements AutomationBackend {
                     bridge.execute("stop");
                     return accepted("STOP sent to the primary Baritone-controlled local player");
                 }
+                if (kind == IntentKind.REPORT_STATUS) {
+                    if (!AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
+                        return rejected("REPORT_STATUS requires a blank instruction");
+                    }
+                    return accepted("REPORT_STATUS accepted: Baritone bridge available");
+                }
                 if (kind == IntentKind.MOVE) {
                     CommandCoordinate coordinate = parseCoordinate(intent.instruction());
                     bridge.execute("goto " + coordinate.commandText());

@@ -492,6 +492,12 @@ Expand the clean-room command vocabulary for local companions while keeping ever
 - Disabled world actions cannot mutate the world or attack entities.
 - Existing commands continue to behave as before unless intentionally expanded.
 
+### Current Implementation
+
+OpenPlayer now includes a focused Phase L vocabulary slice without new dependencies or a pathfinding rewrite. The expanded intent enum and provider prompt include `EQUIP_BEST_ITEM`, `DROP_ITEM`, `REPORT_STATUS`, `GUARD_OWNER`, and `PATROL`. `PATROL` is a vanilla NPC navigation loop between the command start position and one strict `x y z` coordinate within a bounded local distance. `REPORT_STATUS` is accepted as a deterministic no-world-mutation status action.
+
+The vanilla backend keeps mutating or violent Phase L actions behind the existing local world-action safety setting: `EQUIP_BEST_ITEM`, `DROP_ITEM`, and `GUARD_OWNER` reject while world actions are disabled. `DROP_ITEM` only drops the selected hotbar stack near the NPC. `EQUIP_BEST_ITEM` selects a useful hotbar weapon only when nearby combat context exists and otherwise rejects safely. `GUARD_OWNER` stays near the owner and attacks only visible hostile entities close to the owner. Combat avoids the owner, players, and other OpenPlayer NPCs. Instruction parsing has a pure Java validation seam covering strict coordinates, bounded patrol distance, and clamped optional radii.
+
 ### Non-Goals
 
 - No full scripting language, macro runtime, or arbitrary server command bridge.
