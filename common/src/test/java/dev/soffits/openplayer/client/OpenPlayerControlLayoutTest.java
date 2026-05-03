@@ -10,6 +10,7 @@ public final class OpenPlayerControlLayoutTest {
         keepsMainDetailsClearOfFirstActionRow();
         keepsMainControlsVisibleAtDefaultScaledHeight();
         keepsProfileControlsVisibleAtDefaultScaledHeight();
+        keepsProviderStatusBelowTestButtonAtDefaultScaledSize();
         clampsVerySmallHeightsToMinimumGalleryRows();
     }
 
@@ -51,6 +52,16 @@ public final class OpenPlayerControlLayoutTest {
         int safeBottom = screenHeight - OpenPlayerControlLayout.MAIN_SAFE_BOTTOM_MARGIN;
         require(OpenPlayerControlLayout.profileControlsBottom() <= safeBottom, "profile controls must fit inside 640x360 GUI height with safe margin");
         require(OpenPlayerControlLayout.profileStatusBottom() <= safeBottom, "profile status text must fit inside 640x360 GUI height with safe margin");
+    }
+
+    private static void keepsProviderStatusBelowTestButtonAtDefaultScaledSize() {
+        int screenHeight = 360;
+        int safeBottom = screenHeight - OpenPlayerControlLayout.MAIN_SAFE_BOTTOM_MARGIN;
+        require(OpenPlayerControlLayout.providerTestButtonBottom() + OpenPlayerControlLayout.BUTTON_SPACING
+                        < OpenPlayerControlLayout.PROVIDER_STATUS_TOP,
+                "provider test status must not overlap the Test Provider button");
+        require(OpenPlayerControlLayout.providerTextBottom() <= safeBottom,
+                "provider status and notes must fit inside 640x360 GUI height with safe margin");
     }
 
     private static void require(boolean condition, String message) {

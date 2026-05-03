@@ -8,6 +8,8 @@ import dev.soffits.openplayer.api.AiPlayerNpcCommand;
 import dev.soffits.openplayer.api.AiPlayerNpcService;
 import dev.soffits.openplayer.api.AiPlayerNpcSession;
 import dev.soffits.openplayer.api.AiPlayerNpcSpec;
+import dev.soffits.openplayer.api.CommandSubmissionResult;
+import dev.soffits.openplayer.api.CommandSubmissionStatus;
 import dev.soffits.openplayer.api.NpcOwnerId;
 import dev.soffits.openplayer.api.NpcProfileSpec;
 import dev.soffits.openplayer.api.NpcRoleId;
@@ -20,6 +22,8 @@ import dev.soffits.openplayer.character.LocalCharacterDefinition;
 import dev.soffits.openplayer.character.LocalCharacterRepositoryResult;
 import dev.soffits.openplayer.character.LocalSkinPathResolver;
 import dev.soffits.openplayer.character.OpenPlayerLocalCharacters;
+import dev.soffits.openplayer.debug.OpenPlayerDebugEvent;
+import dev.soffits.openplayer.debug.OpenPlayerDebugEvents;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentKind;
 import dev.soffits.openplayer.intent.IntentParseException;
@@ -329,7 +333,9 @@ public final class OpenPlayerNetworking {
                 new CommandIntent(intentKind, IntentPriority.HIGH, intentKind.name())
         );
         if (characterId != null && !characterId.isBlank()) {
-            COMPANION_LIFECYCLE_MANAGER.submitSelectedCommand(sender.getUUID(), characterId, command);
+            CommandSubmissionResult result = COMPANION_LIFECYCLE_MANAGER.submitSelectedCommand(sender.getUUID(), characterId, command);
+            OpenPlayerDebugEvents.record("command_submission", result.status().name(), characterId, null, null,
+                    "kind=" + intentKind.name() + " message=" + result.message());
             sendCharacterListResponse(sender);
             return;
         }
@@ -343,30 +349,55 @@ public final class OpenPlayerNetworking {
 
     private static void submitNetworkNpcCommandText(ServerPlayer sender, String characterId, String commandText) {
         if (commandText == null || commandText.isBlank() || commandText.length() > MAX_COMMAND_TEXT_LENGTH) {
+            OpenPlayerDebugEvents.record("command_text", "rejected", characterId, null, null, "invalid_length_or_blank");
             return;
         }
+        OpenPlayerDebugEvents.record("command_text", "received", characterId, null, null, "length=" + commandText.trim().length());
         if (characterId != null && !characterId.isBlank()) {
-            COMPANION_LIFECYCLE_MANAGER.submitSelectedCommandText(sender.getUUID(), characterId, commandText);
+            CommandSubmissionResult result = COMPANION_LIFECYCLE_MANAGER.submitSelectedCommandText(sender.getUUID(), characterId, commandText);
+            OpenPlayerDebugEvents.record("command_submission", result.status().name(), characterId, null, null, result.message());
             sendCharacterListResponse(sender);
+            sendStatusResponse(sender);
             return;
         }
         AiPlayerNpcService service = OpenPlayerApi.npcService();
+        boolean submitted = false;
         for (AiPlayerNpcSession session : service.listSessions()) {
             if (isLegacyDefaultNetworkNpcSession(sender.getUUID(), sender.getGameProfile().getName(), session)) {
-                service.submitCommandText(session.sessionId(), commandText);
+                CommandSubmissionResult result = service.submitCommandText(session.sessionId(), commandText);
+                OpenPlayerDebugEvents.record("command_submission", result.status().name(), null, null,
+                        session.sessionId().value().toString(), result.message());
+                submitted = true;
             }
         }
+        if (!submitted) {
+            OpenPlayerDebugEvents.record("command_submission", "unknown_session", null, null, null, "No spawned companion matched request");
+        }
         sendCharacterListResponse(sender);
+        sendStatusResponse(sender);
+    }
+
+    public static CommandSubmissionResult submitAssignmentCommandTextResult(ServerPlayer sender, String assignmentId, String commandText) {
+        if (sender == null || assignmentId == null || assignmentId.isBlank()
+                || commandText == null || commandText.isBlank() || commandText.length() > MAX_COMMAND_TEXT_LENGTH) {
+            OpenPlayerDebugEvents.record("command_text", "rejected", assignmentId, null, null, "invalid_length_or_blank");
+            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Message was blank or too long");
+        }
+        String trimmedAssignmentId = assignmentId.trim();
+        String trimmedCommandText = commandText.trim();
+        OpenPlayerDebugEvents.record("command_text", "received", trimmedAssignmentId, null, null,
+                "length=" + trimmedCommandText.length());
+        CommandSubmissionResult result = COMPANION_LIFECYCLE_MANAGER.submitSelectedCommandText(
+                sender.getUUID(), trimmedAssignmentId, trimmedCommandText
+        );
+        OpenPlayerDebugEvents.record("command_submission", result.status().name(), trimmedAssignmentId, null, null, result.message());
+        sendCharacterListResponse(sender);
+        sendStatusResponse(sender);
+        return result;
     }
 
     public static boolean submitAssignmentCommandText(ServerPlayer sender, String assignmentId, String commandText) {
-        if (sender == null || assignmentId == null || assignmentId.isBlank()
-                || commandText == null || commandText.isBlank() || commandText.length() > MAX_COMMAND_TEXT_LENGTH) {
-            return false;
-        }
-        COMPANION_LIFECYCLE_MANAGER.submitSelectedCommandText(sender.getUUID(), assignmentId.trim(), commandText.trim());
-        sendCharacterListResponse(sender);
-        return true;
+        return submitAssignmentCommandTextResult(sender, assignmentId, commandText).status() == CommandSubmissionStatus.ACCEPTED;
     }
 
     private static void handleProviderConfigSaveRequest(ServerPlayer sender, OpenPlayerIntentParserConfig.ProviderConfigSaveRequest request) {
@@ -390,12 +421,15 @@ public final class OpenPlayerNetworking {
     }
 
     private static void handleProviderTestRequest(ServerPlayer sender) {
+        OpenPlayerDebugEvents.record("provider_test", "requested", null, null, null, "permission_check");
         if (!canSaveProviderConfig(sender)) {
+            OpenPlayerDebugEvents.record("provider_test", "permission_required", null, null, null, "permission_required");
             sendProviderTestResponse(sender, "permission_required", "");
             sendStatusResponse(sender);
             return;
         }
         if (!OpenPlayerRuntime.status().intentParser().enabled()) {
+            OpenPlayerDebugEvents.record("provider_test", "not_configured", null, null, null, "parser_disabled");
             sendProviderTestResponse(sender, "not_configured", "");
             sendStatusResponse(sender);
             sendCharacterListResponse(sender);
@@ -404,6 +438,7 @@ public final class OpenPlayerNetworking {
         try {
             OpenPlayerRuntime.reloadIntentParser();
         } catch (IllegalStateException exception) {
+            OpenPlayerDebugEvents.record("provider_test", "not_configured", null, null, null, "reload_failed");
             sendProviderTestResponse(sender, "not_configured", "");
             sendStatusResponse(sender);
             sendCharacterListResponse(sender);
@@ -411,14 +446,23 @@ public final class OpenPlayerNetworking {
         }
         IntentParser intentParser = OpenPlayerRuntime.intentParser();
         try {
+            OpenPlayerDebugEvents.record("provider_parse", "attempted", null, null, null, "source=provider_test prompt=connectivity");
             CommandIntent intent = intentParser.parse(PROVIDER_TEST_PROMPT);
             if (intent == null || intent.kind() == null || intent.priority() == null) {
+                OpenPlayerDebugEvents.record("provider_test", "invalid", null, null, null, "missing_intent_fields");
                 sendProviderTestResponse(sender, "invalid", "");
                 return;
             }
+            OpenPlayerDebugEvents.record("provider_parse", "success", null, null, null,
+                    "kind=" + intent.kind().name() + " instructionLength=" + intent.instruction().length());
+            OpenPlayerDebugEvents.record("provider_test", "success", null, null, null, "kind=" + intent.kind().name());
             sendProviderTestResponse(sender, "success", intent.kind().name());
         } catch (IntentParseException exception) {
-            sendProviderTestResponse(sender, providerFailureCode(exception), providerFailureDetail(exception));
+            String code = providerFailureCode(exception);
+            String detail = providerFailureDetail(exception);
+            OpenPlayerDebugEvents.record("provider_test", code, null, null, null,
+                    detail.isBlank() ? code : "detail=" + detail);
+            sendProviderTestResponse(sender, code, detail);
         } finally {
             sendStatusResponse(sender);
             sendCharacterListResponse(sender);
@@ -437,6 +481,11 @@ public final class OpenPlayerNetworking {
         buffer.writeUtf(status.intentParser().apiKeySource(), 32);
         buffer.writeUtf(status.automationBackend().name(), 64);
         buffer.writeUtf(status.automationBackend().state().name(), 64);
+        List<OpenPlayerDebugEvent> debugEvents = canViewDebugEvents(player) ? OpenPlayerDebugEvents.recent(6) : List.of();
+        buffer.writeVarInt(debugEvents.size());
+        for (OpenPlayerDebugEvent debugEvent : debugEvents) {
+            buffer.writeUtf(debugEvent.compactLine(), OpenPlayerDebugEvents.MAX_NETWORK_LINE_LENGTH);
+        }
         NetworkManager.sendToPlayer(player, OpenPlayerConstants.STATUS_RESPONSE_PACKET_ID, buffer);
     }
 
@@ -505,6 +554,10 @@ public final class OpenPlayerNetworking {
 
     private static boolean canSaveProviderConfig(ServerPlayer player) {
         return maySaveProviderConfig(player.server.isSingleplayerOwner(player.getGameProfile()), player.hasPermissions(2));
+    }
+
+    private static boolean canViewDebugEvents(ServerPlayer player) {
+        return player.server.isSingleplayerOwner(player.getGameProfile()) || player.hasPermissions(2);
     }
 
     static String providerFailureCode(IntentParseException exception) {

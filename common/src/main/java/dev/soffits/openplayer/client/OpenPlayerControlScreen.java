@@ -251,8 +251,8 @@ public final class OpenPlayerControlScreen extends Screen {
         int inputLeft = OpenPlayerControlLayout.centeredLeft(rightLeft, rightWidth, inputWidth);
         int buttonWidth = Math.min(BUTTON_WIDTH, rightWidth);
         int controlsLeft = OpenPlayerControlLayout.centeredLeft(rightLeft, rightWidth, buttonWidth);
-        int providerTop = OpenPlayerControlLayout.PAGE_TOP + 16;
-        int rowStep = OpenPlayerControlLayout.BUTTON_HEIGHT + OpenPlayerControlLayout.BUTTON_SPACING;
+        int providerTop = OpenPlayerControlLayout.PROVIDER_ROW_TOP;
+        int rowStep = OpenPlayerControlLayout.PROVIDER_ROW_STEP;
         providerEndpointInput = new EditBox(this.font, inputLeft, providerTop, inputWidth, OpenPlayerControlLayout.BUTTON_HEIGHT, PROVIDER_ENDPOINT_INPUT);
         providerEndpointInput.setMaxLength(512);
         providerEndpointInput.setHint(PROVIDER_ENDPOINT_INPUT);
@@ -275,7 +275,7 @@ public final class OpenPlayerControlScreen extends Screen {
                 .bounds(controlsLeft, providerTop + rowStep * 4, buttonWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
                 .build());
         this.addRenderableWidget(Button.builder(Component.translatable("screen.openplayer.controls.test_provider"), button -> sendProviderTest())
-                .bounds(controlsLeft, providerTop + rowStep * 5, buttonWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
+                .bounds(controlsLeft, providerTop + rowStep * OpenPlayerControlLayout.PROVIDER_TEST_BUTTON_ROW, buttonWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
                 .build());
     }
 
@@ -398,9 +398,9 @@ public final class OpenPlayerControlScreen extends Screen {
 
     private void renderProviderPage(GuiGraphics graphics, int left, int top, int width) {
         drawFitted(graphics, tr("screen.openplayer.controls.provider_config"), left, top, width, 0xFFFFFF);
-        drawFitted(graphics, tr("screen.openplayer.controls.provider_test_status", OpenPlayerClientStatus.providerTestStatus()), left, top + 150, width, 0xC0C0C0);
-        drawFitted(graphics, tr("screen.openplayer.controls.provider_key_preserve_note"), left, top + 164, width, 0xA0A0A0);
-        drawFitted(graphics, tr("screen.openplayer.controls.provider_key_safe_note"), left, top + 178, width, 0xA0A0A0);
+        drawFitted(graphics, tr("screen.openplayer.controls.provider_test_status", OpenPlayerClientStatus.providerTestStatus()), left, OpenPlayerControlLayout.PROVIDER_STATUS_TOP, width, 0xC0C0C0);
+        drawFitted(graphics, tr("screen.openplayer.controls.provider_key_preserve_note"), left, OpenPlayerControlLayout.PROVIDER_NOTE_TOP, width, 0xA0A0A0);
+        drawFitted(graphics, tr("screen.openplayer.controls.provider_key_safe_note"), left, OpenPlayerControlLayout.PROVIDER_NOTE_TOP + 14, width, 0xA0A0A0);
     }
 
     private void renderProfilePage(GuiGraphics graphics, int left, int top, int width) {
@@ -428,16 +428,26 @@ public final class OpenPlayerControlScreen extends Screen {
         drawFitted(graphics, tr("screen.openplayer.controls.status_api_key", OpenPlayerClientStatus.apiKeyStatus()), left, top + 56, width, 0xC0C0C0);
         drawFitted(graphics, tr("screen.openplayer.controls.provider_test_status", OpenPlayerClientStatus.providerTestStatus()), left, top + 70, width, 0xC0C0C0);
         drawFitted(graphics, tr("screen.openplayer.controls.status_character_files", OpenPlayerClientStatus.characterFileOperationStatus()), left, top + 84, width, 0xC0C0C0);
-        drawFitted(graphics, tr("screen.openplayer.controls.provider_key_preserve_note"), left, top + 106, width, 0xA0A0A0);
+        drawFitted(graphics, tr("screen.openplayer.controls.debug_events"), left, top + 106, width, 0xFFFFFF);
+        List<String> debugEvents = OpenPlayerClientStatus.debugEvents();
+        int debugTop = top + 120;
+        if (debugEvents.isEmpty()) {
+            drawFitted(graphics, tr("screen.openplayer.controls.no_debug_events"), left, debugTop, width, 0xA0A0A0);
+        } else {
+            int firstIndex = Math.max(0, debugEvents.size() - 4);
+            for (int index = firstIndex; index < debugEvents.size(); index++) {
+                drawFitted(graphics, debugEvents.get(index), left, debugTop + (index - firstIndex) * 12, width, 0xA0A0A0);
+            }
+        }
         LocalCharacterListEntry selected = selectedCharacter();
         if (selected == null) {
-            drawFitted(graphics, tr("screen.openplayer.controls.no_selected_assignment"), left, top + 114, width, 0xFFFFFF);
+            drawFitted(graphics, tr("screen.openplayer.controls.no_selected_assignment"), left, top + 174, width, 0xFFFFFF);
             return;
         }
-        drawFitted(graphics, tr("screen.openplayer.controls.selected_value", selected.displayName()), left, top + 114, width, lifecycleColor(selected.lifecycleStatus()));
-        drawFitted(graphics, tr("screen.openplayer.controls.description_value", selected.description().isEmpty() ? tr("screen.openplayer.controls.none") : selected.description()), left, top + 128, width, 0xC0C0C0);
-        drawFitted(graphics, tr("screen.openplayer.controls.skin_value", selected.skinStatus()), left, top + 142, width, 0xC0C0C0);
-        int eventTop = top + 156;
+        drawFitted(graphics, tr("screen.openplayer.controls.selected_value", selected.displayName()), left, top + 174, width, lifecycleColor(selected.lifecycleStatus()));
+        drawFitted(graphics, tr("screen.openplayer.controls.description_value", selected.description().isEmpty() ? tr("screen.openplayer.controls.none") : selected.description()), left, top + 188, width, 0xC0C0C0);
+        drawFitted(graphics, tr("screen.openplayer.controls.skin_value", selected.skinStatus()), left, top + 202, width, 0xC0C0C0);
+        int eventTop = top + 216;
         if (selected.conversationEvents().isEmpty()) {
             drawFitted(graphics, tr("screen.openplayer.controls.no_spoken_status"), left, eventTop, width, 0xA0A0A0);
             return;

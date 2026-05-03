@@ -18,6 +18,7 @@ public final class OpenPlayerClientStatus {
     private static String characterFileOperationStatus = "none";
     private static LocalCharacterListView characterList = new LocalCharacterListView(List.of(), List.of());
     private static List<String> importFileNames = List.of();
+    private static List<String> debugEvents = List.of();
 
     private OpenPlayerClientStatus() {
     }
@@ -31,7 +32,8 @@ public final class OpenPlayerClientStatus {
             boolean apiKeyPresent,
             String apiKeySource,
             String automationName,
-            String automationState
+            String automationState,
+            List<String> debugEvents
     ) {
         OpenPlayerClientStatus.parserAvailable = parserAvailable;
         parserStatus = parserAvailable ? "enabled" : "disabled";
@@ -39,6 +41,7 @@ public final class OpenPlayerClientStatus {
         modelStatus = (modelConfigured ? "configured" : "not configured") + " [" + modelSource + "]";
         apiKeyStatus = (apiKeyPresent ? "present" : "not present") + " [" + apiKeySource + "]";
         automationStatus = automationName + " (" + automationState.toLowerCase(java.util.Locale.ROOT) + ")";
+        OpenPlayerClientStatus.debugEvents = debugEvents == null ? List.of() : List.copyOf(debugEvents);
     }
 
     public static String parserStatus() {
@@ -115,5 +118,9 @@ public final class OpenPlayerClientStatus {
 
     public static List<String> importFileNames() {
         return importFileNames;
+    }
+
+    public static List<String> debugEvents() {
+        return debugEvents;
     }
 }

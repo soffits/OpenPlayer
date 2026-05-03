@@ -12,6 +12,7 @@ import dev.soffits.openplayer.api.NpcRoleId;
 import dev.soffits.openplayer.api.NpcSessionId;
 import dev.soffits.openplayer.api.NpcSessionStatus;
 import dev.soffits.openplayer.api.NpcSpawnLocation;
+import dev.soffits.openplayer.debug.OpenPlayerDebugEvents;
 import dev.soffits.openplayer.entity.OpenPlayerNpcEntity;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentParseException;
@@ -148,11 +149,15 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
             throw new IllegalArgumentException("command cannot be null");
         }
         if (!sessions.containsKey(sessionId)) {
+            OpenPlayerDebugEvents.record("command_submission", "unknown_session", null, null,
+                    sessionId.value().toString(), "submit_command");
             return new CommandSubmissionResult(CommandSubmissionStatus.UNKNOWN_SESSION, "Unknown NPC session");
         }
         RuntimeAiPlayerNpcSession session = sessions.get(sessionId);
         OpenPlayerNpcEntity entity = entityFor(session);
         if (entity == null) {
+            OpenPlayerDebugEvents.record("command_submission", "rejected", null, null,
+                    sessionId.value().toString(), "NPC session entity is unavailable");
             return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "NPC session entity is unavailable");
         }
         try {
@@ -172,13 +177,21 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         }
         synchronized (this) {
             if (!sessions.containsKey(sessionId)) {
+                OpenPlayerDebugEvents.record("command_text", "unknown_session", null, null,
+                        sessionId.value().toString(), "submit_command_text");
                 return new CommandSubmissionResult(CommandSubmissionStatus.UNKNOWN_SESSION, "Unknown NPC session");
             }
         }
         CommandIntent intent;
         try {
+            OpenPlayerDebugEvents.record("provider_parse", "attempted", null, null,
+                    sessionId.value().toString(), "source=command_text messageLength=" + input.trim().length());
             intent = intentParser.parse(input);
+            OpenPlayerDebugEvents.record("provider_parse", "success", null, null,
+                    sessionId.value().toString(), "kind=" + intent.kind().name() + " instructionLength=" + intent.instruction().length());
         } catch (IntentParseException exception) {
+            OpenPlayerDebugEvents.record("provider_parse", "rejected", null, null,
+                    sessionId.value().toString(), "Unable to parse command text");
             return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Unable to parse command text");
         }
         return submitCommand(sessionId, new AiPlayerNpcCommand(UUID.randomUUID(), intent));

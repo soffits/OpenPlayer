@@ -2,6 +2,7 @@ package dev.soffits.openplayer.automation;
 
 import dev.soffits.openplayer.api.NpcOwnerId;
 import dev.soffits.openplayer.automation.AutomationInstructionParser.Coordinate;
+import dev.soffits.openplayer.debug.OpenPlayerDebugEvents;
 import dev.soffits.openplayer.entity.OpenPlayerNpcEntity;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentKind;
@@ -308,6 +309,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 }
                 activeMonitor = newMonitor(activeCommand);
                 activeMonitor.start(entity.getX(), entity.getY(), entity.getZ());
+                OpenPlayerDebugEvents.record("automation", "started", null, null, null,
+                        "kind=" + activeCommand.kind().name());
                 start(activeCommand);
             }
             continueActiveCommand();
@@ -317,6 +320,10 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         @Override
         public void stopAll() {
             queuedCommands.clear();
+            if (activeCommand != null) {
+                OpenPlayerDebugEvents.record("automation", "cancelled", null, null, null,
+                        "kind=" + activeCommand.kind().name() + " reason=stop_all");
+            }
             activeCommand = null;
             if (activeMonitor != null) {
                 activeMonitor.reset();
@@ -681,11 +688,17 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             );
             if (status == AutomationControllerMonitorStatus.TIMED_OUT || status == AutomationControllerMonitorStatus.STUCK) {
                 entity.getNavigation().stop();
+                OpenPlayerDebugEvents.record("automation", status.name(), null, null, null,
+                        "kind=" + activeCommand.kind().name() + " reason=" + activeMonitor.boundedReason());
                 activeCommand = null;
             }
         }
 
         private void completeActiveCommand() {
+            if (activeCommand != null) {
+                OpenPlayerDebugEvents.record("automation", "completed", null, null, null,
+                        "kind=" + activeCommand.kind().name());
+            }
             if (activeMonitor != null) {
                 activeMonitor.complete();
             }
@@ -693,6 +706,10 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         }
 
         private void failActiveCommand(String reason) {
+            if (activeCommand != null) {
+                OpenPlayerDebugEvents.record("automation", "cancelled", null, null, null,
+                        "kind=" + activeCommand.kind().name() + " reason=" + reason);
+            }
             if (activeMonitor != null) {
                 activeMonitor.cancel(reason);
             }

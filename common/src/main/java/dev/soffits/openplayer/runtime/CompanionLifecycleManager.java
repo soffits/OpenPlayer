@@ -17,6 +17,7 @@ import dev.soffits.openplayer.conversation.ConversationHistoryTrimmer;
 import dev.soffits.openplayer.conversation.ConversationLoop;
 import dev.soffits.openplayer.conversation.ConversationStatusRepository;
 import dev.soffits.openplayer.conversation.ConversationTurn;
+import dev.soffits.openplayer.debug.OpenPlayerDebugEvents;
 import dev.soffits.openplayer.intent.IntentParser;
 import dev.soffits.openplayer.OpenPlayerIntentParserConfig;
 import java.util.Locale;
@@ -155,6 +156,7 @@ public final class CompanionLifecycleManager {
         }
         Optional<AiPlayerNpcSession> session = findActiveSession(ownerId, characterId);
         if (session.isEmpty()) {
+            OpenPlayerDebugEvents.record("companion", "unknown_session", characterId, null, null, "submit_command");
             return unknownOrMissingAssignment(characterId);
         }
         return npcService().submitCommand(session.get().sessionId(), command);
@@ -166,47 +168,56 @@ public final class CompanionLifecycleManager {
         }
         Optional<ResolvedAssignment> resolvedAssignment = findAssignment(characterId);
         if (resolvedAssignment.isEmpty()) {
+            OpenPlayerDebugEvents.record("conversation", "unknown_assignment", characterId, null, null, "assignment_not_found");
             return rejectedUnknownAssignment();
         }
         LocalAssignmentDefinition assignment = resolvedAssignment.get().assignment();
         LocalCharacterDefinition character = resolvedAssignment.get().character();
         boolean conversationConfigured = hasConversationConfig(character);
-        if (conversationConfigured) {
-            conversationStatusRepository.recordPlayerMessage(ownerId, assignment.id(), commandText);
+        if (!conversationConfigured) {
+            OpenPlayerDebugEvents.record("conversation", "unavailable", assignment.id(), character.id(), null,
+                    "conversation_config_missing messageLength=" + commandText.trim().length());
+            return new CommandSubmissionResult(CommandSubmissionStatus.UNAVAILABLE,
+                    "Conversation unavailable: conversation config missing");
         }
+        conversationStatusRepository.recordPlayerMessage(ownerId, assignment.id(), commandText);
         Optional<AiPlayerNpcSession> session = findActiveSession(ownerId, resolvedAssignment.get());
         if (session.isEmpty()) {
-            if (conversationConfigured) {
-                conversationStatusRepository.recordFailure(ownerId, assignment.id(), "Companion is not spawned");
-            }
+            conversationStatusRepository.recordFailure(ownerId, assignment.id(), "Companion is not spawned");
+            OpenPlayerDebugEvents.record("conversation", "unknown_session", assignment.id(), character.id(), null,
+                    "companion_not_spawned messageLength=" + commandText.trim().length());
             return new CommandSubmissionResult(CommandSubmissionStatus.UNKNOWN_SESSION, "Companion is not spawned");
         }
-        if (conversationConfigured) {
-            ConversationHistoryKey historyKey = new ConversationHistoryKey(ownerId, assignment.id());
-            List<ConversationTurn> history = conversationHistory.getOrDefault(historyKey, List.of());
-            AiPlayerNpcCommand[] submittedCommand = new AiPlayerNpcCommand[1];
-            CommandSubmissionResult result = conversationLoop.submit(
-                    character,
-                    commandText,
-                    history,
-                    command -> {
-                        submittedCommand[0] = command;
-                        return submitSelectedCommand(ownerId, assignment.id(), command);
-                    }
-            );
-            if (result.status() == CommandSubmissionStatus.ACCEPTED && submittedCommand[0] != null) {
-                appendConversationTurn(historyKey, new ConversationTurn("player", commandText));
-                appendConversationTurn(historyKey, new ConversationTurn(
-                        "openplayer",
-                        "Action accepted: " + submittedCommand[0].intent().kind().name()
-                ));
-                conversationStatusRepository.recordAction(ownerId, assignment.id(), submittedCommand[0].intent());
-            } else if (result.status() != CommandSubmissionStatus.ACCEPTED) {
-                conversationStatusRepository.recordFailure(ownerId, assignment.id(), result.message());
-            }
-            return result;
+        ConversationHistoryKey historyKey = new ConversationHistoryKey(ownerId, assignment.id());
+        List<ConversationTurn> history = conversationHistory.getOrDefault(historyKey, List.of());
+        AiPlayerNpcCommand[] submittedCommand = new AiPlayerNpcCommand[1];
+        String sessionId = session.get().sessionId().value().toString();
+        OpenPlayerDebugEvents.record("provider_parse", "attempted", assignment.id(), character.id(), sessionId,
+                "source=conversation messageLength=" + commandText.trim().length());
+        CommandSubmissionResult result = conversationLoop.submit(
+                character,
+                commandText,
+                history,
+                command -> {
+                    submittedCommand[0] = command;
+                    OpenPlayerDebugEvents.record("provider_parse", "success", assignment.id(), character.id(), sessionId,
+                            "kind=" + command.intent().kind().name() + " instructionLength=" + command.intent().instruction().length());
+                    return submitSelectedCommand(ownerId, assignment.id(), command);
+                }
+        );
+        if (result.status() == CommandSubmissionStatus.ACCEPTED && submittedCommand[0] != null) {
+            appendConversationTurn(historyKey, new ConversationTurn("player", commandText));
+            appendConversationTurn(historyKey, new ConversationTurn(
+                    "openplayer",
+                    "Action accepted: " + submittedCommand[0].intent().kind().name()
+            ));
+            conversationStatusRepository.recordAction(ownerId, assignment.id(), submittedCommand[0].intent());
+        } else if (result.status() != CommandSubmissionStatus.ACCEPTED) {
+            conversationStatusRepository.recordFailure(ownerId, assignment.id(), result.message());
+            OpenPlayerDebugEvents.record("conversation", result.status().name(), assignment.id(), character.id(), sessionId,
+                    result.message());
         }
-        return npcService().submitCommandText(session.get().sessionId(), commandText);
+        return result;
     }
 
     public List<String> conversationEventLines(UUID ownerId, LocalAssignmentDefinition assignment) {

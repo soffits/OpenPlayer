@@ -8,6 +8,7 @@ import dev.soffits.openplayer.api.NpcOwnerId;
 import dev.soffits.openplayer.automation.AutomationCommandResult;
 import dev.soffits.openplayer.automation.AutomationCommandStatus;
 import dev.soffits.openplayer.automation.AutomationController;
+import dev.soffits.openplayer.debug.OpenPlayerDebugEvents;
 
 final class RuntimeCommandExecutor {
     private final AutomationController automationController;
@@ -27,7 +28,10 @@ final class RuntimeCommandExecutor {
         if (command == null) {
             throw new IllegalArgumentException("command cannot be null");
         }
-        return commandResult(automationController.submit(command.intent()));
+        AutomationCommandResult result = automationController.submit(command.intent());
+        OpenPlayerDebugEvents.record("automation", result.status().name(), null, null, null,
+                "kind=" + command.intent().kind().name() + " message=" + result.message());
+        return commandResult(result);
     }
 
     void tick() {

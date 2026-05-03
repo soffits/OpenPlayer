@@ -70,6 +70,11 @@ public final class OpenPlayerClient {
         String apiKeySource = buffer.readUtf(32);
         String automationName = buffer.readUtf(64);
         String automationState = buffer.readUtf(64);
+        int debugEventCount = buffer.isReadable() ? buffer.readVarInt() : 0;
+        List<String> debugEvents = new ArrayList<>();
+        for (int index = 0; index < debugEventCount; index++) {
+            debugEvents.add(buffer.readUtf(192));
+        }
         context.queue(() -> OpenPlayerClientStatus.update(
                 parserAvailable,
                 endpoint,
@@ -79,7 +84,8 @@ public final class OpenPlayerClient {
                 apiKeyPresent,
                 apiKeySource,
                 automationName,
-                automationState
+                automationState,
+                debugEvents
         ));
     }
 

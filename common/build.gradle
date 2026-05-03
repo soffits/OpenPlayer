@@ -72,6 +72,12 @@ tasks.register('runOpenPlayerControlLayoutTest', JavaExec) {
     mainClass = 'dev.soffits.openplayer.client.OpenPlayerControlLayoutTest'
 }
 
+tasks.register('runOpenPlayerDebugEventsTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.debug.OpenPlayerDebugEventsTest'
+}
+
 tasks.register('runNpcHotbarSelectionTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
@@ -138,6 +144,7 @@ tasks.named('check') {
     dependsOn tasks.named('runLocalCharacterSkinTexturesTest')
     dependsOn tasks.named('runOpenPlayerGalleryPageTest')
     dependsOn tasks.named('runOpenPlayerControlLayoutTest')
+    dependsOn tasks.named('runOpenPlayerDebugEventsTest')
     dependsOn tasks.named('runNpcHotbarSelectionTest')
     dependsOn tasks.named('runNpcConsumableUsePolicyTest')
     dependsOn tasks.named('runConversationLoopTest')

@@ -2,6 +2,8 @@ package dev.soffits.openplayer;
 
 import com.mojang.brigadier.arguments.StringArgumentType;
 import dev.architectury.event.events.common.CommandRegistrationEvent;
+import dev.soffits.openplayer.api.CommandSubmissionResult;
+import dev.soffits.openplayer.api.CommandSubmissionStatus;
 import dev.soffits.openplayer.network.OpenPlayerNetworking;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
@@ -41,7 +43,8 @@ public final class OpenPlayerCommands {
     }
 
     private static int submit(ServerPlayer player, String assignmentId, String message) {
-        if (!OpenPlayerNetworking.submitAssignmentCommandText(player, assignmentId, message)) {
+        CommandSubmissionResult result = OpenPlayerNetworking.submitAssignmentCommandTextResult(player, assignmentId, message);
+        if (result.status() != CommandSubmissionStatus.ACCEPTED) {
             player.sendSystemMessage(Component.translatable("commands.openplayer.ai.rejected"));
             return 0;
         }

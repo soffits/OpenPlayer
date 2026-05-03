@@ -1,5 +1,18 @@
 # Release Notes
 
+## v0.1.0-alpha.5
+
+- Adds a bounded, sanitized server-side debug event log for provider tests, chat command receipt, provider parsing, command submission, companion session resolution, and vanilla automation task lifecycle events.
+- Writes structured JSONL diagnostics to `config/openplayer/logs/events.jsonl` with line bounds, in-memory retention bounds, file rotation, and best-effort failure handling so logging cannot break gameplay.
+- Shows recent safe debug events on the Status page for singleplayer owners or permission-level-2 operators, making "Provider Test succeeds but chat does nothing" paths diagnosable without exposing secrets.
+- Fixes the Provider page layout regression where the `Test Provider` button and provider status text overlapped at default 720p-style scaled GUI sizes.
+- Keeps debug output secret-safe: no API keys, Authorization headers, raw player messages, raw prompts, raw provider responses, or raw model output are logged or sent to clients.
+
+Artifacts:
+
+- `openplayer-fabric-0.1.0-alpha.5.jar`
+- `openplayer-forge-0.1.0-alpha.5.jar`
+
 ## v0.1.0-alpha.4
 
 - Resolves OpenAI-compatible provider base URLs ending in `/v1` or `/v1/` to `/v1/chat/completions` while preserving explicit `/chat/completions` and custom gateway endpoints.

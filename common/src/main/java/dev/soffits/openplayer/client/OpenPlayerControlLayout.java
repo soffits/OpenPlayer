@@ -18,6 +18,11 @@ public final class OpenPlayerControlLayout {
     public static final int PROFILE_ROW_STEP = BUTTON_HEIGHT + 4;
     public static final int PROFILE_DEFAULT_NOTE_TOP = PAGE_TOP + 254;
     public static final int PROFILE_STATUS_TOP = PAGE_TOP + 268;
+    public static final int PROVIDER_ROW_TOP = PAGE_TOP + 16;
+    public static final int PROVIDER_ROW_STEP = BUTTON_HEIGHT + BUTTON_SPACING;
+    public static final int PROVIDER_TEST_BUTTON_ROW = 5;
+    public static final int PROVIDER_STATUS_TOP = PROVIDER_ROW_TOP + PROVIDER_ROW_STEP * PROVIDER_TEST_BUTTON_ROW + BUTTON_HEIGHT + 12;
+    public static final int PROVIDER_NOTE_TOP = PROVIDER_STATUS_TOP + 16;
     private static final int PROFILE_LAST_CONTROL_ROW = 9;
 
     private OpenPlayerControlLayout() {
@@ -67,6 +72,14 @@ public final class OpenPlayerControlLayout {
 
     public static int profileStatusBottom() {
         return PROFILE_STATUS_TOP + TEXT_LINE_HEIGHT;
+    }
+
+    public static int providerTestButtonBottom() {
+        return PROVIDER_ROW_TOP + PROVIDER_ROW_STEP * PROVIDER_TEST_BUTTON_ROW + BUTTON_HEIGHT;
+    }
+
+    public static int providerTextBottom() {
+        return PROVIDER_NOTE_TOP + TEXT_LINE_HEIGHT * 2 + 14;
     }
 
     private static int mainDetailBottom(int lineCount) {

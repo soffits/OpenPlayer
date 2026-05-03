@@ -56,6 +56,7 @@ public final class CompanionLifecycleManagerTest {
         matchingDespawnedAssignmentDoesNotBypassActiveAssignmentLimit();
         spawnRecordsDeterministicGreetingForConversationAssignment();
         disabledParserRecordsFailureWithoutProviderCall();
+        missingConversationConfigIsUnavailableAndDoesNotUseRawParserPath();
         acceptedConversationCommandRecordsSafeActionSummary();
         acceptedConversationHistoryDoesNotRetainProviderInstruction();
         conversationHistoryEvictsOldOwnerKeysFromLaterPrompts();
@@ -250,6 +251,20 @@ public final class CompanionLifecycleManagerTest {
                 "conversation command must record sanitized player text");
         require(events.stream().anyMatch(event -> event.contains("parser disabled")),
                 "disabled parser must record a safe failure event");
+    }
+
+    private static void missingConversationConfigIsUnavailableAndDoesNotUseRawParserPath() {
+        TestNpcService service = new TestNpcService();
+        CompanionLifecycleManager manager = manager(service, CHARACTER);
+        manager.spawnSelectedAssignment(new NpcOwnerId(OWNER_ID),
+                new NpcSpawnLocation("minecraft:overworld", 1.0D, 64.0D, 1.0D), CHARACTER.id());
+
+        CommandSubmissionResult result = manager.submitSelectedCommandText(OWNER_ID, CHARACTER.id(), "follow me");
+
+        require(result.status() == CommandSubmissionStatus.UNAVAILABLE,
+                "missing conversation config must be reported explicitly");
+        require(service.submittedCommandTextCount == 0,
+                "missing conversation config must not silently fall back to raw command text parsing");
     }
 
     private static void acceptedConversationCommandRecordsSafeActionSummary() {
