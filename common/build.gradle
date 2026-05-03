@@ -5,3 +5,13 @@ architectury {
 dependencies {
     modApi "dev.architectury:architectury:${architectury_api_version}"
 }
+
+tasks.register('runLocalCharacterDefinitionTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.character.LocalCharacterDefinitionTest'
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('runLocalCharacterDefinitionTest')
+}
