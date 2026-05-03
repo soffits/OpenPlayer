@@ -334,7 +334,7 @@ public final class OpenPlayerNetworking {
         AiPlayerNpcService service = OpenPlayerApi.npcService();
         AiPlayerNpcCommand command = new AiPlayerNpcCommand(
                 UUID.randomUUID(),
-                new CommandIntent(intentKind, IntentPriority.HIGH, intentKind.name())
+                shortcutIntent(intentKind)
         );
         if (characterId != null && !characterId.isBlank()) {
             CommandSubmissionResult result = COMPANION_LIFECYCLE_MANAGER.submitSelectedCommand(sender.getUUID(), characterId, command);
@@ -464,11 +464,40 @@ public final class OpenPlayerNetworking {
         CommandSubmissionResult result = COMPANION_LIFECYCLE_MANAGER.submitSelectedCommand(
                 sender.getUUID(),
                 assignmentId.trim(),
-                new AiPlayerNpcCommand(UUID.randomUUID(), new CommandIntent(intentKind, IntentPriority.HIGH, intentKind.name()))
+                new AiPlayerNpcCommand(UUID.randomUUID(), shortcutIntent(intentKind))
         );
         sendCharacterListResponse(sender);
         sendStatusResponse(sender);
         return result;
+    }
+
+    static CommandIntent shortcutIntent(IntentKind intentKind) {
+        return new CommandIntent(intentKind, IntentPriority.HIGH, shortcutInstruction(intentKind));
+    }
+
+    private static String shortcutInstruction(IntentKind intentKind) {
+        return switch (intentKind) {
+            case STOP,
+                    REPORT_STATUS,
+                    FOLLOW_OWNER,
+                    COLLECT_ITEMS,
+                    EQUIP_BEST_ITEM,
+                    EQUIP_ARMOR,
+                    USE_SELECTED_ITEM,
+                    SWAP_TO_OFFHAND,
+                    DROP_ITEM,
+                    ATTACK_NEAREST,
+                    GUARD_OWNER -> "";
+            case MOVE,
+                    LOOK,
+                    PATROL,
+                    BREAK_BLOCK,
+                    PLACE_BLOCK,
+                    INTERACT,
+                    CHAT,
+                    UNAVAILABLE,
+                    OBSERVE -> intentKind.name();
+        };
     }
 
     public static List<String> localAssignmentIds() {

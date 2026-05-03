@@ -7,6 +7,7 @@ import dev.soffits.openplayer.debug.OpenPlayerRawTrace;
 import dev.soffits.openplayer.entity.OpenPlayerNpcEntity;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentKind;
+import dev.soffits.openplayer.runtime.validation.RuntimeIntentPolicies;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -31,16 +32,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
     public static final double PLAYER_LIKE_NAVIGATION_SPEED = 1.25D;
 
     static boolean isLocalWorldOrInventoryAction(IntentKind kind) {
-        return kind == IntentKind.COLLECT_ITEMS
-                || kind == IntentKind.BREAK_BLOCK
-                || kind == IntentKind.PLACE_BLOCK
-                || kind == IntentKind.ATTACK_NEAREST
-                || kind == IntentKind.GUARD_OWNER
-                || kind == IntentKind.EQUIP_BEST_ITEM
-                || kind == IntentKind.EQUIP_ARMOR
-                || kind == IntentKind.USE_SELECTED_ITEM
-                || kind == IntentKind.SWAP_TO_OFFHAND
-                || kind == IntentKind.DROP_ITEM;
+        return RuntimeIntentPolicies.isLocalWorldOrInventoryAction(kind);
     }
 
     @Override

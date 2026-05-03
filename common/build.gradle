@@ -144,6 +144,12 @@ tasks.register('runRuntimeContextFormatterTest', JavaExec) {
     mainClass = 'dev.soffits.openplayer.runtime.context.RuntimeContextFormatterTest'
 }
 
+tasks.register('runRuntimeIntentValidatorTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.runtime.validation.RuntimeIntentValidatorTest'
+}
+
 tasks.register('runNpcEquipmentSelectionTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
@@ -174,5 +180,6 @@ tasks.named('check') {
     dependsOn tasks.named('runAutomationControllerSnapshotTest')
     dependsOn tasks.named('runInteractionCooldownTest')
     dependsOn tasks.named('runRuntimeContextFormatterTest')
+    dependsOn tasks.named('runRuntimeIntentValidatorTest')
     dependsOn tasks.named('runNpcEquipmentSelectionTest')
 }

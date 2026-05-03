@@ -13,7 +13,9 @@ import dev.soffits.openplayer.api.NpcSessionId;
 import dev.soffits.openplayer.api.NpcSessionStatus;
 import dev.soffits.openplayer.api.NpcSpawnLocation;
 import dev.soffits.openplayer.intent.IntentParseException;
+import dev.soffits.openplayer.intent.IntentKind;
 import dev.soffits.openplayer.intent.IntentProviderException;
+import dev.soffits.openplayer.runtime.validation.RuntimeIntentValidator;
 import java.util.UUID;
 
 public final class OpenPlayerNetworkingTest {
@@ -34,6 +36,7 @@ public final class OpenPlayerNetworkingTest {
         acceptsPermittedLocalProfileManagement();
         rejectsUnauthorizedLocalProfileManagement();
         classifiesProviderHttpFailure();
+        buildsBlankShortcutInstructions();
     }
 
     private static void matchesLegacyDefaultNetworkNpc() {
@@ -91,6 +94,17 @@ public final class OpenPlayerNetworkingTest {
         );
         require("http_status".equals(OpenPlayerNetworking.providerFailureCode(exception)), "HTTP provider failure must be classified");
         require("401".equals(OpenPlayerNetworking.providerFailureDetail(exception)), "HTTP status must be preserved without response body");
+    }
+
+    private static void buildsBlankShortcutInstructions() {
+        require(OpenPlayerNetworking.shortcutIntent(IntentKind.STOP).instruction().isEmpty(),
+                "STOP shortcut must submit a blank instruction");
+        require(OpenPlayerNetworking.shortcutIntent(IntentKind.FOLLOW_OWNER).instruction().isEmpty(),
+                "FOLLOW_OWNER shortcut must submit a blank instruction");
+        require(RuntimeIntentValidator.validate(OpenPlayerNetworking.shortcutIntent(IntentKind.STOP), true).isAccepted(),
+                "STOP shortcut must pass runtime validation");
+        require(RuntimeIntentValidator.validate(OpenPlayerNetworking.shortcutIntent(IntentKind.FOLLOW_OWNER), true).isAccepted(),
+                "FOLLOW_OWNER shortcut must pass runtime validation");
     }
 
     private static AiPlayerNpcSession session(UUID ownerId, String roleId, String profileName) {

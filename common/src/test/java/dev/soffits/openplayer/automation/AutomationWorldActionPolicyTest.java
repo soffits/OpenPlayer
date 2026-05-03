@@ -1,6 +1,7 @@
 package dev.soffits.openplayer.automation;
 
 import dev.soffits.openplayer.intent.IntentKind;
+import dev.soffits.openplayer.runtime.validation.RuntimeIntentPolicies;
 import java.util.EnumSet;
 import java.util.Set;
 
@@ -22,22 +23,27 @@ public final class AutomationWorldActionPolicyTest {
         for (IntentKind kind : IntentKind.values()) {
             boolean expectedGated = gatedActions.contains(kind);
             require(
-                    VanillaAutomationBackend.isLocalWorldOrInventoryAction(kind) == expectedGated,
+                    RuntimeIntentPolicies.isLocalWorldOrInventoryAction(kind) == expectedGated,
                     kind + " allowWorldActions gate classification mismatch"
+            );
+            require(
+                    VanillaAutomationBackend.isLocalWorldOrInventoryAction(kind)
+                            == RuntimeIntentPolicies.isLocalWorldOrInventoryAction(kind),
+                    kind + " backend and runtime gate classification mismatch"
             );
         }
 
-        require(!VanillaAutomationBackend.isLocalWorldOrInventoryAction(IntentKind.STOP),
+        require(!RuntimeIntentPolicies.isLocalWorldOrInventoryAction(IntentKind.STOP),
                 "STOP must remain available when allowWorldActions is false");
-        require(!VanillaAutomationBackend.isLocalWorldOrInventoryAction(IntentKind.MOVE),
+        require(!RuntimeIntentPolicies.isLocalWorldOrInventoryAction(IntentKind.MOVE),
                 "MOVE must remain available when allowWorldActions is false");
-        require(!VanillaAutomationBackend.isLocalWorldOrInventoryAction(IntentKind.LOOK),
+        require(!RuntimeIntentPolicies.isLocalWorldOrInventoryAction(IntentKind.LOOK),
                 "LOOK must remain available when allowWorldActions is false");
-        require(!VanillaAutomationBackend.isLocalWorldOrInventoryAction(IntentKind.FOLLOW_OWNER),
+        require(!RuntimeIntentPolicies.isLocalWorldOrInventoryAction(IntentKind.FOLLOW_OWNER),
                 "FOLLOW_OWNER must remain available when allowWorldActions is false");
-        require(!VanillaAutomationBackend.isLocalWorldOrInventoryAction(IntentKind.PATROL),
+        require(!RuntimeIntentPolicies.isLocalWorldOrInventoryAction(IntentKind.PATROL),
                 "PATROL must remain available when allowWorldActions is false");
-        require(!VanillaAutomationBackend.isLocalWorldOrInventoryAction(IntentKind.REPORT_STATUS),
+        require(!RuntimeIntentPolicies.isLocalWorldOrInventoryAction(IntentKind.REPORT_STATUS),
                 "REPORT_STATUS must remain available when allowWorldActions is false");
         require(VanillaAutomationBackend.PLAYER_LIKE_NAVIGATION_SPEED >= 1.2D,
                 "NPC navigation speed must be faster than the prior slow default");
