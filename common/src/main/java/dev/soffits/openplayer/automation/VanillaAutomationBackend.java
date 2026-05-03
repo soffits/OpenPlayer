@@ -4,6 +4,8 @@ import dev.soffits.openplayer.api.NpcOwnerId;
 import dev.soffits.openplayer.automation.AutomationInstructionParser.Coordinate;
 import dev.soffits.openplayer.automation.AutomationInstructionParser.GotoInstruction;
 import dev.soffits.openplayer.automation.InventoryActionInstructionParser.ParsedItemInstruction;
+import dev.soffits.openplayer.automation.building.BuildPlan;
+import dev.soffits.openplayer.automation.building.BuildPlanParser;
 import dev.soffits.openplayer.automation.navigation.LoadedAreaNavigator;
 import dev.soffits.openplayer.automation.navigation.NavigationRuntime;
 import dev.soffits.openplayer.automation.navigation.NavigationTarget;
@@ -42,6 +44,7 @@ import java.util.Queue;
 import net.minecraft.core.Direction;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -559,6 +562,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 queuedCommands.add(QueuedCommand.placeBlock(coordinate));
                 return accepted("PLACE_BLOCK accepted");
             }
+            if (kind == IntentKind.BUILD_STRUCTURE) {
+                return submitBuildStructure(intent.instruction());
+            }
             if (kind == IntentKind.ATTACK_NEAREST) {
                 double radius = AutomationInstructionParser.parseOptionalRadiusOrNegative(
                         intent.instruction(), ATTACK_DEFAULT_RADIUS, ATTACK_MAX_RADIUS
@@ -617,6 +623,39 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 case BLOCK -> submitGotoBlock(gotoInstruction.resourceId(), gotoInstruction.radius());
                 case ENTITY -> submitGotoEntity(gotoInstruction.resourceId(), gotoInstruction.radius());
             };
+        }
+
+        private AutomationCommandResult submitBuildStructure(String instruction) {
+            BuildPlan plan = BuildPlanParser.parseOrNull(instruction);
+            if (plan == null) {
+                return rejected(BuildPlanParser.USAGE);
+            }
+            Item material = itemByIdOrNull(plan.materialId());
+            if (!(material instanceof BlockItem blockItem) || material == Items.AIR) {
+                return rejected("BUILD_STRUCTURE unsupported material: " + plan.materialId());
+            }
+            BlockState placedState = blockItem.getBlock().defaultBlockState();
+            if (placedState.isAir() || !placedState.getFluidState().isEmpty()) {
+                return rejected("BUILD_STRUCTURE unsupported material: " + plan.materialId());
+            }
+            int carried = untaggedNormalInventoryCount(entity.inventorySnapshot(), material);
+            if (carried < plan.blockCount()) {
+                return rejected("BUILD_STRUCTURE missing materials: material=" + plan.materialId()
+                        + " required=" + plan.blockCount() + " carried=" + carried);
+            }
+            ServerLevel serverLevel = serverLevel();
+            if (serverLevel == null) {
+                return rejected("BUILD_STRUCTURE requires a server level");
+            }
+            for (BlockPos blockPos : plan.positions()) {
+                String rejection = buildTargetRejection(serverLevel, blockPos, placedState);
+                if (rejection != null) {
+                    return rejected("BUILD_STRUCTURE rejected: " + rejection + " at " + blockPos.toShortString());
+                }
+            }
+            queuedCommands.add(QueuedCommand.buildStructure(plan, material));
+            return accepted("BUILD_STRUCTURE accepted: primitive=" + plan.primitive().name().toLowerCase()
+                    + " blocks=" + plan.blockCount() + " material=" + plan.materialId());
         }
 
         private AutomationCommandResult submitGotoCoordinate(Coordinate coordinate) {
@@ -769,6 +808,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                     || command.kind() == IntentKind.FARM_NEARBY
                     || command.kind() == IntentKind.BREAK_BLOCK
                     || command.kind() == IntentKind.PLACE_BLOCK
+                    || command.kind() == IntentKind.BUILD_STRUCTURE
                     || command.kind() == IntentKind.SMELT_ITEM
                     || command.kind() == IntentKind.FISH
                     || command.kind() == IntentKind.ATTACK_NEAREST
@@ -824,6 +864,10 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             if (activeCommand.kind() == IntentKind.PLACE_BLOCK) {
                 placeBlock(activeCommand);
+                return;
+            }
+            if (activeCommand.kind() == IntentKind.BUILD_STRUCTURE) {
+                buildStructure(activeCommand);
                 return;
             }
             if (activeCommand.kind() == IntentKind.SMELT_ITEM) {
@@ -1324,6 +1368,63 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             completeActiveCommand();
         }
 
+        private void buildStructure(QueuedCommand command) {
+            ServerLevel serverLevel = serverLevel();
+            if (serverLevel == null) {
+                failActiveCommand("server_level_unavailable");
+                return;
+            }
+            BuildPlan plan = command.buildPlan();
+            Item material = command.buildMaterial();
+            if (plan == null || material == null || !(material instanceof BlockItem blockItem)) {
+                failActiveCommand("build_plan_unavailable");
+                return;
+            }
+            if (command.buildIndex() >= plan.blockCount()) {
+                completeActiveCommand("build:placed=" + plan.blockCount() + "/" + plan.blockCount()
+                        + " material=" + plan.materialId());
+                return;
+            }
+            BlockPos blockPos = plan.positions().get(command.buildIndex());
+            if (!canUseBlockTarget(serverLevel, command, blockPos)) {
+                failActiveCommand("build_target_unavailable");
+                return;
+            }
+            BlockState placedState = blockItem.getBlock().defaultBlockState();
+            String rejection = buildTargetRejection(serverLevel, blockPos, placedState);
+            if (rejection != null) {
+                failActiveCommand("build_" + rejection);
+                return;
+            }
+            if (untaggedNormalInventoryCount(entity.inventorySnapshot(), material) < 1) {
+                failActiveCommand("build_missing_material");
+                return;
+            }
+            lookAtBlock(blockPos);
+            if (!isWithinInteractionDistance(blockPos)) {
+                moveNearBlock(blockPos);
+                noteBuildProgress(command);
+                return;
+            }
+            stopNavigation();
+            if (!serverLevel.setBlock(blockPos, placedState, Block.UPDATE_ALL)) {
+                failActiveCommand("build_place_failed");
+                return;
+            }
+            if (!consumeOneUntaggedNormalInventoryItem(material)) {
+                serverLevel.setBlock(blockPos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+                failActiveCommand("build_consume_failed_rolled_back");
+                return;
+            }
+            entity.swingMainHandAction();
+            command.incrementBuildIndex();
+            noteBuildProgress(command);
+            if (command.buildIndex() >= plan.blockCount()) {
+                completeActiveCommand("build:placed=" + plan.blockCount() + "/" + plan.blockCount()
+                        + " material=" + plan.materialId());
+            }
+        }
+
         private void smeltItem(QueuedCommand command) {
             ServerLevel serverLevel = serverLevel();
             if (serverLevel == null) {
@@ -1818,6 +1919,14 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             activeCommand = null;
         }
 
+        private void noteBuildProgress(QueuedCommand command) {
+            if (activeMonitor == null || command.buildPlan() == null) {
+                return;
+            }
+            activeMonitor.note("build:placed=" + command.buildIndex() + "/" + command.buildPlan().blockCount()
+                    + " material=" + command.buildPlan().materialId());
+        }
+
         private void failActiveCommand(String reason) {
             if (activeCommand != null) {
                 OpenPlayerDebugEvents.record("automation", "cancelled", null, null, null,
@@ -1901,6 +2010,11 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             if (kind == IntentKind.BREAK_BLOCK || kind == IntentKind.PLACE_BLOCK) {
                 moveNearBlock(activeCommand.blockPos());
+                return;
+            }
+            if (kind == IntentKind.BUILD_STRUCTURE && activeCommand.buildPlan() != null
+                    && activeCommand.buildIndex() < activeCommand.buildPlan().blockCount()) {
+                moveNearBlock(activeCommand.buildPlan().positions().get(activeCommand.buildIndex()));
                 return;
             }
             if (kind == IntentKind.FARM_NEARBY) {
@@ -2026,6 +2140,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (kind == IntentKind.COLLECT_ITEMS || kind == IntentKind.COLLECT_FOOD) {
                 return COLLECT_MAX_TICKS;
             }
+            if (kind == IntentKind.BUILD_STRUCTURE) {
+                return LONG_TASK_MAX_TICKS;
+            }
             if (kind == IntentKind.FOLLOW_OWNER || kind == IntentKind.GUARD_OWNER || kind == IntentKind.PATROL) {
                 return LONG_TASK_MAX_TICKS;
             }
@@ -2103,6 +2220,37 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             return count;
         }
 
+        private boolean consumeOneUntaggedNormalInventoryItem(Item item) {
+            List<ItemStack> inventory = entity.inventorySnapshot();
+            int end = Math.min(NpcInventoryTransfer.FIRST_EQUIPMENT_SLOT, inventory.size());
+            for (int slot = NpcInventoryTransfer.FIRST_NORMAL_SLOT; slot < end; slot++) {
+                ItemStack stack = inventory.get(slot);
+                if (!stack.isEmpty() && stack.is(item) && !stack.hasTag()) {
+                    stack.shrink(1);
+                    return entity.setInventoryItem(slot, stack.isEmpty() ? ItemStack.EMPTY : stack);
+                }
+            }
+            return false;
+        }
+
+        private String buildTargetRejection(ServerLevel serverLevel, BlockPos blockPos, BlockState placedState) {
+            if (!serverLevel.hasChunkAt(blockPos)) {
+                return "target_chunk_unloaded";
+            }
+            if (!serverLevel.getBlockState(blockPos).isAir()) {
+                return "target_occupied";
+            }
+            if (!placedState.canSurvive(serverLevel, blockPos)
+                    || !serverLevel.isUnobstructed(placedState, blockPos, CollisionContext.empty())) {
+                return "target_collision_or_support";
+            }
+            return null;
+        }
+
+        private static Item itemByIdOrNull(ResourceLocation id) {
+            return BuiltInRegistries.ITEM.getOptional(id).orElse(null);
+        }
+
         private static String itemId(Item item) {
             return BuiltInRegistries.ITEM.getKey(item).toString();
         }
@@ -2154,6 +2302,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             private final FuelPlan fuelPlan;
             private final int maxTicks;
             private final boolean survivalOnly;
+            private BuildPlan buildPlan;
+            private Item buildMaterial;
+            private int buildIndex;
             private BlockPos startPosition;
             private int reachTicks;
             private boolean patrolReturn;
@@ -2235,6 +2386,13 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
             private static QueuedCommand placeBlock(Coordinate coordinate) {
                 return new QueuedCommand(IntentKind.PLACE_BLOCK, coordinate, 0.0D);
+            }
+
+            private static QueuedCommand buildStructure(BuildPlan buildPlan, Item buildMaterial) {
+                QueuedCommand command = new QueuedCommand(IntentKind.BUILD_STRUCTURE, null, 0.0D);
+                command.buildPlan = buildPlan;
+                command.buildMaterial = buildMaterial;
+                return command;
             }
 
             private static QueuedCommand attackNearest(double radius) {
@@ -2320,6 +2478,22 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
             private boolean survivalOnly() {
                 return survivalOnly;
+            }
+
+            private BuildPlan buildPlan() {
+                return buildPlan;
+            }
+
+            private Item buildMaterial() {
+                return buildMaterial;
+            }
+
+            private int buildIndex() {
+                return buildIndex;
+            }
+
+            private void incrementBuildIndex() {
+                buildIndex++;
             }
 
             private boolean smeltStarted() {

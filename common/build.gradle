@@ -180,6 +180,12 @@ tasks.register('runWorkLoopPolicyTest', JavaExec) {
     mainClass = 'dev.soffits.openplayer.automation.work.WorkLoopPolicyTest'
 }
 
+tasks.register('runBuildPlanParserTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.automation.building.BuildPlanParserTest'
+}
+
 tasks.register('runRuntimeContextFormatterTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
@@ -258,6 +264,7 @@ tasks.named('check') {
     dependsOn tasks.named('runLoadedAreaNavigatorTest')
     dependsOn tasks.named('runSurvivalPolicyTest')
     dependsOn tasks.named('runWorkLoopPolicyTest')
+    dependsOn tasks.named('runBuildPlanParserTest')
     dependsOn tasks.named('runRuntimeContextFormatterTest')
     dependsOn tasks.named('runRuntimeIntentValidatorTest')
     dependsOn tasks.named('runNpcEquipmentSelectionTest')

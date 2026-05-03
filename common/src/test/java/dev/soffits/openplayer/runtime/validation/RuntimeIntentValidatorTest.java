@@ -28,6 +28,7 @@ public final class RuntimeIntentValidatorTest {
         rejectsNonAutomationConversationKinds();
         validatesSurvivalRadiusInstructions();
         validatesWorkLoopInstructions();
+        validatesBuildStructureInstructions();
         rejectsPlannedIntentKinds();
         gatesPlannedWorldActionKindsBeforeUnimplementedRejection();
         rejectsPlannedNonGatedKindsAsUnimplemented();
@@ -284,6 +285,27 @@ public final class RuntimeIntentValidatorTest {
         }
     }
 
+    private static void validatesBuildStructureInstructions() {
+        require(RuntimeIntentValidator.validate(intent(IntentKind.BUILD_STRUCTURE,
+                        "primitive=floor origin=0,64,0 size=3,1,3 material=minecraft:cobblestone"), true).isAccepted(),
+                "BUILD_STRUCTURE should accept strict primitive syntax");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.BUILD_STRUCTURE,
+                        "material=minecraft:cobblestone size=1,4,1 origin=0,64,0 primitive=line"), true).isAccepted(),
+                "BUILD_STRUCTURE should accept strict key order independence");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.BUILD_STRUCTURE, "build a small house"), true),
+                "BUILD_STRUCTURE requires instruction: primitive=<line|wall|floor|box|stairs> origin=<x,y,z> size=<x,y,z> material=<item_id>");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.BUILD_STRUCTURE,
+                        "primitive=floor origin=0,64,0 size=9,1,8 material=minecraft:cobblestone"), true),
+                "BUILD_STRUCTURE requires instruction: primitive=<line|wall|floor|box|stairs> origin=<x,y,z> size=<x,y,z> material=<item_id>");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.BUILD_STRUCTURE,
+                        "primitive=floor origin=0,64,0 size=3,1,3 material=cobblestone"), true),
+                "BUILD_STRUCTURE requires instruction: primitive=<line|wall|floor|box|stairs> origin=<x,y,z> size=<x,y,z> material=<item_id>");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.BUILD_STRUCTURE,
+                        "primitive=floor origin=0,64,0 size=3,1,3 material=minecraft:cobblestone"), false),
+                "World actions are disabled for this OpenPlayer character");
+    }
+
+
     private static void gatesPlannedWorldActionKindsBeforeUnimplementedRejection() {
         for (IntentKind kind : plannedGatedKinds()) {
             requireRejected(RuntimeIntentValidator.validate(validIntent(kind), false),
@@ -325,14 +347,14 @@ public final class RuntimeIntentValidatorTest {
             case WITHDRAW_ITEM -> "minecraft:bread 1";
             case COLLECT_FOOD,
                     FARM_NEARBY,
-                    FISH,
-                    ATTACK_TARGET,
+                    FISH -> "";
+            case BUILD_STRUCTURE -> "primitive=line origin=1,64,1 size=2,1,1 material=minecraft:cobblestone";
+            case ATTACK_TARGET,
                     DEFEND_OWNER,
                     PAUSE,
                     UNPAUSE,
                     RESET_MEMORY,
-                    BODY_LANGUAGE,
-                    BUILD_STRUCTURE -> "";
+                    BODY_LANGUAGE -> "";
             case OBSERVE,
                     STOP,
                     FOLLOW_OWNER,
@@ -355,8 +377,7 @@ public final class RuntimeIntentValidatorTest {
 
     private static EnumSet<IntentKind> plannedGatedKinds() {
         return EnumSet.of(
-                IntentKind.ATTACK_TARGET,
-                IntentKind.BUILD_STRUCTURE
+                IntentKind.ATTACK_TARGET
         );
     }
 

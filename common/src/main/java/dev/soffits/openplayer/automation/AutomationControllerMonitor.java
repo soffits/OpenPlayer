@@ -101,6 +101,12 @@ public final class AutomationControllerMonitor {
         this.reason = bounded(reason);
     }
 
+    public void note(String reason) {
+        if (status == AutomationControllerMonitorStatus.ACTIVE) {
+            this.reason = bounded(reason);
+        }
+    }
+
     public void reset() {
         status = AutomationControllerMonitorStatus.IDLE;
         reason = "idle";

@@ -264,6 +264,8 @@ OpenPlayer already has:
 
 ### Phase 11: Building System
 
+**Status:** Phase 11 implements a safe first-party `BUILD_STRUCTURE` MVP using strict primitive instructions only: `primitive=<line|wall|floor|box|stairs> origin=<x,y,z> size=<x,y,z> material=<item_id>`. Plans are capped at 64 placed blocks with each dimension at most 16, require exact namespaced carried block item materials, scan only already-loaded target chunks, reject occupied/colliding/unsupported/fluid targets, place only into air, consume one NPC-carried material only after each successful placement, rollback if post-placement consumption fails, and report truthful accepted/rejected/progress/completion reasons. Arbitrary provider-generated code, scripts, free-form blueprints, JSON schema expansion, chunk loading, overwrites, fluid placement, external pathing/building dependencies, and build resume after cancellation remain out of scope.
+
 **Objective:** Implement safe structure building without arbitrary provider-generated code execution.
 
 **Capabilities:**
