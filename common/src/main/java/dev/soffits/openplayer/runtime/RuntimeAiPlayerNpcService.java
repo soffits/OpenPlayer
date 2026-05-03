@@ -18,8 +18,15 @@ import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentParseException;
 import dev.soffits.openplayer.intent.IntentParser;
 import dev.soffits.openplayer.registry.OpenPlayerEntityTypes;
+import dev.soffits.openplayer.runtime.context.RuntimeAgentSnapshot;
+import dev.soffits.openplayer.runtime.context.RuntimeContextFormatter;
+import dev.soffits.openplayer.runtime.context.RuntimeContextSnapshot;
+import dev.soffits.openplayer.runtime.context.RuntimeNearbySnapshot;
+import dev.soffits.openplayer.runtime.context.RuntimeNearbySnapshot.BlockTargetSnapshot;
+import dev.soffits.openplayer.runtime.context.RuntimeNearbySnapshot.RuntimeEntitySnapshot;
+import dev.soffits.openplayer.runtime.context.RuntimeNearbySnapshot.RuntimeNamedEntitySnapshot;
+import dev.soffits.openplayer.runtime.context.RuntimeWorldSnapshot;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -314,7 +321,8 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         if (entity == null) {
             return ConversationContextSnapshot.EMPTY;
         }
-        return new ConversationContextSnapshot(buildConversationContext(session, entity));
+        RuntimeContextSnapshot snapshot = buildRuntimeContextSnapshot(entity);
+        return new ConversationContextSnapshot(RuntimeContextFormatter.format(snapshot));
     }
 
     synchronized void clearRuntimeSessions() {
@@ -422,37 +430,49 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         entity.setCustomNameVisible(true);
     }
 
-    private String buildConversationContext(RuntimeAiPlayerNpcSession session, OpenPlayerNpcEntity entity) {
+    private RuntimeContextSnapshot buildRuntimeContextSnapshot(OpenPlayerNpcEntity entity) {
         ServerLevel level = (ServerLevel) entity.level();
         BlockPos center = entity.blockPosition();
-        StringBuilder builder = new StringBuilder();
-        builder.append("world: dimension=").append(level.dimension().location())
-                .append(", npcPosition=").append(center.getX()).append(",").append(center.getY()).append(",").append(center.getZ())
-                .append(", dayTime=").append(level.getDayTime() % 24000L)
-                .append(", isDay=").append(level.isDay())
-                .append(", raining=").append(level.isRaining())
-                .append(", thundering=").append(level.isThundering())
-                .append(", difficulty=").append(level.getDifficulty().getKey())
-                .append("\n");
-        builder.append("agent: status=").append(status(session.sessionId()).name().toLowerCase(java.util.Locale.ROOT))
-                .append(", health=").append(Math.round(entity.getHealth())).append("/").append(Math.round(entity.getMaxHealth()))
-                .append(", air=").append(entity.getAirSupply())
-                .append(", mainhand=").append(itemName(entity.getMainHandItem()))
-                .append(", offhand=").append(itemName(entity.getOffhandItem()))
-                .append(", armor=").append(armorSummary(entity))
-                .append(", inventory=").append(inventorySummary(entity))
-                .append("\n");
-        builder.append("nearbyBlocks: ").append(nearbyBlockSummary(level, center)).append("\n");
-        builder.append("nearbyDroppedItems: ").append(nearbyDroppedItemsSummary(level, entity)).append("\n");
-        builder.append("nearbyHostiles: ").append(nearbyHostilesSummary(level, entity)).append("\n");
-        builder.append("nearbyPlayers: ").append(nearbyPlayersSummary(level, entity)).append("\n");
-        builder.append("nearbyOpenPlayerNpcs: ").append(nearbyNpcsSummary(level, entity));
-        return builder.toString();
+        RuntimeWorldSnapshot world = new RuntimeWorldSnapshot(
+                level.dimension().location().toString(),
+                center.getX(),
+                center.getY(),
+                center.getZ(),
+                level.getDayTime() % 24000L,
+                level.isDay(),
+                level.isRaining(),
+                level.isThundering(),
+                level.getDifficulty().getKey()
+        );
+        RuntimeAgentSnapshot agent = new RuntimeAgentSnapshot(
+                NpcSessionStatus.ACTIVE.name().toLowerCase(java.util.Locale.ROOT),
+                Math.round(entity.getHealth()),
+                Math.round(entity.getMaxHealth()),
+                entity.getAirSupply(),
+                itemName(entity.getMainHandItem()),
+                itemName(entity.getOffhandItem()),
+                armorSummary(entity),
+                inventorySummary(entity)
+        );
+        RuntimeNearbySnapshot nearby = nearbySnapshot(level, entity, center);
+        return new RuntimeContextSnapshot(world, agent, nearby);
     }
 
-    private static String nearbyBlockSummary(ServerLevel level, BlockPos center) {
+    private static RuntimeNearbySnapshot nearbySnapshot(ServerLevel level, OpenPlayerNpcEntity entity, BlockPos center) {
+        BlockScanSnapshot blocks = nearbyBlocks(level, center);
+        return new RuntimeNearbySnapshot(
+                blocks.counts(),
+                blocks.targets(),
+                nearbyDroppedItemCounts(level, entity),
+                nearbyHostiles(level, entity),
+                nearbyPlayers(level, entity),
+                nearbyNpcs(level, entity)
+        );
+    }
+
+    private static BlockScanSnapshot nearbyBlocks(ServerLevel level, BlockPos center) {
         Map<String, Integer> counts = new TreeMap<>();
-        List<BlockTarget> targets = new ArrayList<>();
+        List<BlockTargetSnapshot> targets = new ArrayList<>();
         int radius = 6;
         for (BlockPos blockPos : BlockPos.betweenClosed(center.offset(-radius, -2, -radius), center.offset(radius, 3, radius))) {
             BlockState state = level.getBlockState(blockPos);
@@ -462,24 +482,18 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
             Block block = state.getBlock();
             String id = BuiltInRegistries.BLOCK.getKey(block).toString();
             counts.merge(id, 1, Integer::sum);
-            targets.add(new BlockTarget(id, blockPos.immutable(), blockDistanceSquared(center, blockPos)));
+            targets.add(new BlockTargetSnapshot(
+                    id,
+                    blockPos.getX(),
+                    blockPos.getY(),
+                    blockPos.getZ(),
+                    blockDistanceSquared(center, blockPos)
+            ));
         }
-        targets.sort(Comparator.comparingDouble(BlockTarget::distanceSquared)
-                .thenComparing(BlockTarget::id)
-                .thenComparingInt(target -> target.position().getX())
-                .thenComparingInt(target -> target.position().getY())
-                .thenComparingInt(target -> target.position().getZ()));
-        List<String> targetValues = new ArrayList<>();
-        for (int index = 0; index < Math.min(12, targets.size()); index++) {
-            BlockTarget target = targets.get(index);
-            BlockPos position = target.position();
-            targetValues.add(target.id() + " @ " + position.getX() + " " + position.getY() + " " + position.getZ());
-        }
-        String nearestTargets = targetValues.isEmpty() ? "none" : String.join(", ", targetValues);
-        return "counts=[" + countedSummary(counts, 16) + "]; nearestTargets=[" + nearestTargets + "]";
+        return new BlockScanSnapshot(counts, targets);
     }
 
-    private record BlockTarget(String id, BlockPos position, double distanceSquared) {
+    private record BlockScanSnapshot(Map<String, Integer> counts, List<BlockTargetSnapshot> targets) {
     }
 
     private static double blockDistanceSquared(BlockPos first, BlockPos second) {
@@ -489,46 +503,43 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         return dx * dx + dy * dy + dz * dz;
     }
 
-    private static String nearbyDroppedItemsSummary(ServerLevel level, OpenPlayerNpcEntity entity) {
+    private static Map<String, Integer> nearbyDroppedItemCounts(ServerLevel level, OpenPlayerNpcEntity entity) {
         Map<String, Integer> counts = new TreeMap<>();
         for (ItemEntity itemEntity : level.getEntitiesOfClass(ItemEntity.class, entity.getBoundingBox().inflate(12.0D),
                 itemEntity -> itemEntity.isAlive() && !itemEntity.getItem().isEmpty())) {
             ItemStack stack = itemEntity.getItem();
             counts.merge(itemName(stack), stack.getCount(), Integer::sum);
         }
-        return countedSummary(counts, 8);
+        return counts;
     }
 
-    private static String nearbyHostilesSummary(ServerLevel level, OpenPlayerNpcEntity entity) {
-        List<String> lines = new ArrayList<>();
+    private static List<RuntimeEntitySnapshot> nearbyHostiles(ServerLevel level, OpenPlayerNpcEntity entity) {
+        List<RuntimeEntitySnapshot> hostiles = new ArrayList<>();
         for (Monster monster : level.getEntitiesOfClass(Monster.class, entity.getBoundingBox().inflate(32.0D), Monster::isAlive)) {
-            lines.add(entityName(monster) + " " + relativeSummary(entity, monster));
+            hostiles.add(new RuntimeEntitySnapshot(entityName(monster), distanceMeters(entity, monster), direction(entity, monster)));
         }
-        lines.sort(String::compareTo);
-        return limitedList(lines, 8);
+        return hostiles;
     }
 
-    private static String nearbyPlayersSummary(ServerLevel level, OpenPlayerNpcEntity entity) {
-        List<String> lines = new ArrayList<>();
+    private static List<RuntimeNamedEntitySnapshot> nearbyPlayers(ServerLevel level, OpenPlayerNpcEntity entity) {
+        List<RuntimeNamedEntitySnapshot> players = new ArrayList<>();
         for (ServerPlayer player : level.getEntitiesOfClass(ServerPlayer.class, entity.getBoundingBox().inflate(64.0D), ServerPlayer::isAlive)) {
-            lines.add(player.getGameProfile().getName() + " " + relativeSummary(entity, player));
+            players.add(new RuntimeNamedEntitySnapshot(player.getGameProfile().getName(), distanceMeters(entity, player), direction(entity, player)));
         }
-        lines.sort(String::compareTo);
-        return limitedList(lines, 8);
+        return players;
     }
 
-    private static String nearbyNpcsSummary(ServerLevel level, OpenPlayerNpcEntity entity) {
-        List<String> lines = new ArrayList<>();
+    private static List<RuntimeNamedEntitySnapshot> nearbyNpcs(ServerLevel level, OpenPlayerNpcEntity entity) {
+        List<RuntimeNamedEntitySnapshot> npcs = new ArrayList<>();
         for (OpenPlayerNpcEntity npc : level.getEntitiesOfClass(OpenPlayerNpcEntity.class, entity.getBoundingBox().inflate(32.0D),
                 npc -> npc.isAlive() && npc != entity)) {
             String name = npc.persistedProfileName().orElse("OpenPlayer NPC");
-            lines.add(name + " " + relativeSummary(entity, npc));
+            npcs.add(new RuntimeNamedEntitySnapshot(name, distanceMeters(entity, npc), direction(entity, npc)));
         }
-        lines.sort(String::compareTo);
-        return limitedList(lines, 8);
+        return npcs;
     }
 
-    private static String inventorySummary(OpenPlayerNpcEntity entity) {
+    private static Map<String, Integer> inventorySummary(OpenPlayerNpcEntity entity) {
         Map<String, Integer> counts = new TreeMap<>();
         for (int slot = 0; slot < 36; slot++) {
             ItemStack stack = entity.getInventoryItem(slot);
@@ -536,10 +547,10 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
                 counts.merge(itemName(stack), stack.getCount(), Integer::sum);
             }
         }
-        return countedSummary(counts, 12);
+        return counts;
     }
 
-    private static String armorSummary(OpenPlayerNpcEntity entity) {
+    private static List<String> armorSummary(OpenPlayerNpcEntity entity) {
         List<String> values = new ArrayList<>();
         for (EquipmentSlot slot : List.of(EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET)) {
             ItemStack stack = entity.getItemBySlot(slot);
@@ -547,36 +558,7 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
                 values.add(slot.getName() + "=" + itemName(stack));
             }
         }
-        return values.isEmpty() ? "none" : String.join(", ", values);
-    }
-
-    private static String countedSummary(Map<String, Integer> counts, int limit) {
-        if (counts.isEmpty()) {
-            return "none";
-        }
-        List<Map.Entry<String, Integer>> entries = new ArrayList<>(counts.entrySet());
-        entries.sort(Comparator.<Map.Entry<String, Integer>>comparingInt(Map.Entry::getValue).reversed()
-                .thenComparing(Map.Entry::getKey));
-        List<String> values = new ArrayList<>();
-        for (int index = 0; index < Math.min(limit, entries.size()); index++) {
-            Map.Entry<String, Integer> entry = entries.get(index);
-            values.add(entry.getKey() + " x" + entry.getValue());
-        }
-        if (entries.size() > limit) {
-            values.add("more=" + (entries.size() - limit));
-        }
-        return String.join(", ", values);
-    }
-
-    private static String limitedList(List<String> values, int limit) {
-        if (values.isEmpty()) {
-            return "none";
-        }
-        List<String> limited = new ArrayList<>(values.subList(0, Math.min(limit, values.size())));
-        if (values.size() > limit) {
-            limited.add("more=" + (values.size() - limit));
-        }
-        return String.join(", ", limited);
+        return values;
     }
 
     private static String itemName(ItemStack stack) {
@@ -590,13 +572,18 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         return BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString();
     }
 
-    private static String relativeSummary(Entity origin, Entity target) {
+    private static long distanceMeters(Entity origin, Entity target) {
         double dx = target.getX() - origin.getX();
         double dy = target.getY() - origin.getY();
         double dz = target.getZ() - origin.getZ();
-        long distance = Math.round(Math.sqrt(dx * dx + dy * dy + dz * dz));
-        return "distance=" + distance + "m direction=" + horizontalDirection(dx, dz)
-                + verticalDirection(dy);
+        return Math.round(Math.sqrt(dx * dx + dy * dy + dz * dz));
+    }
+
+    private static String direction(Entity origin, Entity target) {
+        double dx = target.getX() - origin.getX();
+        double dy = target.getY() - origin.getY();
+        double dz = target.getZ() - origin.getZ();
+        return horizontalDirection(dx, dz) + verticalDirection(dy);
     }
 
     private static String horizontalDirection(double dx, double dz) {
