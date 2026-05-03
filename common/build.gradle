@@ -204,6 +204,12 @@ tasks.register('runRuntimeSmeltingRecipeIndexTest', JavaExec) {
     mainClass = 'dev.soffits.openplayer.automation.resource.RuntimeSmeltingRecipeIndexTest'
 }
 
+tasks.register('runWorkstationCapabilityTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.automation.resource.WorkstationCapabilityTest'
+}
+
 tasks.named('check') {
     dependsOn tasks.named('runLocalCharacterDefinitionTest')
     dependsOn tasks.named('runLocalAssignmentRepositoryTest')
@@ -238,4 +244,5 @@ tasks.named('check') {
     dependsOn tasks.named('runResourceDependencyPlannerTest')
     dependsOn tasks.named('runRuntimeCraftingRecipeIndexTest')
     dependsOn tasks.named('runRuntimeSmeltingRecipeIndexTest')
+    dependsOn tasks.named('runWorkstationCapabilityTest')
 }

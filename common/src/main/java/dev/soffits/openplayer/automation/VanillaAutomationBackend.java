@@ -12,6 +12,11 @@ import dev.soffits.openplayer.automation.resource.ResourcePlanResult;
 import dev.soffits.openplayer.automation.resource.RuntimeCraftingRecipeIndex;
 import dev.soffits.openplayer.automation.resource.RuntimeSmeltingRecipeIndex;
 import dev.soffits.openplayer.automation.resource.SmeltingPlan;
+import dev.soffits.openplayer.automation.workstation.WorkstationCapability;
+import dev.soffits.openplayer.automation.workstation.WorkstationDiagnostics;
+import dev.soffits.openplayer.automation.workstation.WorkstationKind;
+import dev.soffits.openplayer.automation.workstation.WorkstationLocator;
+import dev.soffits.openplayer.automation.workstation.WorkstationTarget;
 import dev.soffits.openplayer.debug.OpenPlayerDebugEvents;
 import dev.soffits.openplayer.debug.OpenPlayerRawTrace;
 import dev.soffits.openplayer.entity.NpcInventoryTransfer;
@@ -41,8 +46,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
@@ -103,6 +108,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private final Queue<QueuedCommand> queuedCommands = new ArrayDeque<>();
         private final InteractionCooldown interactionCooldown = new InteractionCooldown(INTERACTION_COOLDOWN_TICKS);
         private final NavigationRuntime navigationRuntime = new NavigationRuntime(NAVIGATION_MAX_RECOVERIES);
+        private final WorkstationLocator workstationLocator = new WorkstationLocator();
         private QueuedCommand activeCommand;
         private AutomationControllerMonitor activeMonitor;
         private NpcOwnerId ownerId;
@@ -382,7 +388,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 ResourceDependencyPlanner resourceDependencyPlanner = new ResourceDependencyPlanner(
                         RuntimeCraftingRecipeIndex.fromServer(server)
                 );
-                boolean hasCraftingTable = hasNearbyCraftingTable();
+                WorkstationTarget craftingTable = nearestCraftingTable();
+                boolean hasCraftingTable = craftingTable != null;
                 ResourcePlanResult plan = resourceDependencyPlanner.plan(
                         new GetItemRequest(parsed.itemId(), parsed.item(), parsed.count()),
                         entity.inventorySnapshot(),
@@ -437,11 +444,15 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 if (fuelPlan == null) {
                     return rejected("SMELT_ITEM requires enough NPC-carried non-container fuel");
                 }
-                SafeFurnaceTarget target = nearestSafeFurnace();
+                WorkstationTarget target = nearestVanillaFurnace();
                 if (target == null) {
-                    return rejected("SMELT_ITEM requires a loaded nearby vanilla furnace");
+                    return rejected("SMELT_ITEM requires workstation adapter: "
+                            + WorkstationDiagnostics.noLoadedTarget(WorkstationCapability.VANILLA_FURNACE)
+                            + "; " + WorkstationDiagnostics.adapterUnavailable(WorkstationKind.SMOKER, "minecraft:smelting")
+                            + "; " + WorkstationDiagnostics.adapterUnavailable(WorkstationKind.BLAST_FURNACE, "minecraft:smelting"));
                 }
-                List<ItemStack> furnaceStacks = containerSnapshot(target.furnace());
+                Container furnace = WorkstationLocator.requireContainerAdapter(target);
+                List<ItemStack> furnaceStacks = containerSnapshot(furnace);
                 if (!NpcInventoryTransfer.canInsertAll(
                         entity.inventorySnapshot(), plan.requestedOutputStack(),
                         NpcInventoryTransfer.FIRST_NORMAL_SLOT, NpcInventoryTransfer.FIRST_EQUIPMENT_SLOT
@@ -768,7 +779,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 failActiveCommand("server_level_unavailable");
                 return;
             }
-            SafeFurnaceTarget target = safeFurnaceAt(serverLevel, command.furnacePos());
+            WorkstationTarget target = furnaceAt(serverLevel, command.furnacePos());
             if (target == null) {
                 failActiveCommand("furnace_target_unavailable");
                 return;
@@ -783,7 +794,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return;
             }
             stopNavigation();
-            List<ItemStack> furnaceStacks = containerSnapshot(target.furnace());
+            Container furnace = WorkstationLocator.requireContainerAdapter(target);
+            List<ItemStack> furnaceStacks = containerSnapshot(furnace);
             SmeltingPlan plan = command.smeltingPlan();
             if (!command.smeltStarted()) {
                 MinecraftServer server = entity.getServer();
@@ -806,8 +818,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                     failActiveCommand("furnace_start_state_changed");
                     return;
                 }
-                restoreContainer(target.furnace(), furnaceStacks);
-                target.furnace().setChanged();
+                restoreContainer(furnace, furnaceStacks);
+                furnace.setChanged();
                 command.markSmeltStarted();
                 entity.swingMainHandAction();
                 return;
@@ -838,8 +850,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 failActiveCommand("furnace_output_withdraw_failed");
                 return;
             }
-            restoreContainer(target.furnace(), furnaceStacks);
-            target.furnace().setChanged();
+            restoreContainer(furnace, furnaceStacks);
+            furnace.setChanged();
             entity.swingMainHandAction();
             completeActiveCommand();
         }
@@ -1049,47 +1061,23 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             return best;
         }
 
-        private SafeFurnaceTarget nearestSafeFurnace() {
+        private WorkstationTarget nearestVanillaFurnace() {
             ServerLevel serverLevel = serverLevel();
             if (serverLevel == null) {
                 return null;
             }
-            BlockPos center = entity.blockPosition();
-            List<SafeFurnaceTarget> targets = new ArrayList<>();
-            for (BlockPos candidate : BlockPos.betweenClosed(
-                    center.offset(-FURNACE_SCAN_RADIUS, -FURNACE_SCAN_RADIUS, -FURNACE_SCAN_RADIUS),
-                    center.offset(FURNACE_SCAN_RADIUS, FURNACE_SCAN_RADIUS, FURNACE_SCAN_RADIUS)
-            )) {
-                SafeFurnaceTarget target = safeFurnaceAt(serverLevel, candidate);
-                if (target != null) {
-                    targets.add(target);
-                }
-            }
-            return targets.stream()
-                    .min(Comparator
-                            .comparingDouble((SafeFurnaceTarget target) -> target.blockPos().distSqr(center))
-                            .thenComparingInt(target -> target.blockPos().getX())
-                            .thenComparingInt(target -> target.blockPos().getY())
-                            .thenComparingInt(target -> target.blockPos().getZ()))
-                    .orElse(null);
+            return workstationLocator.nearestLoaded(
+                    serverLevel, entity.position(), FURNACE_SCAN_RADIUS, WorkstationCapability.VANILLA_FURNACE
+            );
         }
 
-        private SafeFurnaceTarget safeFurnaceAt(ServerLevel serverLevel, BlockPos blockPos) {
-            if (serverLevel == null || blockPos == null || !serverLevel.hasChunkAt(blockPos)) {
+        private WorkstationTarget furnaceAt(ServerLevel serverLevel, BlockPos blockPos) {
+            if (serverLevel == null || blockPos == null) {
                 return null;
             }
-            if (entity.distanceToSqr(Vec3.atCenterOf(blockPos)) > FURNACE_SCAN_RADIUS * FURNACE_SCAN_RADIUS) {
-                return null;
-            }
-            BlockState blockState = serverLevel.getBlockState(blockPos);
-            if (!blockState.is(Blocks.FURNACE)) {
-                return null;
-            }
-            BlockEntity blockEntity = serverLevel.getBlockEntity(blockPos);
-            if (!(blockEntity instanceof AbstractFurnaceBlockEntity furnace)) {
-                return null;
-            }
-            return new SafeFurnaceTarget(blockPos.immutable(), furnace);
+            return workstationLocator.targetAt(
+                    serverLevel, entity.position(), FURNACE_SCAN_RADIUS, blockPos, WorkstationCapability.VANILLA_FURNACE
+            );
         }
 
         private SafeContainerTarget preferredStashContainer() {
@@ -1148,24 +1136,14 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             return new SafeContainerTarget(blockPos.immutable(), container);
         }
 
-        private boolean hasNearbyCraftingTable() {
+        private WorkstationTarget nearestCraftingTable() {
             ServerLevel serverLevel = serverLevel();
             if (serverLevel == null) {
-                return false;
+                return null;
             }
-            BlockPos center = entity.blockPosition();
-            for (BlockPos candidate : BlockPos.betweenClosed(
-                    center.offset(-CRAFTING_TABLE_SCAN_RADIUS, -CRAFTING_TABLE_SCAN_RADIUS, -CRAFTING_TABLE_SCAN_RADIUS),
-                    center.offset(CRAFTING_TABLE_SCAN_RADIUS, CRAFTING_TABLE_SCAN_RADIUS, CRAFTING_TABLE_SCAN_RADIUS)
-            )) {
-                if (serverLevel.hasChunkAt(candidate)
-                        && entity.distanceToSqr(Vec3.atCenterOf(candidate))
-                        <= CRAFTING_TABLE_SCAN_RADIUS * CRAFTING_TABLE_SCAN_RADIUS
-                        && serverLevel.getBlockState(candidate).is(Blocks.CRAFTING_TABLE)) {
-                    return true;
-                }
-            }
-            return false;
+            return workstationLocator.nearestLoaded(
+                    serverLevel, entity.position(), CRAFTING_TABLE_SCAN_RADIUS, WorkstationCapability.CRAFTING_TABLE
+            );
         }
 
         private static List<ItemStack> containerSnapshot(Container container) {
@@ -1260,11 +1238,12 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (serverLevel == null) {
                 return;
             }
-            SafeFurnaceTarget target = safeFurnaceAt(serverLevel, activeCommand.furnacePos());
+            WorkstationTarget target = furnaceAt(serverLevel, activeCommand.furnacePos());
             if (target == null) {
                 return;
             }
-            List<ItemStack> furnaceStacks = containerSnapshot(target.furnace());
+            Container furnace = WorkstationLocator.requireContainerAdapter(target);
+            List<ItemStack> furnaceStacks = containerSnapshot(furnace);
             SmeltingPlan plan = activeCommand.smeltingPlan();
             if (entity.recoverFurnaceSmeltResources(
                     furnaceStacks,
@@ -1272,8 +1251,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                     activeCommand.fuelPlan().item(),
                     plan.outputItem()
             )) {
-                restoreContainer(target.furnace(), furnaceStacks);
-                target.furnace().setChanged();
+                restoreContainer(furnace, furnaceStacks);
+                furnace.setChanged();
             }
         }
 
@@ -1503,9 +1482,6 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         }
 
         private record SafeContainerTarget(BlockPos blockPos, Container container) {
-        }
-
-        private record SafeFurnaceTarget(BlockPos blockPos, AbstractFurnaceBlockEntity furnace) {
         }
 
         private record FuelPlan(Item item, int count, int burnTicksPerItem) {
