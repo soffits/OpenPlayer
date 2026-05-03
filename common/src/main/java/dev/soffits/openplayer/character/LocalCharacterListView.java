@@ -29,6 +29,26 @@ public record LocalCharacterListView(List<LocalCharacterListEntry> characters, L
         return new LocalCharacterListView(entries, safeErrors);
     }
 
+    public static LocalCharacterListView fromRepositoryResult(LocalCharacterRepositoryResult result,
+                                                              CharacterLifecycleResolver lifecycleResolver,
+                                                              LocalSkinPathResolver localSkinPathResolver) {
+        if (result == null) {
+            throw new IllegalArgumentException("result cannot be null");
+        }
+        if (lifecycleResolver == null) {
+            throw new IllegalArgumentException("lifecycleResolver cannot be null");
+        }
+        List<LocalCharacterListEntry> entries = new ArrayList<>();
+        for (LocalCharacterDefinition character : result.characters()) {
+            entries.add(LocalCharacterListEntry.from(character, lifecycleResolver.lifecycleStatus(character), localSkinPathResolver));
+        }
+        List<String> safeErrors = new ArrayList<>();
+        for (LocalCharacterValidationError error : result.errors()) {
+            safeErrors.add(safeError(error));
+        }
+        return new LocalCharacterListView(entries, safeErrors);
+    }
+
     private static String safeError(LocalCharacterValidationError error) {
         Path file = error.file();
         String message = safeMessage(error.message());

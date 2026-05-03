@@ -8,7 +8,11 @@ public final class OpenPlayerLocalCharacters {
     }
 
     public static Path directory() {
-        return LocalCharacterRepository.defaultConfigDirectory(Platform.getConfigFolder());
+        return openPlayerDirectory().resolve("characters");
+    }
+
+    public static Path openPlayerDirectory() {
+        return Platform.getConfigFolder().resolve("openplayer");
     }
 
     public static LocalCharacterRepository repository() {

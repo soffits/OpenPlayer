@@ -8,7 +8,7 @@ OpenPlayer remains an `AGPL-3.0-only` Minecraft 1.20.1 Java 17 mod using an Arch
 - `fabric`: Fabric entrypoints and loader-specific wiring.
 - `forge`: Forge entrypoints, client event wiring, and loader-specific wiring.
 
-Current implementation already includes runtime NPC sessions, duplicate prevention, owner lifecycle cleanup and restore, spawn/despawn networking, basic command intents, item pickup with inventory persistence, a minimal client control screen, a player-shaped renderer with optional local resource id skin support, a vanilla NPC-backed automation layer, an optional reflective Baritone command bridge, and a disabled-by-default provider-backed intent parser seam.
+Current implementation already includes runtime NPC sessions, duplicate prevention, owner lifecycle cleanup and restore, spawn/despawn networking, basic command intents, item pickup with inventory persistence, a minimal client control screen, a player-shaped renderer with optional local resource id skin support and client-side local PNG skin loading, a vanilla NPC-backed automation layer, an optional reflective Baritone command bridge, and a disabled-by-default provider-backed intent parser seam.
 
 ## Non-Goals And Legal Constraints
 
@@ -123,6 +123,10 @@ Support local PNG skins referenced by local character definitions without downlo
 - Valid local PNG skins render on the local client for matching OpenPlayer NPCs.
 - Invalid or missing skins degrade to deterministic defaults without disconnecting or crashing.
 - Security tests cover path traversal and absolute path rejection.
+
+### Current Implementation Notes
+
+Local character `localSkinFile` values are relative to `<Minecraft config>/openplayer` and must point under `skins/`, for example `skins/alex_helper.png`. The server resolves local files only to produce safe UI status text and still sends no absolute paths or image bytes. Clients independently load matching local character files from their own config directory, register valid `64x32` or `64x64` PNGs as dynamic textures, and fall back to `skinTexture` resource ids or deterministic default player skins when local files are unavailable.
 
 ## Phase 4: Player-Like Renderer Feature Layers
 

@@ -12,7 +12,7 @@ The initial target is Minecraft 1.20.1 on Java 17 with an Architectury-style mul
 
 ## Milestone Status
 
-Current implementation includes runtime NPC sessions, duplicate prevention, local character definition parsing, server-authoritative local character selection from the OpenPlayer UI, basic command intents, item pickup with inventory persistence, owner lifecycle cleanup and restore, spawn/despawn networking, a minimal client control screen with safe runtime status, a player-shaped renderer with optional profile skin resource support, a vanilla NPC-backed task backend, an optional reflective Baritone command bridge, and a disabled-by-default runtime intent parser that can use an opt-in JDK-only OpenAI-compatible provider. Automatone is not directly integrated yet.
+Current implementation includes runtime NPC sessions, duplicate prevention, local character definition parsing, server-authoritative local character selection from the OpenPlayer UI, basic command intents, item pickup with inventory persistence, owner lifecycle cleanup and restore, spawn/despawn networking, a minimal client control screen with safe runtime status, a player-shaped renderer with optional profile skin resource support and client-side local PNG skin loading, a vanilla NPC-backed task backend, an optional reflective Baritone command bridge, and a disabled-by-default runtime intent parser that can use an opt-in JDK-only OpenAI-compatible provider. Automatone is not directly integrated yet.
 
 ## Local Character Config
 
@@ -41,8 +41,16 @@ Validation rules:
 - `displayName` is required, 1-32 characters, and must not contain control characters.
 - `description`, `conversationPrompt`, and `conversationSettings` are optional bounded text fields and must not contain secret-like labels or credentials.
 - `skinTexture` is an optional lowercase Minecraft resource id in `namespace:path` form.
-- `localSkinFile` is reserved for later PNG skin loading and must be a safe relative `.png` path using forward slashes. Absolute paths, drive prefixes, parent traversal, backslashes, empty path segments, and non-PNG paths are rejected.
+- `localSkinFile` is an optional local PNG skin path under `<Minecraft config>/openplayer/skins`, written relative to `<Minecraft config>/openplayer`. Use values like `skins/alex_helper.png`. Absolute paths, drive prefixes, parent traversal, backslashes, empty path segments, paths outside `skins/`, and non-PNG paths are rejected.
 - Character files must not store provider API keys, access tokens, passwords, cookies, credentials, or other secrets.
+
+## Local Skin PNGs
+
+Local PNG skins are loaded only by the Minecraft client from its own `<Minecraft config>/openplayer/skins` directory. OpenPlayer does not download skins, query player accounts, cache external profile data, sync image bytes, or store raw image bytes in entity NBT.
+
+For a selected local character, the renderer first tries the client's matching `localSkinFile` when that file exists, is a regular PNG, stays under `skins/`, and has a standard player skin size of `64x32` or `64x64`. If that local file is missing, invalid, or not present on a multiplayer client, rendering falls back to the configured `skinTexture` resource id when present, then to the deterministic default player skin.
+
+The server-side character list sends only safe skin status text such as `default`, `resource`, `local file`, or `local file unavailable`; it does not send absolute filesystem paths.
 
 ## OpenPlayer Controls UI
 
@@ -58,7 +66,7 @@ The bottom status lines remain safe and presence-only for automation backend, pa
 
 - Architectury API `9.2.14` is used from public Maven coordinates for shared Fabric and Forge entity registration and lifecycle hooks. Architectury API is LGPL-3.0-only.
 - The OpenAI-compatible intent provider uses only Java 17 `java.net.http.HttpClient` and adds no external dependency.
-- Profile skin resource ids are local Minecraft texture references only; OpenPlayer does not add account skin lookup or downloading dependencies.
+- Profile skin resource ids and local PNG skins are local client resources only; OpenPlayer does not add account skin lookup or downloading dependencies.
 - No pathfinding or automation jar is vendored. Direct PlayerEngine vendoring remains forbidden.
 - Baritone is supported only through an optional reflective command bridge. OpenPlayer does not add a hard Gradle dependency on Baritone; install a Minecraft 1.20.1-compatible Baritone API/mod separately when using `OPENPLAYER_AUTOMATION_BACKEND=baritone`.
 - Baritone upstream publishes Minecraft 1.20.1 Fabric and Forge API jars from public GitHub releases and marks the project as LGPL-3.0 with an anime exception. This repository does not redistribute those jars.
