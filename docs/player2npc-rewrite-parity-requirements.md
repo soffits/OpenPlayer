@@ -72,7 +72,7 @@ Replace or extend the minimal `OpenPlayerControlScreen` so players can select a 
 
 ### Current Implementation Notes
 
-OpenPlayer now extends `OpenPlayerControlScreen` with a compact server-fed local character list and selected-character detail panel. The server loads `<Minecraft config>/openplayer/characters` through the existing Architectury loader config-directory hook, and client actions send only a stable character id before the server resolves character data. Empty repositories, validation errors, selected lifecycle state, skin status, conversation status, and the existing safe runtime status lines are visible in the screen. With no selected character, the spawn control keeps the original default OpenPlayer NPC spawn behavior.
+OpenPlayer now extends `OpenPlayerControlScreen` with a server-fed local assignment gallery and selected-assignment detail panel. The server loads `<Minecraft config>/openplayer/characters` and `<Minecraft config>/openplayer/assignments` through the existing Architectury loader config-directory hook, and client actions send only a stable assignment id before the server resolves assignment and character data. The gallery shows loading, empty, validation-error, selected, active/spawned, despawned, skin, and conversation availability states; more than six assignments are navigable with Prev/Next pagination and selection remains keyed by assignment id across refreshes. The detail panel shows display name, assignment id, character id, description, skin status, lifecycle status, conversation status, and action hints while the bottom runtime status remains safe and presence-only. With no selected assignment, the spawn control keeps the original default OpenPlayer NPC spawn behavior.
 
 ### Requirements
 
