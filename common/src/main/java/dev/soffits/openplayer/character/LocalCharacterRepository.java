@@ -67,7 +67,7 @@ public final class LocalCharacterRepository {
             }
         } catch (IOException exception) {
             return new LocalCharacterRepositoryResult(List.of(), List.of(
-                    new LocalCharacterValidationError(directory, "Unable to list character files: " + exception.getMessage())
+                    new LocalCharacterValidationError(directory, "Unable to list character files")
             ));
         }
         files.sort(Comparator.comparing(path -> path.getFileName().toString()));
@@ -134,7 +134,7 @@ public final class LocalCharacterRepository {
             ));
         } catch (IOException exception) {
             return new LocalCharacterFileResult(null, List.of(
-                    new LocalCharacterValidationError(file, "Unable to read character file: " + exception.getMessage())
+                    new LocalCharacterValidationError(file, "Unable to read character file")
             ));
         }
 

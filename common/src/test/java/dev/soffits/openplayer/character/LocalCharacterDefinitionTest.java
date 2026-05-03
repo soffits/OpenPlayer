@@ -2,6 +2,7 @@ package dev.soffits.openplayer.character;
 
 import dev.soffits.openplayer.api.NpcOwnerId;
 import dev.soffits.openplayer.api.NpcSpawnLocation;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
 
@@ -15,6 +16,8 @@ public final class LocalCharacterDefinitionTest {
         rejectsSecretMarkers();
         acceptsReadmeSample();
         convertsToNpcSpec();
+        createsSafeListView();
+        sanitizesExceptionPathsInListView();
     }
 
     private static void rejectsUnsafeId() {
@@ -92,10 +95,46 @@ public final class LocalCharacterDefinitionTest {
         );
         require("Alex".equals(character.toProfileSpec().name()), "profile name must use displayName");
         require("openplayer:skins/alex".equals(character.toProfileSpec().skinTexture()), "profile skin must use skinTexture");
-        require("helper_01".equals(character.toNpcSpec(
+        require("openplayer-local-character-alex_01".equals(character.toSessionRoleId().value()), "session role id must use stable character id");
+        require("helper_01".equals(character.optionalDefaultRoleId().orElseThrow()), "defaultRoleId must remain optional metadata");
+        require("openplayer-local-character-alex_01".equals(character.toNpcSpec(
                 new NpcOwnerId(UUID.fromString("00000000-0000-0000-0000-000000000001")),
                 new NpcSpawnLocation("minecraft:overworld", 0.0D, 64.0D, 0.0D)
-        ).roleId().value()), "default role id must map to AiPlayerNpcSpec");
+        ).roleId().value()), "AiPlayerNpcSpec role id must use stable local character session identity");
+    }
+
+    private static void createsSafeListView() {
+        LocalCharacterDefinition character = new LocalCharacterDefinition(
+                "alex_01",
+                "Alex",
+                "Local helper",
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+        LocalCharacterRepositoryResult result = new LocalCharacterRepositoryResult(
+                List.of(character),
+                List.of(new LocalCharacterValidationError(Path.of("/tmp/openplayer/characters/bad.properties"), "displayName is required"))
+        );
+        LocalCharacterListView view = LocalCharacterListView.fromRepositoryResult(result, ignored -> "active");
+        require(view.characters().size() == 1, "list view must expose valid characters");
+        require("default".equals(view.characters().get(0).skinStatus()), "missing skins must report default status");
+        require("active".equals(view.characters().get(0).lifecycleStatus()), "lifecycle resolver must be used");
+        require("bad.properties: displayName is required".equals(view.errors().get(0)), "UI errors must not expose absolute paths: " + view.errors());
+    }
+
+    private static void sanitizesExceptionPathsInListView() {
+        LocalCharacterRepositoryResult result = new LocalCharacterRepositoryResult(
+                List.of(),
+                List.of(new LocalCharacterValidationError(
+                        Path.of("/tmp/openplayer/characters/bad.properties"),
+                        "Unable to read character file: /tmp/openplayer/characters/bad.properties"
+                ))
+        );
+        LocalCharacterListView view = LocalCharacterListView.fromRepositoryResult(result, ignored -> "despawned");
+        require("bad.properties: Unable to read character file: bad.properties".equals(view.errors().get(0)), "UI errors must sanitize exception paths: " + view.errors());
     }
 
     private static void require(boolean condition, String message) {

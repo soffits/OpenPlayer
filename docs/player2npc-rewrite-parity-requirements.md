@@ -43,6 +43,7 @@ Add a local character repository that lets a player define reusable NPC characte
 - Store local character definitions in a mod-owned config/data location appropriate for Minecraft 1.20.1 on Fabric and Forge.
 - Character fields should include a stable local character id, display name, optional description, optional local skin reference, optional default role id, and optional behavior/conversation settings reserved for later phases.
 - Character ids must be stable, ASCII-safe, path-safe, and independent from display names.
+- Selected local character runtime sessions must bind to a deterministic session role id derived from the stable character id. Display names and optional default role metadata must not be used as selected-character action identity.
 - Character display names must be validated before being passed to `NpcProfileSpec`.
 - Repository reads must tolerate missing directories and malformed individual character files by reporting actionable validation errors without crashing the game.
 - Repository writes must avoid partial file corruption where practical.
@@ -68,6 +69,10 @@ Add a local character repository that lets a player define reusable NPC characte
 ### Goal
 
 Replace or extend the minimal `OpenPlayerControlScreen` so players can select a local character, review details, spawn/despawn that selected character, and send commands to the selected companion.
+
+### Current Implementation Notes
+
+OpenPlayer now extends `OpenPlayerControlScreen` with a compact server-fed local character list and selected-character detail panel. The server loads `<Minecraft config>/openplayer/characters` through the existing Architectury loader config-directory hook, and client actions send only a stable character id before the server resolves character data. Empty repositories, validation errors, selected lifecycle state, skin status, conversation status, and the existing safe runtime status lines are visible in the screen. With no selected character, the spawn control keeps the original default OpenPlayer NPC spawn behavior.
 
 ### Requirements
 

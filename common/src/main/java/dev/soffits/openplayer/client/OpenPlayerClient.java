@@ -6,7 +6,11 @@ import dev.architectury.networking.NetworkManager;
 import dev.architectury.registry.client.level.entity.EntityRendererRegistry;
 import dev.architectury.registry.client.keymappings.KeyMappingRegistry;
 import dev.soffits.openplayer.OpenPlayerConstants;
+import dev.soffits.openplayer.character.LocalCharacterListEntry;
+import dev.soffits.openplayer.character.LocalCharacterListView;
 import dev.soffits.openplayer.registry.OpenPlayerEntityTypes;
+import java.util.ArrayList;
+import java.util.List;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import org.lwjgl.glfw.GLFW;
@@ -38,6 +42,11 @@ public final class OpenPlayerClient {
                 OpenPlayerConstants.STATUS_RESPONSE_PACKET_ID,
                 OpenPlayerClient::receiveStatusResponse
         );
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.S2C,
+                OpenPlayerConstants.CHARACTER_LIST_RESPONSE_PACKET_ID,
+                OpenPlayerClient::receiveCharacterListResponse
+        );
         ClientTickEvent.CLIENT_POST.register(OpenPlayerClient::openControlsOnKeyPress);
     }
 
@@ -56,6 +65,27 @@ public final class OpenPlayerClient {
                 automationName,
                 automationState
         ));
+    }
+
+    private static void receiveCharacterListResponse(net.minecraft.network.FriendlyByteBuf buffer, NetworkManager.PacketContext context) {
+        int characterCount = buffer.readVarInt();
+        List<LocalCharacterListEntry> characters = new ArrayList<>();
+        for (int index = 0; index < characterCount; index++) {
+            characters.add(new LocalCharacterListEntry(
+                    buffer.readUtf(64),
+                    buffer.readUtf(32),
+                    buffer.readUtf(1024),
+                    buffer.readUtf(64),
+                    buffer.readUtf(64),
+                    buffer.readUtf(64)
+            ));
+        }
+        int errorCount = buffer.readVarInt();
+        List<String> errors = new ArrayList<>();
+        for (int index = 0; index < errorCount; index++) {
+            errors.add(buffer.readUtf(512));
+        }
+        context.queue(() -> OpenPlayerClientStatus.updateCharacters(new LocalCharacterListView(characters, errors)));
     }
 
     private static void openControlsOnKeyPress(Minecraft minecraft) {

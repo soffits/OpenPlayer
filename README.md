@@ -12,11 +12,11 @@ The initial target is Minecraft 1.20.1 on Java 17 with an Architectury-style mul
 
 ## Milestone Status
 
-Current implementation includes runtime NPC sessions, duplicate prevention, local character definition parsing, basic command intents, item pickup with inventory persistence, owner lifecycle cleanup and restore, spawn/despawn networking, a minimal client control screen with safe runtime status, a player-shaped renderer with optional profile skin resource support, a vanilla NPC-backed task backend, an optional reflective Baritone command bridge, and a disabled-by-default runtime intent parser that can use an opt-in JDK-only OpenAI-compatible provider. Automatone is not directly integrated yet.
+Current implementation includes runtime NPC sessions, duplicate prevention, local character definition parsing, server-authoritative local character selection from the OpenPlayer UI, basic command intents, item pickup with inventory persistence, owner lifecycle cleanup and restore, spawn/despawn networking, a minimal client control screen with safe runtime status, a player-shaped renderer with optional profile skin resource support, a vanilla NPC-backed task backend, an optional reflective Baritone command bridge, and a disabled-by-default runtime intent parser that can use an opt-in JDK-only OpenAI-compatible provider. Automatone is not directly integrated yet.
 
 ## Local Character Config
 
-OpenPlayer local character definitions use dependency-free Java `.properties` files. The default mod-owned path is `<Minecraft config>/openplayer/characters`; loader wiring will call the repository slice with that path in a later UI/runtime phase. Missing directories return an empty character list.
+OpenPlayer local character definitions use dependency-free Java `.properties` files. The default mod-owned path is `<Minecraft config>/openplayer/characters`, resolved through Architectury's loader config directory hook on Fabric and Forge. Missing directories return an empty character list.
 
 Each character is one `*.properties` file:
 
@@ -33,6 +33,8 @@ conversationSettings=Reserved for later non-sensitive preferences.
 
 Supported fields are exactly `id`, `displayName`, `description`, `skinTexture`, `localSkinFile`, `defaultRoleId`, `conversationPrompt`, and `conversationSettings`. Unknown fields are validation errors.
 
+At runtime, selected local character sessions use a deterministic internal role id derived from `id` with the `openplayer-local-character-` prefix. `defaultRoleId` is reserved metadata for future behavior role selection and is not used as the selected character's session identity.
+
 Validation rules:
 
 - `id` and `defaultRoleId` use 2-64 lowercase ASCII characters: letters, digits, underscore, or hyphen, starting with a letter or digit.
@@ -41,6 +43,16 @@ Validation rules:
 - `skinTexture` is an optional lowercase Minecraft resource id in `namespace:path` form.
 - `localSkinFile` is reserved for later PNG skin loading and must be a safe relative `.png` path using forward slashes. Absolute paths, drive prefixes, parent traversal, backslashes, empty path segments, and non-PNG paths are rejected.
 - Character files must not store provider API keys, access tokens, passwords, cookies, credentials, or other secrets.
+
+## OpenPlayer Controls UI
+
+Press the OpenPlayer controls key, `O` by default, to open the compact control screen. The screen requests the local character list from the server, so clients only send stable character ids and never send full mutable character data.
+
+The left panel shows loading, empty, validation-error, and character-list states. Validation errors show only safe file names and messages, not absolute filesystem paths or stack traces.
+
+Selecting a character shows its display name, id, description, skin status, lifecycle status, and conversation status. Spawn, despawn, follow, stop, and command text then target that selected character. With no character selected, the Spawn button keeps the original default OpenPlayer NPC spawn behavior.
+
+The bottom status lines remain safe and presence-only for automation backend, parser state, endpoint, model, and API key status.
 
 ## Dependencies
 
