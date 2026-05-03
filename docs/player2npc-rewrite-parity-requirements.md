@@ -8,7 +8,7 @@ OpenPlayer remains an `AGPL-3.0-only` Minecraft 1.20.1 Java 17 mod using an Arch
 - `fabric`: Fabric entrypoints and loader-specific wiring.
 - `forge`: Forge entrypoints, client event wiring, and loader-specific wiring.
 
-Current implementation already includes runtime NPC sessions, duplicate prevention, owner lifecycle cleanup and restore, spawn/despawn networking, basic command intents, item pickup with inventory persistence, a minimal client control screen, a player-shaped renderer with optional local resource id skin support and client-side local PNG skin loading, a vanilla NPC-backed automation layer, an optional reflective Baritone command bridge, and a disabled-by-default provider-backed intent parser seam.
+Current implementation already includes runtime NPC sessions, duplicate prevention, owner lifecycle cleanup and restore, spawn/despawn networking, basic command intents, item pickup with inventory persistence, a minimal client control screen, a player-shaped renderer with optional local resource id skin support, client-side local PNG skin loading, and vanilla feature layers for held items, armor, head-slot items, elytra, arrows, and bee stingers, a vanilla NPC-backed automation layer, an optional reflective Baritone command bridge, and a disabled-by-default provider-backed intent parser seam.
 
 ## Non-Goals And Legal Constraints
 
@@ -153,6 +153,10 @@ Bring the `OpenPlayerNpcRenderer` closer to player-like visual parity by adding 
 - Equipped armor and held items are visible on OpenPlayer NPCs.
 - Skin overlays and model layers render without affecting default fallback skins.
 - Rendering works on both Fabric and Forge clients.
+
+### Current Implementation Notes
+
+`OpenPlayerNpcRenderer` composes Minecraft 1.20.1 vanilla render layers for held items, humanoid armor, custom head-slot items, elytra, arrows, and bee stingers. The held-item and armor layers read through `OpenPlayerNpcEntity.getHandSlots`, `getArmorSlots`, and `getItemBySlot`, which are backed by the NPC's persisted internal inventory. Account capes, remote profile metadata, and external skin lookups remain unsupported; texture selection still follows the Phase 3 local PNG, configured resource id, and deterministic default skin fallback order.
 
 ## Phase 5: Companion Lifecycle Manager
 

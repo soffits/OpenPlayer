@@ -12,7 +12,7 @@ The initial target is Minecraft 1.20.1 on Java 17 with an Architectury-style mul
 
 ## Milestone Status
 
-Current implementation includes runtime NPC sessions, duplicate prevention, local character definition parsing, server-authoritative local character selection from the OpenPlayer UI, basic command intents, item pickup with inventory persistence, owner lifecycle cleanup and restore, spawn/despawn networking, a minimal client control screen with safe runtime status, a player-shaped renderer with optional profile skin resource support and client-side local PNG skin loading, a vanilla NPC-backed task backend, an optional reflective Baritone command bridge, and a disabled-by-default runtime intent parser that can use an opt-in JDK-only OpenAI-compatible provider. Automatone is not directly integrated yet.
+Current implementation includes runtime NPC sessions, duplicate prevention, local character definition parsing, server-authoritative local character selection from the OpenPlayer UI, basic command intents, item pickup with inventory persistence, owner lifecycle cleanup and restore, spawn/despawn networking, a minimal client control screen with safe runtime status, a player-shaped renderer with optional profile skin resource support, client-side local PNG skin loading, and vanilla feature layers for held items, armor, head-slot items, elytra, arrows, and bee stingers, a vanilla NPC-backed task backend, an optional reflective Baritone command bridge, and a disabled-by-default runtime intent parser that can use an opt-in JDK-only OpenAI-compatible provider. Automatone is not directly integrated yet.
 
 ## Local Character Config
 
@@ -51,6 +51,10 @@ Local PNG skins are loaded only by the Minecraft client from its own `<Minecraft
 For a selected local character, the renderer first tries the client's matching `localSkinFile` when that file exists, is a regular PNG, stays under `skins/`, and has a standard player skin size of `64x32` or `64x64`. If that local file is missing, invalid, or not present on a multiplayer client, rendering falls back to the configured `skinTexture` resource id when present, then to the deterministic default player skin.
 
 The server-side character list sends only safe skin status text such as `default`, `resource`, `local file`, or `local file unavailable`; it does not send absolute filesystem paths.
+
+## NPC Rendering
+
+OpenPlayer NPCs use the vanilla player model with the existing local skin fallback order: matching client local PNG skin, configured skin resource id, then deterministic default player skin. The renderer also composes Minecraft 1.20.1 vanilla feature layers for held items, armor, head-slot items such as pumpkins or skulls, elytra, arrows, and bee stingers. These layers read from the NPC's persisted equipment inventory and do not use account capes, remote profile metadata, or external skin services.
 
 ## OpenPlayer Controls UI
 
