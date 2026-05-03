@@ -30,6 +30,7 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
     private static final String OWNER_ID_TAG = "OpenPlayerOwnerId";
     private static final String ROLE_ID_TAG = "OpenPlayerRoleId";
     private static final String PROFILE_NAME_TAG = "OpenPlayerProfileName";
+    private static final String PROFILE_SKIN_TEXTURE_TAG = "OpenPlayerProfileSkinTexture";
     private static final int INVENTORY_SIZE = 36;
     private static final int FIRST_NORMAL_INVENTORY_SLOT = 0;
     private static final int NORMAL_INVENTORY_SLOT_COUNT = 31;
@@ -54,12 +55,17 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
             OpenPlayerNpcEntity.class,
             EntityDataSerializers.STRING
     );
+    private static final EntityDataAccessor<String> DATA_PROFILE_SKIN_TEXTURE = SynchedEntityData.defineId(
+            OpenPlayerNpcEntity.class,
+            EntityDataSerializers.STRING
+    );
 
     private final RuntimeCommandExecutor runtimeCommandExecutor = new RuntimeCommandExecutor(this);
     private final NonNullList<ItemStack> internalInventory = NonNullList.withSize(INVENTORY_SIZE, ItemStack.EMPTY);
     private UUID persistedOwnerId;
     private String persistedRoleId;
     private String persistedProfileName;
+    private String persistedProfileSkinTexture;
     private int selectedMainHandSlot = DEFAULT_SELECTED_MAIN_HAND_SLOT;
 
     public OpenPlayerNpcEntity(EntityType<? extends OpenPlayerNpcEntity> entityType, Level level) {
@@ -72,6 +78,7 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
         entityData.define(DATA_OWNER_ID, Optional.empty());
         entityData.define(DATA_ROLE_ID, "");
         entityData.define(DATA_PROFILE_NAME, "");
+        entityData.define(DATA_PROFILE_SKIN_TEXTURE, "");
     }
 
     @Override
@@ -88,6 +95,10 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
     }
 
     public void setPersistedIdentity(NpcOwnerId ownerId, String roleId, String profileName) {
+        setPersistedIdentity(ownerId, roleId, profileName, null);
+    }
+
+    public void setPersistedIdentity(NpcOwnerId ownerId, String roleId, String profileName, String profileSkinTexture) {
         if (ownerId == null) {
             throw new IllegalArgumentException("ownerId cannot be null");
         }
@@ -100,6 +111,7 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
         persistedOwnerId = ownerId.value();
         persistedRoleId = roleId;
         persistedProfileName = profileName;
+        persistedProfileSkinTexture = profileSkinTexture == null || profileSkinTexture.isBlank() ? null : profileSkinTexture;
         syncPersistedIdentity();
         setRuntimeOwnerId(ownerId);
     }
@@ -122,6 +134,14 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
             return Optional.of(syncedProfileName);
         }
         return Optional.ofNullable(persistedProfileName);
+    }
+
+    public Optional<String> persistedProfileSkinTexture() {
+        String syncedProfileSkinTexture = entityData.get(DATA_PROFILE_SKIN_TEXTURE);
+        if (!syncedProfileSkinTexture.isBlank()) {
+            return Optional.of(syncedProfileSkinTexture);
+        }
+        return Optional.ofNullable(persistedProfileSkinTexture);
     }
 
     public boolean hasValidPersistedIdentity() {
@@ -209,6 +229,9 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
             compoundTag.putUUID(OWNER_ID_TAG, persistedOwnerId);
             compoundTag.putString(ROLE_ID_TAG, persistedRoleId);
             compoundTag.putString(PROFILE_NAME_TAG, persistedProfileName);
+            if (persistedProfileSkinTexture != null) {
+                compoundTag.putString(PROFILE_SKIN_TEXTURE_TAG, persistedProfileSkinTexture);
+            }
         }
     }
 
@@ -239,6 +262,12 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
         persistedProfileName = compoundTag.contains(PROFILE_NAME_TAG, Tag.TAG_STRING)
                 ? compoundTag.getString(PROFILE_NAME_TAG)
                 : null;
+        persistedProfileSkinTexture = compoundTag.contains(PROFILE_SKIN_TEXTURE_TAG, Tag.TAG_STRING)
+                ? compoundTag.getString(PROFILE_SKIN_TEXTURE_TAG)
+                : null;
+        if (persistedProfileSkinTexture != null && persistedProfileSkinTexture.isBlank()) {
+            persistedProfileSkinTexture = null;
+        }
         syncPersistedIdentity();
         if (persistedOwnerId != null) {
             runtimeCommandExecutor.setOwnerId(new NpcOwnerId(persistedOwnerId));
@@ -249,6 +278,7 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
         entityData.set(DATA_OWNER_ID, Optional.ofNullable(persistedOwnerId));
         entityData.set(DATA_ROLE_ID, persistedRoleId == null ? "" : persistedRoleId);
         entityData.set(DATA_PROFILE_NAME, persistedProfileName == null ? "" : persistedProfileName);
+        entityData.set(DATA_PROFILE_SKIN_TEXTURE, persistedProfileSkinTexture == null ? "" : persistedProfileSkinTexture);
     }
 
     private int inventorySlotForEquipmentSlot(EquipmentSlot equipmentSlot) {

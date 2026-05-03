@@ -71,6 +71,7 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
             if (existingEntity != null) {
                 if (existingEntity.level().dimension().equals(level.dimension())) {
                     relocate(existingEntity, spec.spawnLocation());
+                    applyProfile(existingEntity, spec);
                     existingSession.update(spec, existingEntity.getUUID());
                     return existingSession;
                 }
@@ -100,9 +101,7 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         }
         NpcSpawnLocation location = spec.spawnLocation();
         entity.moveTo(location.x(), location.y(), location.z(), 0.0F, 0.0F);
-        entity.setPersistedIdentity(spec.ownerId(), spec.roleId().value(), spec.profile().name());
-        entity.setCustomName(net.minecraft.network.chat.Component.literal(spec.profile().name()));
-        entity.setCustomNameVisible(true);
+        applyProfile(entity, spec);
 
         if (!level.addFreshEntity(entity)) {
             throw new IllegalStateException("Unable to spawn OpenPlayer NPC entity");
@@ -232,7 +231,7 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         AiPlayerNpcSpec spec = new AiPlayerNpcSpec(
                 new NpcRoleId(roleId),
                 new NpcOwnerId(ownerId),
-                new NpcProfileSpec(profileName),
+                new NpcProfileSpec(profileName, entity.persistedProfileSkinTexture().orElse(null)),
                 location
         );
         entity.setRuntimeOwnerId(spec.ownerId());
@@ -277,5 +276,16 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         entity.teleportTo(location.x(), location.y(), location.z());
         entity.setYRot(0.0F);
         entity.setXRot(0.0F);
+    }
+
+    private void applyProfile(OpenPlayerNpcEntity entity, AiPlayerNpcSpec spec) {
+        entity.setPersistedIdentity(
+                spec.ownerId(),
+                spec.roleId().value(),
+                spec.profile().name(),
+                spec.profile().skinTexture()
+        );
+        entity.setCustomName(net.minecraft.network.chat.Component.literal(spec.profile().name()));
+        entity.setCustomNameVisible(true);
     }
 }

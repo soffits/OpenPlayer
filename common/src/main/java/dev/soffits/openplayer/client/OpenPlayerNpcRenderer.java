@@ -15,6 +15,13 @@ public final class OpenPlayerNpcRenderer extends LivingEntityRenderer<OpenPlayer
 
     @Override
     public ResourceLocation getTextureLocation(OpenPlayerNpcEntity entity) {
+        String profileSkinTexture = entity.persistedProfileSkinTexture().orElse(null);
+        if (profileSkinTexture != null) {
+            ResourceLocation textureLocation = ResourceLocation.tryParse(profileSkinTexture);
+            if (textureLocation != null) {
+                return textureLocation;
+            }
+        }
         return DefaultPlayerSkin.getDefaultSkin(entity.deterministicSkinId());
     }
 }
