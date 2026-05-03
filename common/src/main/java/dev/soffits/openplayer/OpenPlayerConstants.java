@@ -18,6 +18,9 @@ public final class OpenPlayerConstants {
     public static final ResourceLocation STATUS_RESPONSE_PACKET_ID = id("status_response");
     public static final ResourceLocation CHARACTER_LIST_REQUEST_PACKET_ID = id("character_list_request");
     public static final ResourceLocation CHARACTER_LIST_RESPONSE_PACKET_ID = id("character_list_response");
+    public static final ResourceLocation CHARACTER_EXPORT_REQUEST_PACKET_ID = id("character_export_request");
+    public static final ResourceLocation CHARACTER_IMPORT_REQUEST_PACKET_ID = id("character_import_request");
+    public static final ResourceLocation CHARACTER_FILE_OPERATION_RESPONSE_PACKET_ID = id("character_file_operation_response");
 
     private OpenPlayerConstants() {
     }

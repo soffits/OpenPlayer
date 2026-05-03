@@ -415,6 +415,14 @@ Add safe in-game management for local character files so players can create, edi
 - No online character service, cloud backup, account binding, or marketplace-style sharing.
 - No remote skin download or automatic conversion from player account names.
 
+### Current Implementation Notes
+
+OpenPlayer now has a pure Java local character write/import/export foundation in the character repository. Active definitions are written only to `<Minecraft config>/openplayer/characters/<id>.properties`, imports are accepted only by safe file name from `<Minecraft config>/openplayer/imports/*.properties`, and exports write only loaded local character ids to `<Minecraft config>/openplayer/exports/<id>.properties`. The writer serializes exactly `id`, `displayName`, `description`, `skinTexture`, `localSkinFile`, `defaultRoleId`, `conversationPrompt`, and `conversationSettings`, omitting blank optional fields.
+
+The file-management path validates through `LocalCharacterDefinition` and existing unknown-field checks before saving. It rejects unsafe ids, id/file mismatches, invalid existing target files, absolute paths, parent traversal, backslashes, drive prefixes, hidden arbitrary files, non-`.properties` names, unknown fields, and secret-like labels or credentials. Writes use a temporary file in the same directory followed by an atomic move when available, with replace fallback and temp cleanup. Result objects carry status plus safe English messages and do not expose absolute server paths to the client.
+
+The in-game Phase J UI slice remains intentionally compact: the control screen can reload the local list, export the selected character, and submit a safe import file name typed into the existing input box. Broad form editing, Player2NPC compatibility import, online services, remote skin download, account lookup, provider credentials, cloud sync, and new dependencies remain out of scope.
+
 ## Phase K: Spoken Conversation UX, Greeting, And Response Surface
 
 ### Goal

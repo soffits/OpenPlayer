@@ -67,6 +67,19 @@ public final class OpenPlayerRequestSender {
         NetworkManager.sendToServer(OpenPlayerConstants.CHARACTER_LIST_REQUEST_PACKET_ID, emptyPayload());
     }
 
+    public static void sendCharacterExportRequest(String characterId) {
+        NetworkManager.sendToServer(OpenPlayerConstants.CHARACTER_EXPORT_REQUEST_PACKET_ID, characterPayload(characterId));
+    }
+
+    public static void sendCharacterImportRequest(String fileName) {
+        if (fileName == null) {
+            throw new IllegalArgumentException("fileName cannot be null");
+        }
+        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+        buffer.writeUtf(fileName, 80);
+        NetworkManager.sendToServer(OpenPlayerConstants.CHARACTER_IMPORT_REQUEST_PACKET_ID, buffer);
+    }
+
     private static FriendlyByteBuf emptyPayload() {
         return new FriendlyByteBuf(Unpooled.buffer());
     }
