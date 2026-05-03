@@ -12,7 +12,7 @@ The initial target is Minecraft 1.20.1 on Java 17 with an Architectury-style mul
 
 ## Milestone Status
 
-Current implementation includes runtime NPC sessions, duplicate prevention, a server-side companion lifecycle manager for selected local characters, local character definition parsing, server-authoritative local character selection from the OpenPlayer UI, basic command intents, item pickup with inventory persistence, explicit NPC hotbar and held-equipment helpers, owner lifecycle cleanup and restore, spawn/despawn networking, a minimal client control screen with safe runtime status, a player-shaped renderer with optional profile skin resource support, client-side local PNG skin loading, and vanilla feature layers for held items, armor, head-slot items, elytra, arrows, and bee stingers, a vanilla NPC-backed task backend, an optional reflective Baritone command bridge, and a disabled-by-default runtime intent parser that can use an opt-in JDK-only OpenAI-compatible provider. Automatone is not directly integrated yet.
+Current implementation includes runtime NPC sessions, duplicate prevention, a server-side companion lifecycle manager for selected local characters, local character definition parsing, server-authoritative local character selection from the OpenPlayer UI, basic command intents, item pickup with inventory persistence, explicit NPC hotbar and held-equipment helpers, owner lifecycle cleanup and restore, spawn/despawn networking, a minimal client control screen with safe runtime status, a player-shaped renderer with optional profile skin resource support, client-side local PNG skin loading, and vanilla feature layers for held items, armor, head-slot items, elytra, arrows, and bee stingers, a vanilla NPC-backed task backend, an optional reflective Baritone command bridge, a disabled-by-default runtime intent parser that can use an opt-in JDK-only OpenAI-compatible provider, and an optional per-character conversation loop on top of that parser. Automatone is not directly integrated yet.
 
 ## Local Character Config
 
@@ -27,8 +27,8 @@ description=Optional short description shown by future UI.
 skinTexture=openplayer:skins/alex_helper
 localSkinFile=skins/alex_helper.png
 defaultRoleId=helper
-conversationPrompt=Reserved for later role instructions.
-conversationSettings=Reserved for later non-sensitive preferences.
+conversationPrompt=Optional role/personality text for selected-character conversation.
+conversationSettings=Optional non-sensitive local conversation preferences.
 ```
 
 Supported fields are exactly `id`, `displayName`, `description`, `skinTexture`, `localSkinFile`, `defaultRoleId`, `conversationPrompt`, and `conversationSettings`. Unknown fields are validation errors.
@@ -68,7 +68,7 @@ Selecting a character shows its display name, id, description, skin status, life
 
 Despawning a runtime NPC stops its active runtime commands before the entity is discarded. Owner disconnect and server stop continue to use the runtime cleanup hooks so companion tasks are stopped without persisting transient session ids as long-term identity.
 
-The bottom status lines remain safe and presence-only for automation backend, parser state, endpoint, model, and API key status.
+The bottom status lines remain safe and presence-only for automation backend, parser state, endpoint, model, and API key status. Character list entries report conversation as `not configured`, `unavailable: parser disabled`, or `available`; they never include provider credentials, absolute paths, or raw provider responses.
 
 ## Dependencies
 
@@ -83,12 +83,20 @@ The bottom status lines remain safe and presence-only for automation backend, pa
 
 Raw command text submitted through the public NPC service is parsed by the runtime-owned intent parser before becoming an `AiPlayerNpcCommand`. The parser is disabled by default and returns unavailable intents without contacting a provider.
 
+For a selected local character, command text uses the per-character conversation loop only when that character has `conversationPrompt` or `conversationSettings` and the runtime parser is enabled. If the parser is disabled, selected-character conversation returns `Conversation unavailable: intent parser disabled`, does not contact any provider, and does not fall back to raw action execution. If the selected character has no conversation fields, command text keeps the existing direct command-text behavior.
+
+The conversation loop assembles a bounded prompt from the selected character's display text, `conversationPrompt`, `conversationSettings`, recent in-memory history, and the player's message. Those character fields are non-secret text only. Provider endpoint, model, and API key remain environment variables or JVM properties only and are never read from character files.
+
+Provider output is untrusted. It must pass through the existing `IntentParser`, become a constrained `CommandIntent`, and then submit through the selected-character `CompanionLifecycleManager` path. Invalid, unavailable, oversized, or unparsable output is rejected without submitting an NPC action. Conversation history is in-memory only, bounded, and stores player messages plus accepted intent summaries rather than raw provider responses.
+
 Set safe JVM system properties or environment variables with these exact names to enable the OpenAI-compatible provider:
 
 - `OPENPLAYER_INTENT_PARSER_ENABLED=true`
 - `OPENPLAYER_INTENT_PROVIDER_ENDPOINT=https://example.invalid/v1/chat/completions`
 - `OPENPLAYER_INTENT_PROVIDER_API_KEY=...`
 - `OPENPLAYER_INTENT_PROVIDER_MODEL=...`
+
+Remaining conversation gaps: there is no chat bubble or separate NPC spoken-response UI, no persisted conversation memory, no per-character model or provider override, no per-character API key support, no rate-limit scheduler beyond provider failure rejection, and unsupported intent kinds still rely on the automation backend to reject safely.
 
 ## Automation Backend
 
@@ -113,6 +121,7 @@ The Baritone backend is intentionally honest about scope: stock Baritone control
 - Establish loader-neutral NPC domain contracts.
 - Add entity, persistence, and networking slices.
 - Evaluate provider-backed command parsing behavior in runtime playtesting.
+- Expand conversation UX only after a small safe response surface is designed.
 - Expand NPC-backed automation beyond the current vanilla task layer if a clean pathfinding and action adapter boundary is identified.
 - Evaluate Automatone integration for movement automation once public coordinates, loader/version compatibility, license posture, and adapter boundaries are clear.
 - Evaluate external player account profile and skin lookup support without adding opaque runtime fetch behavior.

@@ -20,6 +20,7 @@ public final class LocalCharacterDefinitionTest {
         acceptsReadmeSample();
         convertsToNpcSpec();
         createsSafeListView();
+        createsSafeConversationStatusInListView();
         sanitizesExceptionPathsInListView();
         resolvesSafeLocalSkinPaths();
         rejectsUnsafeLocalSkinPaths();
@@ -145,6 +146,28 @@ public final class LocalCharacterDefinitionTest {
         );
         LocalCharacterListView view = LocalCharacterListView.fromRepositoryResult(result, ignored -> "despawned");
         require("bad.properties: Unable to read character file: bad.properties".equals(view.errors().get(0)), "UI errors must sanitize exception paths: " + view.errors());
+    }
+
+    private static void createsSafeConversationStatusInListView() {
+        LocalCharacterDefinition character = new LocalCharacterDefinition(
+                "alex_01",
+                "Alex",
+                null,
+                null,
+                null,
+                null,
+                "Friendly helper instructions.",
+                null
+        );
+        LocalCharacterRepositoryResult result = new LocalCharacterRepositoryResult(List.of(character), List.of());
+        LocalCharacterListView view = LocalCharacterListView.fromRepositoryResult(
+                result,
+                ignored -> "despawned",
+                null,
+                ignored -> "unavailable: parser disabled"
+        );
+        require("unavailable: parser disabled".equals(view.characters().get(0).conversationStatus()),
+                "configured conversation must report safe resolver status");
     }
 
     private static void resolvesSafeLocalSkinPaths() {
