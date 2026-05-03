@@ -1,5 +1,6 @@
 package dev.soffits.openplayer.intent;
 
+import dev.soffits.openplayer.debug.OpenPlayerRawTrace;
 import java.util.Locale;
 
 public final class ProviderBackedIntentParser implements IntentParser {
@@ -20,20 +21,34 @@ public final class ProviderBackedIntentParser implements IntentParser {
 
         ProviderIntent providerIntent;
         try {
+            OpenPlayerRawTrace.parseInput("provider_backed_parser", null, input);
             providerIntent = provider.parseIntent(input);
         } catch (IntentProviderException exception) {
+            OpenPlayerRawTrace.parseRejection("provider_backed_parser", null, input, exception.getMessage());
             throw new IntentParseException("intent provider failed", exception);
         } catch (RuntimeException exception) {
+            OpenPlayerRawTrace.parseRejection("provider_backed_parser", null, input, exception.getMessage());
             throw new IntentParseException("intent provider returned an invalid response", exception);
         }
 
         if (providerIntent == null) {
+            OpenPlayerRawTrace.parseRejection("provider_backed_parser", null, input, "intent provider returned no intent");
             throw new IntentParseException("intent provider returned no intent");
         }
 
-        IntentKind kind = parseKind(providerIntent.kind());
-        IntentPriority priority = parsePriority(providerIntent.priority());
-        return new CommandIntent(kind, priority, providerIntent.instruction());
+        try {
+            IntentKind kind = parseKind(providerIntent.kind());
+            IntentPriority priority = parsePriority(providerIntent.priority());
+            OpenPlayerRawTrace.parseOutput("provider_backed_parser", null,
+                    "kind=" + providerIntent.kind() + " priority=" + providerIntent.priority()
+                            + " instruction=" + providerIntent.instruction());
+            return new CommandIntent(kind, priority, providerIntent.instruction());
+        } catch (IntentParseException exception) {
+            OpenPlayerRawTrace.parseRejection("provider_backed_parser", null,
+                    "kind=" + providerIntent.kind() + " priority=" + providerIntent.priority()
+                            + " instruction=" + providerIntent.instruction(), exception.getMessage());
+            throw exception;
+        }
     }
 
     private static IntentKind parseKind(String value) throws IntentParseException {

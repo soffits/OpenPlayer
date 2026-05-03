@@ -1,5 +1,6 @@
 package dev.soffits.openplayer.intent;
 
+import dev.soffits.openplayer.debug.OpenPlayerRawTrace;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -69,11 +70,13 @@ public final class OpenAiCompatibleIntentProvider implements IntentProvider {
             throw new IntentProviderException("input cannot be null");
         }
 
+        String requestBody = requestBody(input);
+        OpenPlayerRawTrace.providerRequest(endpointUri.toString(), model, requestBody);
         HttpRequest request = HttpRequest.newBuilder(endpointUri)
             .timeout(REQUEST_TIMEOUT)
             .header("Authorization", "Bearer " + apiKey)
             .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(requestBody(input), StandardCharsets.UTF_8))
+            .POST(HttpRequest.BodyPublishers.ofString(requestBody, StandardCharsets.UTF_8))
             .build();
 
         HttpResponse<String> response;
@@ -89,6 +92,7 @@ public final class OpenAiCompatibleIntentProvider implements IntentProvider {
         }
 
         int statusCode = response.statusCode();
+        OpenPlayerRawTrace.providerResponse(endpointUri.toString(), model, statusCode, response.body());
         if (statusCode < 200 || statusCode >= 300) {
             throw new IntentProviderException("intent provider request failed with status " + statusCode);
         }
@@ -116,12 +120,20 @@ public final class OpenAiCompatibleIntentProvider implements IntentProvider {
     }
 
     private static ProviderIntent parseProviderResponse(String responseBody) throws IntentProviderException {
-        String content = readStringField(responseBody, "content", "provider response content");
-        String intentJson = extractJsonObject(content);
-        String kind = readStringField(intentJson, "kind", "provider intent kind");
-        String priority = readStringField(intentJson, "priority", "provider intent priority");
-        String instruction = readStringField(intentJson, "instruction", "provider intent instruction");
-        return new ProviderIntent(kind, priority, instruction);
+        try {
+            OpenPlayerRawTrace.parseInput("provider_response_body", null, responseBody);
+            String content = readStringField(responseBody, "content", "provider response content");
+            OpenPlayerRawTrace.parseInput("provider_model_content", null, content);
+            String intentJson = extractJsonObject(content);
+            String kind = readStringField(intentJson, "kind", "provider intent kind");
+            String priority = readStringField(intentJson, "priority", "provider intent priority");
+            String instruction = readStringField(intentJson, "instruction", "provider intent instruction");
+            OpenPlayerRawTrace.parseOutput("provider_intent_json", null, intentJson);
+            return new ProviderIntent(kind, priority, instruction);
+        } catch (IntentProviderException exception) {
+            OpenPlayerRawTrace.parseRejection("provider_response_body", null, responseBody, exception.getMessage());
+            throw exception;
+        }
     }
 
     private static String readStringField(String json, String fieldName, String description) throws IntentProviderException {

@@ -7,12 +7,11 @@ import dev.soffits.openplayer.api.AiPlayerNpcSpec;
 import dev.soffits.openplayer.api.CommandSubmissionResult;
 import dev.soffits.openplayer.api.CommandSubmissionStatus;
 import dev.soffits.openplayer.api.NpcOwnerId;
-import dev.soffits.openplayer.api.NpcProfileSpec;
-import dev.soffits.openplayer.api.NpcRoleId;
 import dev.soffits.openplayer.api.NpcSessionId;
 import dev.soffits.openplayer.api.NpcSessionStatus;
 import dev.soffits.openplayer.api.NpcSpawnLocation;
 import dev.soffits.openplayer.debug.OpenPlayerDebugEvents;
+import dev.soffits.openplayer.debug.OpenPlayerRawTrace;
 import dev.soffits.openplayer.entity.OpenPlayerNpcEntity;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentParseException;
@@ -55,13 +54,19 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         this.intentParser = intentParser;
     }
 
-    public synchronized void restorePersistedSessions() {
+    public synchronized void removeStalePersistedNpcs() {
+        int removed = 0;
         for (ServerLevel level : server.getAllLevels()) {
             for (Entity entity : level.getAllEntities()) {
-                if (entity instanceof OpenPlayerNpcEntity npcEntity && npcEntity.hasValidPersistedIdentity()) {
-                    adoptPersistedEntity(level, npcEntity);
+                if (entity instanceof OpenPlayerNpcEntity npcEntity) {
+                    npcEntity.stopRuntimeCommands();
+                    npcEntity.discard();
+                    removed++;
                 }
             }
+        }
+        if (removed > 0) {
+            OpenPlayerDebugEvents.record("npc_lifecycle", "stale_removed", null, null, null, "count=" + removed);
         }
     }
 
@@ -175,6 +180,7 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         if (input == null) {
             throw new IllegalArgumentException("input cannot be null");
         }
+        OpenPlayerRawTrace.commandText("runtime_service", null, null, sessionId.value().toString(), input);
         synchronized (this) {
             if (!sessions.containsKey(sessionId)) {
                 OpenPlayerDebugEvents.record("command_text", "unknown_session", null, null,
@@ -186,12 +192,17 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         try {
             OpenPlayerDebugEvents.record("provider_parse", "attempted", null, null,
                     sessionId.value().toString(), "source=command_text messageLength=" + input.trim().length());
+            OpenPlayerRawTrace.parseInput("runtime_service", sessionId.value().toString(), input);
             intent = intentParser.parse(input);
             OpenPlayerDebugEvents.record("provider_parse", "success", null, null,
                     sessionId.value().toString(), "kind=" + intent.kind().name() + " instructionLength=" + intent.instruction().length());
+            OpenPlayerRawTrace.parseOutput("runtime_service", sessionId.value().toString(),
+                    "kind=" + intent.kind().name() + " priority=" + intent.priority().name()
+                            + " instruction=" + intent.instruction());
         } catch (IntentParseException exception) {
             OpenPlayerDebugEvents.record("provider_parse", "rejected", null, null,
                     sessionId.value().toString(), "Unable to parse command text");
+            OpenPlayerRawTrace.parseRejection("runtime_service", sessionId.value().toString(), input, exception.getMessage());
             return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Unable to parse command text");
         }
         return submitCommand(sessionId, new AiPlayerNpcCommand(UUID.randomUUID(), intent));
@@ -232,35 +243,6 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         }
         sessions.clear();
         sessionIdsByIdentity.clear();
-    }
-
-    private void adoptPersistedEntity(ServerLevel level, OpenPlayerNpcEntity entity) {
-        UUID ownerId = entity.persistedOwnerId().orElseThrow();
-        String roleId = entity.persistedRoleId().orElseThrow();
-        String profileName = entity.persistedProfileName().orElseThrow();
-        RuntimeNpcIdentityKey identityKey = RuntimeNpcIdentityKey.from(ownerId, roleId, profileName);
-        if (sessionIdsByIdentity.containsKey(identityKey)) {
-            entity.discard();
-            return;
-        }
-        NpcSpawnLocation location = new NpcSpawnLocation(
-                level.dimension().location().toString(),
-                entity.getX(),
-                entity.getY(),
-                entity.getZ()
-        );
-        AiPlayerNpcSpec spec = new AiPlayerNpcSpec(
-                new NpcRoleId(roleId),
-                new NpcOwnerId(ownerId),
-                new NpcProfileSpec(profileName, entity.persistedProfileSkinTexture().orElse(null)),
-                location,
-                entity.allowWorldActions()
-        );
-        entity.setRuntimeOwnerId(spec.ownerId());
-        NpcSessionId sessionId = new NpcSessionId(UUID.randomUUID());
-        RuntimeAiPlayerNpcSession session = new RuntimeAiPlayerNpcSession(this, sessionId, spec, entity.getUUID());
-        sessions.put(sessionId, session);
-        sessionIdsByIdentity.put(identityKey, sessionId);
     }
 
     private ServerLevel levelFor(NpcSpawnLocation location) {

@@ -1,5 +1,17 @@
 # Release Notes
 
+## v0.1.0-alpha.6
+
+- Adds a local-only bounded raw trace JSONL log at `config/openplayer/logs/raw-trace.jsonl` for full provider payloads/responses, parse inputs/outputs/rejections, command text, and automation operation diagnostics.
+- Keeps raw trace data off client UI, status packets, and the safe debug event log while continuing to redact or omit credentials such as API keys, Authorization headers, bearer tokens, and other secret-like values.
+- Removes stale persisted OpenPlayer NPC entities during server runtime initialization so re-entered worlds can spawn/rebuild clean companions instead of leaving inert old entities standing in place.
+- Raises vanilla NPC navigation to a player-like speed for move, follow, patrol, collect, block, and combat navigation paths.
+
+Artifacts:
+
+- `openplayer-fabric-0.1.0-alpha.6.jar`
+- `openplayer-forge-0.1.0-alpha.6.jar`
+
 ## v0.1.0-alpha.5
 
 - Adds a bounded, sanitized server-side debug event log for provider tests, chat command receipt, provider parsing, command submission, companion session resolution, and vanilla automation task lifecycle events.

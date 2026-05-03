@@ -24,6 +24,7 @@ import dev.soffits.openplayer.character.LocalSkinPathResolver;
 import dev.soffits.openplayer.character.OpenPlayerLocalCharacters;
 import dev.soffits.openplayer.debug.OpenPlayerDebugEvent;
 import dev.soffits.openplayer.debug.OpenPlayerDebugEvents;
+import dev.soffits.openplayer.debug.OpenPlayerRawTrace;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentKind;
 import dev.soffits.openplayer.intent.IntentParseException;
@@ -353,6 +354,7 @@ public final class OpenPlayerNetworking {
             return;
         }
         OpenPlayerDebugEvents.record("command_text", "received", characterId, null, null, "length=" + commandText.trim().length());
+        OpenPlayerRawTrace.commandText("network_character", sender.getUUID().toString(), characterId, null, commandText);
         if (characterId != null && !characterId.isBlank()) {
             CommandSubmissionResult result = COMPANION_LIFECYCLE_MANAGER.submitSelectedCommandText(sender.getUUID(), characterId, commandText);
             OpenPlayerDebugEvents.record("command_submission", result.status().name(), characterId, null, null, result.message());
@@ -387,6 +389,8 @@ public final class OpenPlayerNetworking {
         String trimmedCommandText = commandText.trim();
         OpenPlayerDebugEvents.record("command_text", "received", trimmedAssignmentId, null, null,
                 "length=" + trimmedCommandText.length());
+        OpenPlayerRawTrace.commandText("network_assignment", sender.getUUID().toString(), trimmedAssignmentId, null,
+                trimmedCommandText);
         CommandSubmissionResult result = COMPANION_LIFECYCLE_MANAGER.submitSelectedCommandText(
                 sender.getUUID(), trimmedAssignmentId, trimmedCommandText
         );

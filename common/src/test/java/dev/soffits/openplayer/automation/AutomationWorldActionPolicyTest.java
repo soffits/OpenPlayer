@@ -39,6 +39,10 @@ public final class AutomationWorldActionPolicyTest {
                 "PATROL must remain available when allowWorldActions is false");
         require(!VanillaAutomationBackend.isLocalWorldOrInventoryAction(IntentKind.REPORT_STATUS),
                 "REPORT_STATUS must remain available when allowWorldActions is false");
+        require(VanillaAutomationBackend.PLAYER_LIKE_NAVIGATION_SPEED >= 1.2D,
+                "NPC navigation speed must be faster than the prior slow default");
+        require(VanillaAutomationBackend.PLAYER_LIKE_NAVIGATION_SPEED <= 1.5D,
+                "NPC navigation speed must stay within a non-absurd player-like range");
     }
 
     private static void require(boolean condition, String message) {

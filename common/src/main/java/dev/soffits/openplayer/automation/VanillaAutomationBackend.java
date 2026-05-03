@@ -3,6 +3,7 @@ package dev.soffits.openplayer.automation;
 import dev.soffits.openplayer.api.NpcOwnerId;
 import dev.soffits.openplayer.automation.AutomationInstructionParser.Coordinate;
 import dev.soffits.openplayer.debug.OpenPlayerDebugEvents;
+import dev.soffits.openplayer.debug.OpenPlayerRawTrace;
 import dev.soffits.openplayer.entity.OpenPlayerNpcEntity;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentKind;
@@ -26,6 +27,7 @@ import net.minecraft.world.phys.Vec3;
 
 public final class VanillaAutomationBackend implements AutomationBackend {
     public static final String NAME = "vanilla";
+    public static final double PLAYER_LIKE_NAVIGATION_SPEED = 1.25D;
 
     static boolean isLocalWorldOrInventoryAction(IntentKind kind) {
         return kind == IntentKind.COLLECT_ITEMS
@@ -56,8 +58,6 @@ public final class VanillaAutomationBackend implements AutomationBackend {
     }
 
     private static final class VanillaAutomationController implements AutomationController {
-        private static final double MOVE_SPEED = 1.0D;
-        private static final double FOLLOW_SPEED = 1.0D;
         private static final double FOLLOW_STOP_DISTANCE = 3.0D;
         private static final double FOLLOW_START_DISTANCE = 4.0D;
         private static final double COLLECT_RADIUS = 16.0D;
@@ -68,7 +68,6 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private static final double ATTACK_DEFAULT_RADIUS = 12.0D;
         private static final double ATTACK_MAX_RADIUS = 24.0D;
         private static final double ATTACK_REACH_DISTANCE = 2.5D;
-        private static final double ATTACK_SPEED = 1.1D;
         private static final double GUARD_DEFAULT_RADIUS = 12.0D;
         private static final double GUARD_MAX_RADIUS = 16.0D;
         private static final double PATROL_MAX_DISTANCE = 32.0D;
@@ -311,6 +310,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 activeMonitor.start(entity.getX(), entity.getY(), entity.getZ());
                 OpenPlayerDebugEvents.record("automation", "started", null, null, null,
                         "kind=" + activeCommand.kind().name());
+                OpenPlayerRawTrace.automationOperation("started", activeCommand.kind().name(),
+                        "entity=" + entity.getUUID() + " position=" + entity.position()
+                                + " coordinate=" + activeCommand.coordinate());
                 start(activeCommand);
             }
             continueActiveCommand();
@@ -323,6 +325,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (activeCommand != null) {
                 OpenPlayerDebugEvents.record("automation", "cancelled", null, null, null,
                         "kind=" + activeCommand.kind().name() + " reason=stop_all");
+                OpenPlayerRawTrace.automationOperation("cancelled", activeCommand.kind().name(), "reason=stop_all");
             }
             activeCommand = null;
             if (activeMonitor != null) {
@@ -337,7 +340,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private void start(QueuedCommand command) {
             if (command.kind() == IntentKind.MOVE) {
                 Coordinate coordinate = command.coordinate();
-                entity.getNavigation().moveTo(coordinate.x(), coordinate.y(), coordinate.z(), MOVE_SPEED);
+                entity.getNavigation().moveTo(coordinate.x(), coordinate.y(), coordinate.z(), PLAYER_LIKE_NAVIGATION_SPEED);
                 return;
             }
             if (command.kind() == IntentKind.LOOK) {
@@ -356,7 +359,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             if (command.kind() == IntentKind.PATROL) {
                 Coordinate coordinate = command.coordinate();
-                entity.getNavigation().moveTo(coordinate.x(), coordinate.y(), coordinate.z(), MOVE_SPEED);
+                entity.getNavigation().moveTo(coordinate.x(), coordinate.y(), coordinate.z(), PLAYER_LIKE_NAVIGATION_SPEED);
             }
         }
 
@@ -417,7 +420,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             entity.getLookControl().setLookAt(itemEntity);
             if (entity.distanceToSqr(itemEntity) > COLLECT_REACH_DISTANCE * COLLECT_REACH_DISTANCE) {
-                entity.getNavigation().moveTo(itemEntity, MOVE_SPEED);
+                entity.getNavigation().moveTo(itemEntity, PLAYER_LIKE_NAVIGATION_SPEED);
                 command.resetReachTicks();
                 return;
             }
@@ -575,7 +578,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             entity.getLookControl().setLookAt(target);
             entity.selectBestAttackItem();
             if (entity.distanceToSqr(target) > ATTACK_REACH_DISTANCE * ATTACK_REACH_DISTANCE) {
-                entity.getNavigation().moveTo(target, ATTACK_SPEED);
+                entity.getNavigation().moveTo(target, PLAYER_LIKE_NAVIGATION_SPEED);
                 return false;
             }
             entity.getNavigation().stop();
@@ -600,7 +603,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         }
 
         private void moveNearBlock(BlockPos blockPos) {
-            entity.getNavigation().moveTo(blockPos.getX() + 0.5D, blockPos.getY(), blockPos.getZ() + 0.5D, MOVE_SPEED);
+            entity.getNavigation().moveTo(blockPos.getX() + 0.5D, blockPos.getY(), blockPos.getZ() + 0.5D,
+                    PLAYER_LIKE_NAVIGATION_SPEED);
         }
 
         private void lookAtBlock(BlockPos blockPos) {
@@ -615,7 +619,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             double distanceSquared = entity.distanceToSqr(owner);
             if (distanceSquared > FOLLOW_START_DISTANCE * FOLLOW_START_DISTANCE) {
-                entity.getNavigation().moveTo(owner, FOLLOW_SPEED);
+                entity.getNavigation().moveTo(owner, PLAYER_LIKE_NAVIGATION_SPEED);
             } else if (distanceSquared <= FOLLOW_STOP_DISTANCE * FOLLOW_STOP_DISTANCE) {
                 entity.getNavigation().stop();
             }
@@ -658,11 +662,11 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                         startPosition.getX() + 0.5D,
                         startPosition.getY(),
                         startPosition.getZ() + 0.5D,
-                        MOVE_SPEED
+                        PLAYER_LIKE_NAVIGATION_SPEED
                 );
             } else {
                 Coordinate coordinate = command.coordinate();
-                entity.getNavigation().moveTo(coordinate.x(), coordinate.y(), coordinate.z(), MOVE_SPEED);
+                entity.getNavigation().moveTo(coordinate.x(), coordinate.y(), coordinate.z(), PLAYER_LIKE_NAVIGATION_SPEED);
             }
         }
 
@@ -690,6 +694,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 entity.getNavigation().stop();
                 OpenPlayerDebugEvents.record("automation", status.name(), null, null, null,
                         "kind=" + activeCommand.kind().name() + " reason=" + activeMonitor.boundedReason());
+                OpenPlayerRawTrace.automationOperation(status.name(), activeCommand.kind().name(),
+                        "reason=" + activeMonitor.boundedReason());
                 activeCommand = null;
             }
         }
@@ -698,6 +704,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (activeCommand != null) {
                 OpenPlayerDebugEvents.record("automation", "completed", null, null, null,
                         "kind=" + activeCommand.kind().name());
+                OpenPlayerRawTrace.automationOperation("completed", activeCommand.kind().name(),
+                        "entity=" + entity.getUUID() + " position=" + entity.position());
             }
             if (activeMonitor != null) {
                 activeMonitor.complete();
@@ -709,6 +717,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (activeCommand != null) {
                 OpenPlayerDebugEvents.record("automation", "cancelled", null, null, null,
                         "kind=" + activeCommand.kind().name() + " reason=" + reason);
+                OpenPlayerRawTrace.automationOperation("cancelled", activeCommand.kind().name(), "reason=" + reason);
             }
             if (activeMonitor != null) {
                 activeMonitor.cancel(reason);
