@@ -59,10 +59,18 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private static final double GUARD_DEFAULT_RADIUS = 12.0D;
         private static final double GUARD_MAX_RADIUS = 16.0D;
         private static final double PATROL_MAX_DISTANCE = 32.0D;
+        private static final int MOVE_MAX_TICKS = 20 * 60;
+        private static final int SHORT_TASK_MAX_TICKS = 20 * 30;
+        private static final int COLLECT_MAX_TICKS = 20 * 45;
+        private static final int LONG_TASK_MAX_TICKS = 20 * 120;
+        private static final int STUCK_CHECK_INTERVAL_TICKS = 40;
+        private static final double STUCK_MIN_PROGRESS_DISTANCE = 0.15D;
+        private static final int STUCK_MAX_CHECKS = 4;
 
         private final OpenPlayerNpcEntity entity;
         private final Queue<QueuedCommand> queuedCommands = new ArrayDeque<>();
         private QueuedCommand activeCommand;
+        private AutomationControllerMonitor activeMonitor;
         private NpcOwnerId ownerId;
 
         private VanillaAutomationController(OpenPlayerNpcEntity entity) {
@@ -101,6 +109,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 if (coordinate == null) {
                     return rejected("MOVE requires instruction: x y z");
                 }
+                if (!isCoordinateLoaded(coordinate)) {
+                    return rejected("MOVE target chunk is not loaded");
+                }
                 queuedCommands.add(QueuedCommand.move(coordinate));
                 return accepted("MOVE accepted");
             }
@@ -132,6 +143,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 );
                 if (coordinate == null) {
                     return rejected("PATROL requires instruction x y z within " + (int) PATROL_MAX_DISTANCE + " blocks");
+                }
+                if (!isCoordinateLoaded(coordinate)) {
+                    return rejected("PATROL target chunk is not loaded");
                 }
                 queuedCommands.add(QueuedCommand.patrol(coordinate));
                 return accepted("PATROL accepted");
@@ -168,6 +182,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 if (coordinate == null) {
                     return rejected("BREAK_BLOCK requires instruction: x y z");
                 }
+                if (!isCoordinateLoaded(coordinate)) {
+                    return rejected("BREAK_BLOCK target chunk is not loaded");
+                }
                 queuedCommands.add(QueuedCommand.breakBlock(coordinate));
                 return accepted("BREAK_BLOCK accepted");
             }
@@ -175,6 +192,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 Coordinate coordinate = AutomationInstructionParser.parseCoordinateOrNull(intent.instruction());
                 if (coordinate == null) {
                     return rejected("PLACE_BLOCK requires instruction: x y z");
+                }
+                if (!isCoordinateLoaded(coordinate)) {
+                    return rejected("PLACE_BLOCK target chunk is not loaded");
                 }
                 if (!(entity.getMainHandItem().getItem() instanceof BlockItem)
                         && !entity.selectFirstHotbarBlockItem()) {
@@ -222,15 +242,21 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 if (activeCommand == null) {
                     return;
                 }
+                activeMonitor = newMonitor(activeCommand);
+                activeMonitor.start(entity.getX(), entity.getY(), entity.getZ());
                 start(activeCommand);
             }
             continueActiveCommand();
+            watchdogActiveCommand();
         }
 
         @Override
         public void stopAll() {
             queuedCommands.clear();
             activeCommand = null;
+            if (activeMonitor != null) {
+                activeMonitor.reset();
+            }
             entity.getNavigation().stop();
             entity.setDeltaMovement(Vec3.ZERO);
             entity.getLookControl().setLookAt(entity.getX(), entity.getEyeY(), entity.getZ());
@@ -245,7 +271,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (command.kind() == IntentKind.LOOK) {
                 Coordinate coordinate = command.coordinate();
                 entity.getLookControl().setLookAt(coordinate.x(), coordinate.y(), coordinate.z());
-                activeCommand = null;
+                completeActiveCommand();
                 return;
             }
             if (command.kind() == IntentKind.COLLECT_ITEMS
@@ -268,7 +294,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             if (activeCommand.kind() == IntentKind.MOVE) {
                 if (entity.getNavigation().isDone()) {
-                    activeCommand = null;
+                    completeActiveCommand();
                 }
                 return;
             }
@@ -304,17 +330,17 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private void collectItems(QueuedCommand command) {
             ServerLevel serverLevel = serverLevel();
             if (serverLevel == null) {
-                activeCommand = null;
+                failActiveCommand("server_level_unavailable");
                 return;
             }
             if (!isWithinStartDistance(command, entity.position(), COLLECT_RADIUS)) {
-                activeCommand = null;
+                failActiveCommand("outside_collect_radius");
                 return;
             }
             ItemEntity itemEntity = nearestItem(serverLevel, command);
             if (itemEntity == null) {
                 entity.getNavigation().stop();
-                activeCommand = null;
+                completeActiveCommand();
                 return;
             }
             entity.getLookControl().setLookAt(itemEntity);
@@ -326,7 +352,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             entity.getNavigation().stop();
             command.incrementReachTicks();
             if (command.reachTicks() >= COLLECT_REACH_TICKS) {
-                activeCommand = null;
+                completeActiveCommand();
             }
         }
 
@@ -348,17 +374,17 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private void breakBlock(QueuedCommand command) {
             ServerLevel serverLevel = serverLevel();
             if (serverLevel == null) {
-                activeCommand = null;
+                failActiveCommand("server_level_unavailable");
                 return;
             }
             BlockPos blockPos = command.blockPos();
             if (!canUseBlockTarget(serverLevel, command, blockPos)) {
-                activeCommand = null;
+                failActiveCommand("block_target_unavailable");
                 return;
             }
             BlockState blockState = serverLevel.getBlockState(blockPos);
             if (blockState.isAir() || blockState.getDestroySpeed(serverLevel, blockPos) < 0.0F) {
-                activeCommand = null;
+                failActiveCommand("block_not_breakable");
                 return;
             }
             entity.selectBestToolFor(blockState, serverLevel, blockPos);
@@ -370,27 +396,27 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             entity.getNavigation().stop();
             entity.swingMainHandAction();
             serverLevel.destroyBlock(blockPos, true, entity);
-            activeCommand = null;
+            completeActiveCommand();
         }
 
         private void placeBlock(QueuedCommand command) {
             ServerLevel serverLevel = serverLevel();
             if (serverLevel == null) {
-                activeCommand = null;
+                failActiveCommand("server_level_unavailable");
                 return;
             }
             BlockPos blockPos = command.blockPos();
             if (!canUseBlockTarget(serverLevel, command, blockPos)) {
-                activeCommand = null;
+                failActiveCommand("block_target_unavailable");
                 return;
             }
             ItemStack mainHandStack = entity.getMainHandItem();
             if (!(mainHandStack.getItem() instanceof BlockItem blockItem)) {
-                activeCommand = null;
+                failActiveCommand("missing_block_item");
                 return;
             }
             if (!serverLevel.getBlockState(blockPos).isAir()) {
-                activeCommand = null;
+                failActiveCommand("block_target_occupied");
                 return;
             }
             lookAtBlock(blockPos);
@@ -401,7 +427,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             BlockState placedState = blockItem.getBlock().defaultBlockState();
             if (!placedState.canSurvive(serverLevel, blockPos)
                     || !serverLevel.isUnobstructed(placedState, blockPos, CollisionContext.empty())) {
-                activeCommand = null;
+                failActiveCommand("block_cannot_survive");
                 return;
             }
             entity.getNavigation().stop();
@@ -409,28 +435,28 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 mainHandStack.shrink(1);
                 entity.swingMainHandAction();
             }
-            activeCommand = null;
+            completeActiveCommand();
         }
 
         private void attackNearest(QueuedCommand command) {
             ServerLevel serverLevel = serverLevel();
             if (serverLevel == null) {
-                activeCommand = null;
+                failActiveCommand("server_level_unavailable");
                 return;
             }
             if (!isWithinStartDistance(command, entity.position(), command.radius())) {
                 entity.getNavigation().stop();
-                activeCommand = null;
+                failActiveCommand("outside_attack_radius");
                 return;
             }
             LivingEntity target = nearestAttackTarget(serverLevel, command.radius(), Vec3.atCenterOf(command.startPosition()));
             if (target == null) {
                 entity.getNavigation().stop();
-                activeCommand = null;
+                completeActiveCommand();
                 return;
             }
             if (attackTarget(target)) {
-                activeCommand = null;
+                completeActiveCommand();
             }
         }
 
@@ -533,7 +559,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             if (!isWithinStartDistance(command, owner.position(), command.radius() + FOLLOW_START_DISTANCE)) {
                 entity.getNavigation().stop();
-                activeCommand = null;
+                failActiveCommand("outside_guard_radius");
                 return;
             }
             LivingEntity target = nearestGuardTarget(serverLevel, owner, command.radius());
@@ -547,7 +573,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private void patrol(QueuedCommand command) {
             if (!isWithinStartDistance(command, entity.position(), PATROL_MAX_DISTANCE + FOLLOW_START_DISTANCE)) {
                 entity.getNavigation().stop();
-                activeCommand = null;
+                failActiveCommand("outside_patrol_radius");
                 return;
             }
             if (!entity.getNavigation().isDone()) {
@@ -570,10 +596,74 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
         private String statusSummary() {
             String activeKind = activeCommand == null ? "idle" : activeCommand.kind().name();
-            return "health=" + Math.round(entity.getHealth())
-                    + ", selectedSlot=" + entity.selectedHotbarSlot()
+            String controllerStatus = activeMonitor == null ? "idle" : activeMonitor.status().name().toLowerCase();
+            String controllerReason = activeMonitor == null ? "idle" : activeMonitor.boundedReason();
+            return "hp=" + Math.round(entity.getHealth())
+                    + ", slot=" + entity.selectedHotbarSlot()
                     + ", active=" + activeKind
-                    + ", queued=" + queuedCommands.size();
+                    + ", queued=" + queuedCommands.size()
+                    + ", ctrl=" + controllerStatus
+                    + ", reason=" + controllerReason;
+        }
+
+        private void watchdogActiveCommand() {
+            if (activeCommand == null || activeMonitor == null) {
+                return;
+            }
+            AutomationControllerMonitorStatus status = activeMonitor.tick(
+                    entity.getX(), entity.getY(), entity.getZ(), requiresNavigationProgress(activeCommand)
+            );
+            if (status == AutomationControllerMonitorStatus.TIMED_OUT || status == AutomationControllerMonitorStatus.STUCK) {
+                entity.getNavigation().stop();
+                activeCommand = null;
+            }
+        }
+
+        private void completeActiveCommand() {
+            if (activeMonitor != null) {
+                activeMonitor.complete();
+            }
+            activeCommand = null;
+        }
+
+        private void failActiveCommand(String reason) {
+            if (activeMonitor != null) {
+                activeMonitor.cancel(reason);
+            }
+            entity.getNavigation().stop();
+            activeCommand = null;
+        }
+
+        private boolean requiresNavigationProgress(QueuedCommand command) {
+            return command.kind() != IntentKind.LOOK && !entity.getNavigation().isDone();
+        }
+
+        private AutomationControllerMonitor newMonitor(QueuedCommand command) {
+            return new AutomationControllerMonitor(
+                    maxTicks(command.kind()),
+                    STUCK_CHECK_INTERVAL_TICKS,
+                    STUCK_MIN_PROGRESS_DISTANCE,
+                    STUCK_MAX_CHECKS
+            );
+        }
+
+        private int maxTicks(IntentKind kind) {
+            if (kind == IntentKind.MOVE) {
+                return MOVE_MAX_TICKS;
+            }
+            if (kind == IntentKind.COLLECT_ITEMS) {
+                return COLLECT_MAX_TICKS;
+            }
+            if (kind == IntentKind.FOLLOW_OWNER || kind == IntentKind.GUARD_OWNER || kind == IntentKind.PATROL) {
+                return LONG_TASK_MAX_TICKS;
+            }
+            return SHORT_TASK_MAX_TICKS;
+        }
+
+        private boolean isCoordinateLoaded(Coordinate coordinate) {
+            ServerLevel serverLevel = serverLevel();
+            return serverLevel != null
+                    && serverLevel.hasChunkAt(BlockPos.containing(coordinate.x(), coordinate.y(), coordinate.z()));
         }
 
         private ServerPlayer owner() {

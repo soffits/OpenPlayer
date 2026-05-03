@@ -538,6 +538,12 @@ Create a clean NPC-backed movement/controller foundation for OpenPlayer NPCs so 
 - No claim that stock local-player automation controls server-side NPCs.
 - No advanced parkour, mining routes, or combat navigation beyond explicitly accepted bounded tasks.
 
+### Current Implementation Notes
+
+OpenPlayer now has a focused Phase M controller foundation inside the vanilla automation backend. Long-running queued tasks start an `AutomationControllerMonitor` that tracks elapsed ticks, timeout, repeated missing movement progress, cancellation, completion, and bounded terminal reasons through pure Java state. The backend applies that monitor to vanilla NPC-backed `MOVE`, `FOLLOW_OWNER`, `PATROL`, `COLLECT_ITEMS`, `BREAK_BLOCK`, `PLACE_BLOCK`, `ATTACK_NEAREST`, and `GUARD_OWNER` execution where applicable. When timeout or stuck detection fires, vanilla navigation is stopped and the active task is cleared deterministically.
+
+`STOP` clears queued and active tasks, stops vanilla navigation, zeroes movement, and resets controller status to idle. `REPORT_STATUS` now includes active kind, queued count, controller state, and bounded reason text in addition to existing local health and selected-slot data; it does not expose paths, target coordinates, secrets, or raw provider text. Coordinate-targeted navigation and block tasks reject unloaded target chunks at submission time. This remains simple vanilla navigation only: no Baritone, AltoClef, Automatone, PlayerEngine, external pathfinding dependency, or broad planner has been added.
+
 ## Phase N: Player-Like Interaction Manager Expansion
 
 ### Goal
