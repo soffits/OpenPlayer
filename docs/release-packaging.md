@@ -52,16 +52,18 @@ The Gradle archive base name is `openplayer-<module>` and the version comes from
 
 OpenPlayer is offline and provider-disabled by default.
 
-The `OPENPLAYER_*` names below can be set as environment variables or as JVM system properties with `-D<name>=<value>`.
+The `OPENPLAYER_*` names below can be set as environment variables or as JVM system properties with `-D<name>=<value>`. JVM system properties have highest priority, environment variables have second priority, and the optional in-game UI fallback in `<Minecraft config>/openplayer/provider.properties` has third priority.
 
 - `OPENPLAYER_INTENT_PARSER_ENABLED=true` enables the optional runtime intent parser path.
 - `OPENPLAYER_INTENT_PROVIDER_ENDPOINT=...` sets the OpenAI-compatible endpoint.
-- `OPENPLAYER_INTENT_PROVIDER_API_KEY=...` sets the provider API key. Never put this in character files, screenshots, logs, docs, or release notes.
+- `OPENPLAYER_INTENT_PROVIDER_API_KEY=<secret>` sets the provider API key. Never put this in character files, screenshots, logs, docs, or release notes.
 - `OPENPLAYER_INTENT_PROVIDER_MODEL=...` sets the provider model.
 - `OPENPLAYER_AUTOMATION_BACKEND=vanilla` uses the default NPC-backed vanilla automation layer.
 - `OPENPLAYER_AUTOMATION_BACKEND=disabled` rejects automation commands.
 - `OPENPLAYER_AUTOMATION_BACKEND=baritone` tries the optional reflective Baritone command bridge when a compatible separate Baritone install is present.
 - `OPENPLAYER_AUTOMATION_ALLOW_WORLD_ACTIONS=true` or `openplayer.automation.allowWorldActions=true` enables local world, inventory, and violent actions. Keep this disabled for ordinary release QA except in throwaway worlds.
+
+Singleplayer hosts and players with sufficient server permission can save the provider fallback through the OpenPlayer controls UI. The fallback file uses `parserEnabled`, `endpoint`, `model`, and `apiKey`, and is separate from character files. Blank API key saves preserve the existing key unless the explicit clear-key option is selected. Do not package local `provider.properties` files or screenshots showing provider secrets.
 
 ## Known Limitations
 

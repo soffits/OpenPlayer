@@ -95,7 +95,7 @@ public final class ConversationLoopTest {
     }
 
     private static IntentParserRuntimeStatus status(boolean enabled) {
-        return new IntentParserRuntimeStatus(enabled, "test", true, true);
+        return new IntentParserRuntimeStatus(enabled, "test", "test", true, "test", true, "test");
     }
 
     private static void require(boolean condition, String message) {

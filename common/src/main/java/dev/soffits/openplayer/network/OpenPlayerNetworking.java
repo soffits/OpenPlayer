@@ -2,6 +2,7 @@ package dev.soffits.openplayer.network;
 
 import dev.architectury.networking.NetworkManager;
 import dev.soffits.openplayer.OpenPlayerConstants;
+import dev.soffits.openplayer.OpenPlayerIntentParserConfig;
 import dev.soffits.openplayer.OpenPlayerRuntimeStatus;
 import dev.soffits.openplayer.api.AiPlayerNpcCommand;
 import dev.soffits.openplayer.api.AiPlayerNpcService;
@@ -84,6 +85,11 @@ public final class OpenPlayerNetworking {
                 NetworkManager.Side.C2S,
                 OpenPlayerConstants.CHARACTER_IMPORT_REQUEST_PACKET_ID,
                 OpenPlayerNetworking::receiveCharacterImportRequest
+        );
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.C2S,
+                OpenPlayerConstants.PROVIDER_CONFIG_SAVE_REQUEST_PACKET_ID,
+                OpenPlayerNetworking::receiveProviderConfigSaveRequest
         );
     }
 
@@ -181,6 +187,25 @@ public final class OpenPlayerNetworking {
         });
     }
 
+    private static void receiveProviderConfigSaveRequest(FriendlyByteBuf buffer, NetworkManager.PacketContext context) {
+        boolean enabled = buffer.readBoolean();
+        String endpoint = buffer.readUtf(OpenPlayerIntentParserConfig.MAX_ENDPOINT_LENGTH);
+        String model = buffer.readUtf(OpenPlayerIntentParserConfig.MAX_MODEL_LENGTH);
+        String apiKey = buffer.readUtf(OpenPlayerIntentParserConfig.MAX_API_KEY_LENGTH);
+        boolean clearApiKey = buffer.readBoolean();
+        context.queue(() -> {
+            if (context.getPlayer() instanceof ServerPlayer player) {
+                handleProviderConfigSaveRequest(player, new OpenPlayerIntentParserConfig.ProviderConfigSaveRequest(
+                        enabled,
+                        endpoint,
+                        model,
+                        apiKey,
+                        clearApiKey
+                ));
+            }
+        });
+    }
+
     private static void handleSpawnRequest(ServerPlayer sender, String characterId) {
         NpcSpawnLocation location = new NpcSpawnLocation(
                 sender.serverLevel().dimension().location().toString(),
@@ -259,13 +284,36 @@ public final class OpenPlayerNetworking {
         sendCharacterListResponse(sender);
     }
 
+    private static void handleProviderConfigSaveRequest(ServerPlayer sender, OpenPlayerIntentParserConfig.ProviderConfigSaveRequest request) {
+        if (!canSaveProviderConfig(sender)) {
+            sendSafeStatusMessage(sender, "Provider config save rejected: permission required");
+            sendStatusResponse(sender);
+            return;
+        }
+        OpenPlayerIntentParserConfig.ProviderConfigSaveResult result = OpenPlayerIntentParserConfig.saveProviderConfig(request);
+        String statusMessage = result.message();
+        if (result.accepted()) {
+            try {
+                OpenPlayerRuntime.reloadIntentParser();
+            } catch (IllegalStateException exception) {
+                statusMessage = "Provider config saved; parser reload needs endpoint, model, and API key";
+            }
+        }
+        sendSafeStatusMessage(sender, statusMessage);
+        sendStatusResponse(sender);
+        sendCharacterListResponse(sender);
+    }
+
     private static void sendStatusResponse(ServerPlayer player) {
         OpenPlayerRuntimeStatus status = OpenPlayerRuntime.status();
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
         buffer.writeBoolean(status.intentParser().enabled());
         buffer.writeUtf(status.intentParser().endpointStatus(), 128);
+        buffer.writeUtf(status.intentParser().endpointSource(), 32);
         buffer.writeBoolean(status.intentParser().modelConfigured());
+        buffer.writeUtf(status.intentParser().modelSource(), 32);
         buffer.writeBoolean(status.intentParser().apiKeyPresent());
+        buffer.writeUtf(status.intentParser().apiKeySource(), 32);
         buffer.writeUtf(status.automationBackend().name(), 64);
         buffer.writeUtf(status.automationBackend().state().name(), 64);
         NetworkManager.sendToPlayer(player, OpenPlayerConstants.STATUS_RESPONSE_PACKET_ID, buffer);
@@ -309,6 +357,20 @@ public final class OpenPlayerNetworking {
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
         buffer.writeUtf(result.formatForClientStatus(), LocalCharacterFileOperationResult.NETWORK_RESPONSE_MAX_LENGTH);
         NetworkManager.sendToPlayer(player, OpenPlayerConstants.CHARACTER_FILE_OPERATION_RESPONSE_PACKET_ID, buffer);
+    }
+
+    private static void sendSafeStatusMessage(ServerPlayer player, String message) {
+        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+        buffer.writeUtf(message, 256);
+        NetworkManager.sendToPlayer(player, OpenPlayerConstants.CHARACTER_FILE_OPERATION_RESPONSE_PACKET_ID, buffer);
+    }
+
+    private static boolean canSaveProviderConfig(ServerPlayer player) {
+        return maySaveProviderConfig(player.server.isSingleplayerOwner(player.getGameProfile()), player.hasPermissions(2));
+    }
+
+    static boolean maySaveProviderConfig(boolean singleplayerOwner, boolean sufficientPermission) {
+        return singleplayerOwner || sufficientPermission;
     }
 
     static boolean isLegacyDefaultNetworkNpcSession(UUID ownerId, String ownerProfileName, AiPlayerNpcSession session) {

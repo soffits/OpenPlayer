@@ -6,6 +6,7 @@ import java.util.List;
 
 public final class OpenPlayerClientStatus {
     private static String parserStatus = "unknown";
+    private static boolean parserEnabled;
     private static String endpointStatus = "unknown";
     private static String modelStatus = "unknown";
     private static String apiKeyStatus = "unknown";
@@ -20,20 +21,28 @@ public final class OpenPlayerClientStatus {
     public static void update(
             boolean parserEnabled,
             String endpoint,
+            String endpointSource,
             boolean modelConfigured,
+            String modelSource,
             boolean apiKeyPresent,
+            String apiKeySource,
             String automationName,
             String automationState
     ) {
+        OpenPlayerClientStatus.parserEnabled = parserEnabled;
         parserStatus = parserEnabled ? "enabled" : "disabled";
-        endpointStatus = endpoint;
-        modelStatus = modelConfigured ? "configured" : "not configured";
-        apiKeyStatus = apiKeyPresent ? "present" : "not present";
+        endpointStatus = endpoint + " [" + endpointSource + "]";
+        modelStatus = (modelConfigured ? "configured" : "not configured") + " [" + modelSource + "]";
+        apiKeyStatus = (apiKeyPresent ? "present" : "not present") + " [" + apiKeySource + "]";
         automationStatus = automationName + " (" + automationState.toLowerCase(java.util.Locale.ROOT) + ")";
     }
 
     public static String parserStatus() {
         return parserStatus;
+    }
+
+    public static boolean parserEnabled() {
+        return parserEnabled;
     }
 
     public static String endpointStatus() {

@@ -32,7 +32,7 @@ import net.minecraft.world.level.Level;
 
 public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
     private final MinecraftServer server;
-    private final IntentParser intentParser;
+    private IntentParser intentParser;
     private final Map<NpcSessionId, RuntimeAiPlayerNpcSession> sessions = new LinkedHashMap<>();
     private final Map<RuntimeNpcIdentityKey, NpcSessionId> sessionIdsByIdentity = new LinkedHashMap<>();
 
@@ -44,6 +44,13 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
             throw new IllegalArgumentException("intentParser cannot be null");
         }
         this.server = server;
+        this.intentParser = intentParser;
+    }
+
+    public synchronized void updateIntentParser(IntentParser intentParser) {
+        if (intentParser == null) {
+            throw new IllegalArgumentException("intentParser cannot be null");
+        }
         this.intentParser = intentParser;
     }
 

@@ -2,6 +2,7 @@ package dev.soffits.openplayer.client;
 
 import dev.architectury.networking.NetworkManager;
 import dev.soffits.openplayer.OpenPlayerConstants;
+import dev.soffits.openplayer.OpenPlayerIntentParserConfig;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
 
@@ -78,6 +79,16 @@ public final class OpenPlayerRequestSender {
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
         buffer.writeUtf(fileName, 80);
         NetworkManager.sendToServer(OpenPlayerConstants.CHARACTER_IMPORT_REQUEST_PACKET_ID, buffer);
+    }
+
+    public static void sendProviderConfigSaveRequest(boolean enabled, String endpoint, String model, String apiKey, boolean clearApiKey) {
+        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+        buffer.writeBoolean(enabled);
+        buffer.writeUtf(endpoint == null ? "" : endpoint, OpenPlayerIntentParserConfig.MAX_ENDPOINT_LENGTH);
+        buffer.writeUtf(model == null ? "" : model, OpenPlayerIntentParserConfig.MAX_MODEL_LENGTH);
+        buffer.writeUtf(apiKey == null ? "" : apiKey, OpenPlayerIntentParserConfig.MAX_API_KEY_LENGTH);
+        buffer.writeBoolean(clearApiKey);
+        NetworkManager.sendToServer(OpenPlayerConstants.PROVIDER_CONFIG_SAVE_REQUEST_PACKET_ID, buffer);
     }
 
     private static FriendlyByteBuf emptyPayload() {

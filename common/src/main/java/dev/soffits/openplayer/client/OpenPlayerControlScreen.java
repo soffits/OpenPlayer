@@ -17,6 +17,9 @@ public final class OpenPlayerControlScreen extends Screen {
     private static final Component STOP_BUTTON = Component.literal("Stop");
     private static final Component COMMAND_BUTTON = Component.literal("Send Command Text");
     private static final Component COMMAND_INPUT = Component.literal("Command or natural language input");
+    private static final Component PROVIDER_ENDPOINT_INPUT = Component.literal("Provider endpoint URL");
+    private static final Component PROVIDER_MODEL_INPUT = Component.literal("Provider model");
+    private static final Component PROVIDER_API_KEY_INPUT = Component.literal("API key; blank preserves existing key");
     private static final int BUTTON_WIDTH = 142;
     private static final int BUTTON_HEIGHT = 20;
     private static final int BUTTON_SPACING = 6;
@@ -25,6 +28,12 @@ public final class OpenPlayerControlScreen extends Screen {
     private static final int MIN_VISIBLE_ASSIGNMENTS = 3;
     private static final int MAX_VISIBLE_ASSIGNMENTS = 6;
     private EditBox commandInput;
+    private EditBox providerEndpointInput;
+    private EditBox providerModelInput;
+    private EditBox providerApiKeyInput;
+    private boolean providerEnabled;
+    private boolean providerEnabledEdited;
+    private boolean clearApiKeyOnSave;
     private String selectedAssignmentId;
     private String renderedCharacterKey = "";
     private int pageIndex;
@@ -50,13 +59,22 @@ public final class OpenPlayerControlScreen extends Screen {
 
     private void rebuildControlWidgetsPreservingCommandText(boolean keepSelectedVisible) {
         String commandText = commandInput == null ? "" : commandInput.getValue();
+        String endpointText = providerEndpointInput == null ? "" : providerEndpointInput.getValue();
+        String modelText = providerModelInput == null ? "" : providerModelInput.getValue();
+        String apiKeyText = providerApiKeyInput == null ? "" : providerApiKeyInput.getValue();
         rebuildControlWidgets(keepSelectedVisible);
         commandInput.setValue(commandText);
+        providerEndpointInput.setValue(endpointText);
+        providerModelInput.setValue(modelText);
+        providerApiKeyInput.setValue(apiKeyText);
     }
 
     private void rebuildControlWidgets(boolean keepSelectedVisible) {
         this.clearWidgets();
         renderedCharacterKey = characterKey();
+        if (!providerEnabledEdited) {
+            providerEnabled = OpenPlayerClientStatus.parserEnabled();
+        }
         int margin = 12;
         int listWidth = Math.min(210, Math.max(124, this.width / 3));
         int rightLeft = margin + listWidth + 12;
@@ -141,6 +159,37 @@ public final class OpenPlayerControlScreen extends Screen {
         this.addRenderableWidget(Button.builder(Component.literal("Import File Name"), button -> sendImportFileName())
                 .bounds(controlsLeft, top + (BUTTON_HEIGHT + BUTTON_SPACING) * 8, controlWidth, BUTTON_HEIGHT)
                 .build());
+        int providerTop = top + (BUTTON_HEIGHT + BUTTON_SPACING) * 9 + 8;
+        this.addRenderableWidget(Button.builder(Component.literal(providerEnabled ? "Parser Enabled" : "Parser Disabled"), button -> {
+                    providerEnabled = !providerEnabled;
+                    providerEnabledEdited = true;
+                    rebuildControlWidgetsPreservingCommandText(true);
+                })
+                .bounds(controlsLeft, providerTop, controlWidth, BUTTON_HEIGHT)
+                .build());
+        int inputLeft = rightLeft + Math.max(0, (rightWidth - COMMAND_INPUT_WIDTH) / 2);
+        int inputWidth = Math.min(COMMAND_INPUT_WIDTH, rightWidth);
+        providerEndpointInput = new EditBox(this.font, inputLeft, providerTop + BUTTON_HEIGHT + 4, inputWidth, BUTTON_HEIGHT, PROVIDER_ENDPOINT_INPUT);
+        providerEndpointInput.setMaxLength(512);
+        providerEndpointInput.setHint(PROVIDER_ENDPOINT_INPUT);
+        this.addRenderableWidget(providerEndpointInput);
+        providerModelInput = new EditBox(this.font, inputLeft, providerTop + (BUTTON_HEIGHT + 4) * 2, inputWidth, BUTTON_HEIGHT, PROVIDER_MODEL_INPUT);
+        providerModelInput.setMaxLength(128);
+        providerModelInput.setHint(PROVIDER_MODEL_INPUT);
+        this.addRenderableWidget(providerModelInput);
+        providerApiKeyInput = new EditBox(this.font, inputLeft, providerTop + (BUTTON_HEIGHT + 4) * 3, inputWidth, BUTTON_HEIGHT, PROVIDER_API_KEY_INPUT);
+        providerApiKeyInput.setMaxLength(512);
+        providerApiKeyInput.setHint(PROVIDER_API_KEY_INPUT);
+        this.addRenderableWidget(providerApiKeyInput);
+        this.addRenderableWidget(Button.builder(Component.literal(clearApiKeyOnSave ? "Clear Key On Save" : "Preserve Blank Key"), button -> {
+                    clearApiKeyOnSave = !clearApiKeyOnSave;
+                    rebuildControlWidgetsPreservingCommandText(true);
+                })
+                .bounds(controlsLeft, providerTop + (BUTTON_HEIGHT + 4) * 4, controlWidth, BUTTON_HEIGHT)
+                .build());
+        this.addRenderableWidget(Button.builder(Component.literal("Save Provider Config"), button -> sendProviderConfig())
+                .bounds(controlsLeft, providerTop + (BUTTON_HEIGHT + 4) * 5, controlWidth, BUTTON_HEIGHT)
+                .build());
     }
 
     @Override
@@ -164,6 +213,7 @@ public final class OpenPlayerControlScreen extends Screen {
         graphics.drawString(this.font, "Model: " + OpenPlayerClientStatus.modelStatus(), statusLeft, statusTop + 36, 0xC0C0C0);
         graphics.drawString(this.font, "API key: " + OpenPlayerClientStatus.apiKeyStatus(), statusLeft, statusTop + 48, 0xC0C0C0);
         graphics.drawString(this.font, "Character files: " + fit(OpenPlayerClientStatus.characterFileOperationStatus(), rightWidth - 88), statusLeft, statusTop + 60, 0xC0C0C0);
+        graphics.drawString(this.font, "Provider config: blank API key preserves existing key unless clear is selected.", statusLeft, statusTop + 72, 0xA0A0A0);
         super.render(graphics, mouseX, mouseY, partialTick);
     }
 
@@ -277,6 +327,18 @@ public final class OpenPlayerControlScreen extends Screen {
         }
     }
 
+    private void sendProviderConfig() {
+        OpenPlayerRequestSender.sendProviderConfigSaveRequest(
+                providerEnabled,
+                providerEndpointInput.getValue(),
+                providerModelInput.getValue(),
+                providerApiKeyInput.getValue(),
+                clearApiKeyOnSave
+        );
+        providerApiKeyInput.setValue("");
+        clearApiKeyOnSave = false;
+    }
+
     private LocalCharacterListEntry selectedCharacter() {
         if (selectedAssignmentId == null) {
             return null;
@@ -293,6 +355,10 @@ public final class OpenPlayerControlScreen extends Screen {
     private String characterKey() {
         List<String> parts = new ArrayList<>();
         parts.add(OpenPlayerClientStatus.characterListStatus());
+        parts.add(OpenPlayerClientStatus.parserStatus());
+        parts.add(OpenPlayerClientStatus.endpointStatus());
+        parts.add(OpenPlayerClientStatus.modelStatus());
+        parts.add(OpenPlayerClientStatus.apiKeyStatus());
         for (LocalCharacterListEntry character : OpenPlayerClientStatus.characters()) {
             parts.add(character.assignmentId() + ":" + character.lifecycleStatus() + ":" + character.conversationStatus());
             parts.addAll(character.conversationEvents());

@@ -84,7 +84,9 @@ Selecting a row shows its display name, assignment id, character id, description
 
 Despawning a runtime NPC stops its active runtime commands before the entity is discarded. Owner disconnect and server stop continue to use the runtime cleanup hooks so companion tasks are stopped without persisting transient session ids as long-term identity.
 
-The bottom status lines remain safe and presence-only for automation backend, parser state, endpoint, model, API key status, and local character file operation results. Character list entries report conversation as `not configured`, `unavailable: parser disabled`, or `available`; spoken status lines are server-authored bounded strings such as deterministic greetings, sanitized player messages, accepted intent summaries, or safe failures. They never include provider credentials, absolute paths, or raw provider responses.
+The bottom status lines remain safe and presence-only for automation backend, parser state, endpoint host, model, API key status, source labels, and local character file operation results. Character list entries report conversation as `not configured`, `unavailable: parser disabled`, or `available`; spoken status lines are server-authored bounded strings such as deterministic greetings, sanitized player messages, accepted intent summaries, or safe failures. They never include provider credentials, absolute paths, or raw provider responses.
+
+Singleplayer hosts and players with sufficient server permission can save the OpenAI-compatible provider fallback from this screen. The provider form writes only `<Minecraft config>/openplayer/provider.properties`, never character files. Leaving the API key box blank preserves the existing persisted key; use the explicit clear-key toggle before saving to remove it.
 
 ## Dependencies
 
@@ -113,16 +115,18 @@ Raw command text submitted through the public NPC service is parsed by the runti
 
 For a selected local character, command text uses the per-character conversation loop only when that character has `conversationPrompt` or `conversationSettings` and the runtime parser is enabled. If the parser is disabled, selected-character conversation returns `Conversation unavailable: intent parser disabled`, does not contact any provider, and does not fall back to raw action execution. If the selected character has no conversation fields, command text keeps the existing direct command-text behavior.
 
-The conversation loop assembles a bounded prompt from the selected character's display text, `conversationPrompt`, `conversationSettings`, recent in-memory history, and the player's message. Those character fields are non-secret text only. Provider endpoint, model, and API key remain environment variables or JVM properties only and are never read from character files.
+The conversation loop assembles a bounded prompt from the selected character's display text, `conversationPrompt`, `conversationSettings`, recent in-memory history, and the player's message. Those character fields are non-secret text only. Provider endpoint, model, and API key are never read from character files.
 
 Provider output is untrusted. It must pass through the existing `IntentParser`, become a constrained `CommandIntent`, and then submit through the selected-character `CompanionLifecycleManager` path. Invalid, unavailable, oversized, or unparsable output is rejected without submitting an NPC action. Conversation history and spoken status are in-memory only and bounded; the UI shows sanitized player messages, deterministic greetings, accepted intent summaries, and safe failure/status messages rather than raw provider responses.
 
-Set safe JVM system properties or environment variables with these exact names to enable the OpenAI-compatible provider:
+Set safe JVM system properties or environment variables with these exact names to enable the OpenAI-compatible provider. JVM system properties have highest priority, environment variables have second priority, and the in-game UI fallback in `<Minecraft config>/openplayer/provider.properties` has third priority:
 
 - `OPENPLAYER_INTENT_PARSER_ENABLED=true`
 - `OPENPLAYER_INTENT_PROVIDER_ENDPOINT=https://example.invalid/v1/chat/completions`
-- `OPENPLAYER_INTENT_PROVIDER_API_KEY=...`
+- `OPENPLAYER_INTENT_PROVIDER_API_KEY=<secret>`
 - `OPENPLAYER_INTENT_PROVIDER_MODEL=...`
+
+The UI fallback uses `parserEnabled`, `endpoint`, `model`, and `apiKey` fields in `provider.properties`. Server status may reveal the endpoint host, whether a model is configured, whether an API key is present, and which source supplied each value, but it never sends the API key value back to clients.
 
 Remaining conversation gaps: there is no TTS, speech recognition, audio dependency, chat bubble, raw model response display, persisted conversation memory, per-character model or provider override, per-character API key support, rate-limit scheduler beyond provider failure rejection, or broader action permission profile beyond the automation backend safety gates.
 
