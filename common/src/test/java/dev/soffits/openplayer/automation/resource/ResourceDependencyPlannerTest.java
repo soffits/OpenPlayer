@@ -28,6 +28,7 @@ public final class ResourceDependencyPlannerTest {
         ingredientAlternativeConflictBacktracksToValidAssignment();
         unsupportedTargetRejectsDeterministically();
         knownTableRecipeRejectsWithRequiresTableReason();
+        knownTableRecipePlansWithTableCapability();
         knownRemainderRecipeRejectsWithUnsupportedReason();
         missingMaterialsReportRequiredItemAndCount();
         plannerDoesNotMutateSourceInventory();
@@ -157,6 +158,30 @@ public final class ResourceDependencyPlannerTest {
         require(RecipePlanEntry.REQUIRES_CRAFTING_TABLE.equals(result.reason()),
                 "table recipe must report requires crafting table");
         require(result.steps().isEmpty(), "table recipe must not produce synthetic steps");
+    }
+
+    private static void knownTableRecipePlansWithTableCapability() {
+        NonNullList<ItemStack> inventory = emptyInventory();
+        inventory.set(0, new ItemStack(Items.COBBLESTONE, 64));
+        Map<Item, List<RecipePlanEntry>> recipes = new HashMap<>();
+        recipes.put(Items.FURNACE, List.of(recipe(Items.FURNACE, 1,
+                List.of(
+                        List.of(Items.COBBLESTONE), List.of(Items.COBBLESTONE), List.of(Items.COBBLESTONE),
+                        List.of(Items.COBBLESTONE), List.of(Items.COBBLESTONE), List.of(Items.COBBLESTONE),
+                        List.of(Items.COBBLESTONE), List.of(Items.COBBLESTONE)
+                ), 3, 3, true, "")));
+
+        ResourcePlanResult result = new ResourceDependencyPlanner(output -> recipes.getOrDefault(output, List.of()))
+                .plan(GetItemRequest.of(Items.FURNACE, 1), inventory, ResourcePlanningCapabilities.NEARBY_CRAFTING_TABLE);
+
+        require(result.status() == ResourcePlanResult.Status.CRAFTING_STEPS,
+                "table recipe must plan when table capability is present");
+        require(result.steps().size() == 1, "table recipe must produce one step");
+        require(result.steps().get(0).requiresCraftingTable(), "table recipe step must preserve table metadata");
+        require(!NpcInventoryTransfer.applyCraftingSteps(inventory, result.steps()),
+                "table metadata must prevent accidental inventory-only execution");
+        require(NpcInventoryTransfer.applyCraftingSteps(inventory, result.steps(), true),
+                "table metadata must allow execution with table capability");
     }
 
     private static void knownRemainderRecipeRejectsWithUnsupportedReason() {

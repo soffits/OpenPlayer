@@ -19,6 +19,7 @@ public final class RuntimeIntentValidatorTest {
         validatesWorldActionGate();
         validatesBlankOnlyInstructions();
         validatesPhaseFiveInventoryInstructions();
+        validatesContainerTransferInstructions();
         validatesGetItemInstruction();
         validatesCoordinateInstructions();
         validatesRadiusInstructions();
@@ -119,6 +120,31 @@ public final class RuntimeIntentValidatorTest {
                 "World actions are disabled for this OpenPlayer character");
     }
 
+    private static void validatesContainerTransferInstructions() {
+        require(RuntimeIntentValidator.validate(intent(IntentKind.DEPOSIT_ITEM, ""), true).isAccepted(),
+                "DEPOSIT_ITEM should accept blank deposit-all syntax");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.DEPOSIT_ITEM, "minecraft:bread 3"), true).isAccepted(),
+                "DEPOSIT_ITEM should accept exact item count syntax");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.DEPOSIT_ITEM, "minecraft:bread 0"), true),
+                "DEPOSIT_ITEM requires blank or instruction: <item_id> [count]");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.STASH_ITEM, ""), true).isAccepted(),
+                "STASH_ITEM should accept blank deposit-all syntax");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.STASH_ITEM, "minecraft:bread 3"), true).isAccepted(),
+                "STASH_ITEM should accept exact item count syntax");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.STASH_ITEM, "minecraft:bread owner"), true),
+                "STASH_ITEM requires blank or instruction: <item_id> [count]");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.WITHDRAW_ITEM, "minecraft:bread"), true).isAccepted(),
+                "WITHDRAW_ITEM should accept exact item id with default count");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.WITHDRAW_ITEM, "minecraft:bread 3"), true).isAccepted(),
+                "WITHDRAW_ITEM should accept exact item count syntax");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.WITHDRAW_ITEM, ""), true),
+                "WITHDRAW_ITEM requires instruction: <item_id> [count]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.WITHDRAW_ITEM, "minecraft:bread 0"), true),
+                "WITHDRAW_ITEM requires instruction: <item_id> [count]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.WITHDRAW_ITEM, "minecraft:bread 1"), false),
+                "World actions are disabled for this OpenPlayer character");
+    }
+
     private static void validatesCoordinateInstructions() {
         IntentKind[] coordinateKinds = {
                 IntentKind.MOVE,
@@ -211,9 +237,9 @@ public final class RuntimeIntentValidatorTest {
             case EQUIP_ITEM -> "minecraft:iron_sword";
             case GIVE_ITEM -> "minecraft:bread 1 owner";
             case GET_ITEM -> "minecraft:stick 1";
-            case DEPOSIT_ITEM,
-                    STASH_ITEM,
-                    COLLECT_FOOD,
+            case DEPOSIT_ITEM, STASH_ITEM -> "";
+            case WITHDRAW_ITEM -> "minecraft:bread 1";
+            case COLLECT_FOOD,
                     FARM_NEARBY,
                     FISH,
                     ATTACK_TARGET,
@@ -245,8 +271,6 @@ public final class RuntimeIntentValidatorTest {
 
     private static EnumSet<IntentKind> plannedGatedKinds() {
         return EnumSet.of(
-                IntentKind.DEPOSIT_ITEM,
-                IntentKind.STASH_ITEM,
                 IntentKind.COLLECT_FOOD,
                 IntentKind.FARM_NEARBY,
                 IntentKind.FISH,

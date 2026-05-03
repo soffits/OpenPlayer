@@ -45,6 +45,11 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
     private static final String PROFILE_NAME_TAG = "OpenPlayerProfileName";
     private static final String PROFILE_SKIN_TEXTURE_TAG = "OpenPlayerProfileSkinTexture";
     private static final String ALLOW_WORLD_ACTIONS_TAG = "OpenPlayerAllowWorldActions";
+    private static final String STASH_MEMORY_TAG = "OpenPlayerStashMemory";
+    private static final String STASH_DIMENSION_TAG = "Dimension";
+    private static final String STASH_X_TAG = "X";
+    private static final String STASH_Y_TAG = "Y";
+    private static final String STASH_Z_TAG = "Z";
     private static final int INVENTORY_SIZE = 36;
     private static final int FIRST_NORMAL_INVENTORY_SLOT = 0;
     private static final int HOTBAR_SLOT_COUNT = NpcHotbarSelection.HOTBAR_SIZE;
@@ -83,6 +88,7 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
     private String persistedProfileSkinTexture;
     private boolean allowWorldActions;
     private int selectedMainHandSlot = DEFAULT_SELECTED_MAIN_HAND_SLOT;
+    private StashMemory stashMemory;
 
     public OpenPlayerNpcEntity(EntityType<? extends OpenPlayerNpcEntity> entityType, Level level) {
         super(entityType, level);
@@ -287,6 +293,37 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
         return NpcInventoryTransfer.applyCraftingSteps(internalInventory, steps);
     }
 
+    public boolean applyInventoryCraftingSteps(List<ResourcePlanStep> steps, boolean allowCraftingTableSteps) {
+        return NpcInventoryTransfer.applyCraftingSteps(internalInventory, steps, allowCraftingTableSteps);
+    }
+
+    public boolean depositAllNormalInventoryTo(List<ItemStack> containerStacks) {
+        return NpcInventoryTransfer.depositAllNormalInventory(internalInventory, containerStacks);
+    }
+
+    public boolean depositInventoryItemTo(List<ItemStack> containerStacks, Item item, int count) {
+        return NpcInventoryTransfer.depositExactItem(internalInventory, containerStacks, item, count);
+    }
+
+    public boolean withdrawInventoryItemFrom(List<ItemStack> containerStacks, Item item, int count) {
+        return NpcInventoryTransfer.withdrawExactItem(internalInventory, containerStacks, item, count);
+    }
+
+    public void rememberStash(String dimensionId, BlockPos blockPos) {
+        if (dimensionId == null || dimensionId.isBlank() || blockPos == null) {
+            stashMemory = null;
+            return;
+        }
+        stashMemory = new StashMemory(dimensionId.trim(), blockPos.immutable());
+    }
+
+    public BlockPos rememberedStashPos(String dimensionId) {
+        if (dimensionId == null || stashMemory == null || !stashMemory.dimensionId().equals(dimensionId)) {
+            return null;
+        }
+        return stashMemory.blockPos();
+    }
+
     public boolean equipMatchingItem(Item item) {
         if (item == null) {
             return false;
@@ -477,6 +514,14 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
             }
             compoundTag.putBoolean(ALLOW_WORLD_ACTIONS_TAG, allowWorldActions);
         }
+        if (stashMemory != null) {
+            CompoundTag stashTag = new CompoundTag();
+            stashTag.putString(STASH_DIMENSION_TAG, stashMemory.dimensionId());
+            stashTag.putInt(STASH_X_TAG, stashMemory.blockPos().getX());
+            stashTag.putInt(STASH_Y_TAG, stashMemory.blockPos().getY());
+            stashTag.putInt(STASH_Z_TAG, stashMemory.blockPos().getZ());
+            compoundTag.put(STASH_MEMORY_TAG, stashTag);
+        }
     }
 
     @Override
@@ -514,6 +559,7 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
         }
         allowWorldActions = compoundTag.contains(ALLOW_WORLD_ACTIONS_TAG, Tag.TAG_BYTE)
                 && compoundTag.getBoolean(ALLOW_WORLD_ACTIONS_TAG);
+        stashMemory = readStashMemory(compoundTag);
         syncPersistedIdentity();
         if (persistedOwnerId != null) {
             runtimeCommandExecutor.setOwnerId(new NpcOwnerId(persistedOwnerId));
@@ -554,6 +600,30 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
         for (int slot = 0; slot < internalInventory.size() && slot < snapshot.size(); slot++) {
             internalInventory.set(slot, snapshot.get(slot).copy());
         }
+    }
+
+    private static StashMemory readStashMemory(CompoundTag compoundTag) {
+        if (!compoundTag.contains(STASH_MEMORY_TAG, Tag.TAG_COMPOUND)) {
+            return null;
+        }
+        CompoundTag stashTag = compoundTag.getCompound(STASH_MEMORY_TAG);
+        if (!stashTag.contains(STASH_DIMENSION_TAG, Tag.TAG_STRING)
+                || !stashTag.contains(STASH_X_TAG, Tag.TAG_INT)
+                || !stashTag.contains(STASH_Y_TAG, Tag.TAG_INT)
+                || !stashTag.contains(STASH_Z_TAG, Tag.TAG_INT)) {
+            return null;
+        }
+        String dimensionId = stashTag.getString(STASH_DIMENSION_TAG).trim();
+        if (dimensionId.isEmpty()) {
+            return null;
+        }
+        return new StashMemory(
+                dimensionId,
+                new BlockPos(stashTag.getInt(STASH_X_TAG), stashTag.getInt(STASH_Y_TAG), stashTag.getInt(STASH_Z_TAG))
+        );
+    }
+
+    private record StashMemory(String dimensionId, BlockPos blockPos) {
     }
 
     private static void restorePlayerMainInventory(ServerPlayer player, List<ItemStack> snapshot) {

@@ -25,8 +25,16 @@ public final class ResourceDependencyPlanner {
     }
 
     public ResourcePlanResult plan(GetItemRequest request, List<ItemStack> inventoryStacks) {
+        return plan(request, inventoryStacks, ResourcePlanningCapabilities.INVENTORY_ONLY);
+    }
+
+    public ResourcePlanResult plan(GetItemRequest request, List<ItemStack> inventoryStacks,
+                                   ResourcePlanningCapabilities capabilities) {
         if (request == null) {
             throw new IllegalArgumentException("request cannot be null");
+        }
+        if (capabilities == null) {
+            throw new IllegalArgumentException("capabilities cannot be null");
         }
         List<ItemStack> simulatedInventory = NpcInventoryTransfer.copyStacks(inventoryStacks);
         if (countItem(simulatedInventory, request.item()) >= request.count()) {
@@ -37,14 +45,15 @@ public final class ResourceDependencyPlanner {
             return ResourcePlanResult.unsupportedTarget(UNSUPPORTED_NO_RECIPE_PATH);
         }
         String targetBlockedReason = firstBlockedReason(targetRecipes);
-        if (!hasExecutableRecipe(targetRecipes)) {
+        if (!hasExecutableRecipe(targetRecipes, capabilities)) {
             return ResourcePlanResult.unsupportedTarget(targetBlockedReason);
         }
 
         List<ResourcePlanStep> steps = new ArrayList<>();
         Map<Item, Integer> missingItems = new HashMap<>();
         PlanningFailure failure = new PlanningFailure();
-        if (!ensureItem(simulatedInventory, request.item(), request.count(), steps, missingItems, failure, new HashSet<>(), 0)) {
+        if (!ensureItem(simulatedInventory, request.item(), request.count(), steps, missingItems, failure,
+                capabilities, new HashSet<>(), 0)) {
             if (missingItems.isEmpty()) {
                 return ResourcePlanResult.unsupportedTarget(failure.reasonOr(targetBlockedReason));
             }
@@ -57,7 +66,8 @@ public final class ResourceDependencyPlanner {
     }
 
     private boolean ensureItem(List<ItemStack> inventory, Item item, int count, List<ResourcePlanStep> steps,
-                               Map<Item, Integer> missingItems, PlanningFailure failure, Set<Item> visiting, int depth) {
+                               Map<Item, Integer> missingItems, PlanningFailure failure,
+                               ResourcePlanningCapabilities capabilities, Set<Item> visiting, int depth) {
         if (countItem(inventory, item) >= count) {
             return true;
         }
@@ -73,21 +83,22 @@ public final class ResourceDependencyPlanner {
             return false;
         }
         for (RecipePlanEntry recipe : recipes) {
-            if (!recipe.executable()) {
+            if (!recipe.executable(capabilities)) {
                 failure.add(recipe.blockedReason());
             }
         }
 
         for (RecipePlanEntry recipe : recipes) {
-            if (!recipe.executable()) {
+            if (!recipe.executable(capabilities)) {
                 continue;
             }
             List<ItemStack> snapshot = NpcInventoryTransfer.copyStacks(inventory);
             int stepStart = steps.size();
             Map<Item, Integer> recipeMissing = new HashMap<>();
             int neededCrafts = craftsNeeded(inventory, item, count, recipe.result().getCount());
-            Map<Item, Integer> ingredients = selectedIngredients(inventory, recipe, neededCrafts, visiting, depth);
-            if (!ingredients.isEmpty() && ensureIngredients(inventory, ingredients, steps, recipeMissing, failure, visiting, depth + 1)) {
+            Map<Item, Integer> ingredients = selectedIngredients(inventory, recipe, neededCrafts, capabilities, visiting, depth);
+            if (!ingredients.isEmpty() && ensureIngredients(inventory, ingredients, steps, recipeMissing, failure,
+                    capabilities, visiting, depth + 1)) {
                 ResourcePlanStep step = stepFor(recipe, ingredients, neededCrafts);
                 if (applyStep(inventory, step)) {
                     steps.add(step);
@@ -105,10 +116,11 @@ public final class ResourceDependencyPlanner {
     }
 
     private boolean ensureIngredients(List<ItemStack> inventory, Map<Item, Integer> ingredients,
-                                      List<ResourcePlanStep> steps, Map<Item, Integer> missingItems, PlanningFailure failure,
-                                      Set<Item> visiting, int depth) {
+                                       List<ResourcePlanStep> steps, Map<Item, Integer> missingItems, PlanningFailure failure,
+                                       ResourcePlanningCapabilities capabilities, Set<Item> visiting, int depth) {
         for (Map.Entry<Item, Integer> ingredient : ingredients.entrySet()) {
-            if (!ensureItem(inventory, ingredient.getKey(), ingredient.getValue(), steps, missingItems, failure, visiting, depth)) {
+            if (!ensureItem(inventory, ingredient.getKey(), ingredient.getValue(), steps, missingItems, failure,
+                    capabilities, visiting, depth)) {
                 return false;
             }
         }
@@ -116,7 +128,7 @@ public final class ResourceDependencyPlanner {
     }
 
     private Map<Item, Integer> selectedIngredients(List<ItemStack> inventory, RecipePlanEntry recipe, int crafts,
-                                                   Set<Item> visiting, int depth) {
+                                                    ResourcePlanningCapabilities capabilities, Set<Item> visiting, int depth) {
         Map<Item, Integer> selectedCounts = new HashMap<>();
         List<List<Item>> expandedIngredients = new ArrayList<>(recipe.ingredients().size() * crafts);
         for (int craft = 0; craft < crafts; craft++) {
@@ -125,20 +137,21 @@ public final class ResourceDependencyPlanner {
         expandedIngredients.sort(Comparator
                 .comparingInt((List<Item> choices) -> choices.size())
                 .thenComparing(choices -> itemId(choices.get(0))));
-        if (!assignIngredients(inventory, expandedIngredients, 0, selectedCounts, visiting, depth)) {
+        if (!assignIngredients(inventory, expandedIngredients, 0, selectedCounts, capabilities, visiting, depth)) {
             return Map.of();
         }
         return sortedByItemId(selectedCounts);
     }
 
     private boolean assignIngredients(List<ItemStack> inventory, List<List<Item>> expandedIngredients, int index,
-                                      Map<Item, Integer> selectedCounts, Set<Item> visiting, int depth) {
+                                       Map<Item, Integer> selectedCounts, ResourcePlanningCapabilities capabilities,
+                                       Set<Item> visiting, int depth) {
         if (index >= expandedIngredients.size()) {
             return true;
         }
-        for (Item choice : orderedChoices(inventory, expandedIngredients.get(index), selectedCounts, visiting, depth)) {
+        for (Item choice : orderedChoices(inventory, expandedIngredients.get(index), selectedCounts, capabilities, visiting, depth)) {
             selectedCounts.merge(choice, 1, Integer::sum);
-            if (assignIngredients(inventory, expandedIngredients, index + 1, selectedCounts, visiting, depth)) {
+            if (assignIngredients(inventory, expandedIngredients, index + 1, selectedCounts, capabilities, visiting, depth)) {
                 return true;
             }
             decrement(selectedCounts, choice);
@@ -147,7 +160,7 @@ public final class ResourceDependencyPlanner {
     }
 
     private List<Item> orderedChoices(List<ItemStack> inventory, List<Item> choices, Map<Item, Integer> selectedCounts,
-                                      Set<Item> visiting, int depth) {
+                                      ResourcePlanningCapabilities capabilities, Set<Item> visiting, int depth) {
         List<Item> ordered = new ArrayList<>();
         for (Item choice : choices) {
             if (countItem(inventory, choice) > selectedCounts.getOrDefault(choice, 0)) {
@@ -155,7 +168,8 @@ public final class ResourceDependencyPlanner {
             }
         }
         for (Item choice : choices) {
-            if (!ordered.contains(choice) && canCraftChoice(inventory, choice, selectedCounts.getOrDefault(choice, 0) + 1, visiting, depth)) {
+            if (!ordered.contains(choice) && canCraftChoice(inventory, choice, selectedCounts.getOrDefault(choice, 0) + 1,
+                    capabilities, visiting, depth)) {
                 ordered.add(choice);
             }
         }
@@ -167,14 +181,16 @@ public final class ResourceDependencyPlanner {
         return ordered;
     }
 
-    private boolean canCraftChoice(List<ItemStack> inventory, Item item, int count, Set<Item> visiting, int depth) {
+    private boolean canCraftChoice(List<ItemStack> inventory, Item item, int count,
+                                   ResourcePlanningCapabilities capabilities, Set<Item> visiting, int depth) {
         if (recipeIndex.recipesFor(item).isEmpty() || visiting.contains(item)) {
             return false;
         }
         List<ItemStack> inventoryCopy = NpcInventoryTransfer.copyStacks(inventory);
         List<ResourcePlanStep> ignoredSteps = new ArrayList<>();
         Map<Item, Integer> ignoredMissing = new HashMap<>();
-        return ensureItem(inventoryCopy, item, count, ignoredSteps, ignoredMissing, new PlanningFailure(), new HashSet<>(visiting), depth + 1);
+        return ensureItem(inventoryCopy, item, count, ignoredSteps, ignoredMissing, new PlanningFailure(),
+                capabilities, new HashSet<>(visiting), depth + 1);
     }
 
     private static void decrement(Map<Item, Integer> counts, Item item) {
@@ -186,9 +202,9 @@ public final class ResourceDependencyPlanner {
         }
     }
 
-    private static boolean hasExecutableRecipe(List<RecipePlanEntry> recipes) {
+    private static boolean hasExecutableRecipe(List<RecipePlanEntry> recipes, ResourcePlanningCapabilities capabilities) {
         for (RecipePlanEntry recipe : recipes) {
-            if (recipe.executable()) {
+            if (recipe.executable(capabilities)) {
                 return true;
             }
         }
@@ -217,7 +233,7 @@ public final class ResourceDependencyPlanner {
         }
         ItemStack result = recipe.result().copy();
         result.setCount(recipe.result().getCount() * crafts);
-        return new ResourcePlanStep(ingredientStacks, result);
+        return new ResourcePlanStep(ingredientStacks, result, recipe.requiresCraftingTable());
     }
 
     private static boolean applyStep(List<ItemStack> inventory, ResourcePlanStep step) {

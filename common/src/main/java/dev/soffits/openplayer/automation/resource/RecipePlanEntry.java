@@ -64,7 +64,14 @@ public record RecipePlanEntry(
     }
 
     public boolean executable() {
-        return !requiresCraftingTable && unsupportedReason.isEmpty();
+        return executable(ResourcePlanningCapabilities.INVENTORY_ONLY);
+    }
+
+    public boolean executable(ResourcePlanningCapabilities capabilities) {
+        if (!unsupportedReason.isEmpty()) {
+            return false;
+        }
+        return !requiresCraftingTable || capabilities.allowCraftingTableRecipes();
     }
 
     public String blockedReason() {

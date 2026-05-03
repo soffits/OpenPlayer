@@ -503,6 +503,7 @@ public final class OpenPlayerNetworking {
                     GIVE_ITEM,
                     DEPOSIT_ITEM,
                     STASH_ITEM,
+                    WITHDRAW_ITEM,
                     GET_ITEM,
                     COLLECT_FOOD,
                     FARM_NEARBY,

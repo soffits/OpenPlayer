@@ -4,7 +4,11 @@ import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.world.item.ItemStack;
 
-public record ResourcePlanStep(List<ItemStack> ingredients, ItemStack result) {
+public record ResourcePlanStep(List<ItemStack> ingredients, ItemStack result, boolean requiresCraftingTable) {
+    public ResourcePlanStep(List<ItemStack> ingredients, ItemStack result) {
+        this(ingredients, result, false);
+    }
+
     public ResourcePlanStep {
         if (ingredients == null || ingredients.isEmpty()) {
             throw new IllegalArgumentException("ingredients cannot be empty");

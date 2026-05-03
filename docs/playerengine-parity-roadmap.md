@@ -156,7 +156,7 @@ OpenPlayer already has:
 
 ### Phase 6: Resource and Crafting Planner MVP
 
-**Status:** Phase 6B implements a bounded `GET_ITEM <item_id> [count]` one-stack local inventory/crafting MVP backed by the server `RecipeManager`, so supported simple datapack and mod crafting recipes present at execution time can be planned through the common recipe-query seam. It validates exact namespaced item ids, rejects over-stack requests, supports safe non-special exact vanilla 2x2-compatible shaped/shapeless recipes with finite expanded item alternatives including tag-backed ingredients, rejects NBT-bearing ingredients/results and crafting remainders, reports unsupported recipe reasons or deterministic missing materials, and keeps world gathering, physical crafting-table interaction, containers/stash, smelting, and visible resource execution deferred.
+**Status:** Phase 6B implemented a bounded `GET_ITEM <item_id> [count]` one-stack local inventory/crafting MVP backed by the server `RecipeManager`, so supported simple datapack and mod crafting recipes present at execution time can be planned through the common recipe-query seam. It validates exact namespaced item ids, rejects over-stack requests, supports safe non-special exact vanilla shaped/shapeless recipes with finite expanded item alternatives including tag-backed ingredients, rejects NBT-bearing ingredients/results and crafting remainders, reports unsupported recipe reasons or deterministic missing materials, and keeps world gathering, physical workstation menus, smelting, and visible resource execution deferred.
 
 **Objective:** Implement clean-room `get <item> <count>` for simple local/offline tasks.
 
@@ -164,7 +164,7 @@ OpenPlayer already has:
 
 - Dynamic server `RecipeManager` crafting recipe query for supported simple datapack and mod recipes.
 - Inventory crafting for 2x2-compatible safe shaped/shapeless recipes.
-- Crafting table crafting deferred to the workstation/container phase.
+- Crafting table recipe planning and atomic inventory mutation when a loaded nearby crafting table is available as a capability gate.
 - Material dependency planner.
 - Visible/reachable resource gathering is deferred until the bounded world-search and navigation phase.
 - Tool selection and progress status.
@@ -179,16 +179,18 @@ OpenPlayer already has:
 
 ### Phase 7: Container, Stash, and Smelting
 
+**Status:** Phase 7A implements bounded server-side `DEPOSIT_ITEM`, `STASH_ITEM`, and `WITHDRAW_ITEM` for exact item/count and deposit-all normal inventory transfers against loaded nearby vanilla chests and barrels only. Transfers are gated by `allowWorldActions`, ignore armor/offhand, use deterministic nearest-container ordering, and apply all-or-nothing snapshots for NPC inventory plus container slots. `STASH_ITEM` stores one local dimension/block-position stash memory on the NPC and `WITHDRAW_ITEM` prefers that valid stash before falling back nearby. `GET_ITEM` can now plan table-required crafting steps only when a loaded nearby crafting table is present; steps preserve table metadata so inventory-only execution rejects them. Smelting remains deferred and unavailable.
+
 **Objective:** Add chest/barrel/furnace/smoker/crafting-table interactions.
 
 **Capabilities:**
 
-- Find nearby safe containers.
-- Deposit all or item/count.
-- Withdraw item/count.
-- Remember local stash locations per assignment.
-- Smelt in furnace/smoker with fuel checks.
-- Use crafting table for recipe planner.
+- Find nearby safe loaded vanilla chest/barrel containers.
+- Deposit all normal inventory or exact item/count atomically.
+- Withdraw exact item/count atomically.
+- Remember one local stash location on the NPC entity.
+- Smelt in furnace/smoker with fuel checks remains deferred.
+- Use nearby loaded crafting table as a recipe planner capability gate.
 
 **Acceptance Criteria:**
 

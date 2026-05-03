@@ -5,6 +5,7 @@ import java.util.List;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.NonNullList;
 import net.minecraft.server.Bootstrap;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
@@ -25,6 +26,16 @@ public final class NpcInventoryTransferTest {
         craftingMutationConsumesIngredientsAndInsertsResult();
         craftingMutationRejectsMissingIngredientsAtomically();
         craftingMutationRejectsFullOutputInventoryAtomically();
+        craftingTableStepRejectsInventoryOnlyExecution();
+        exactDepositMovesRequestedCountAtomically();
+        exactDepositPreservesStackData();
+        exactDepositRejectsIncompatibleTaggedMergeAtomically();
+        exactDepositFullContainerRollsBack();
+        exactWithdrawMovesRequestedCountAtomically();
+        exactWithdrawPreservesStackData();
+        exactWithdrawFullNpcInventoryRollsBack();
+        depositAllRequiresEveryNormalStackToFit();
+        containerTransferIgnoresArmorAndOffhand();
     }
 
     private static void matchesExactItemsOnly() {
@@ -165,8 +176,165 @@ public final class NpcInventoryTransferTest {
         require(stacksEqual(stacks, snapshot), "full output inventory must leave inventory unchanged");
     }
 
+    private static void craftingTableStepRejectsInventoryOnlyExecution() {
+        NonNullList<ItemStack> stacks = emptyInventory();
+        stacks.set(0, new ItemStack(Items.OAK_PLANKS, 4));
+        ResourcePlanStep step = new ResourcePlanStep(
+                List.of(new ItemStack(Items.OAK_PLANKS, 4)),
+                new ItemStack(Items.CRAFTING_TABLE),
+                true
+        );
+        List<ItemStack> snapshot = NpcInventoryTransfer.copyStacks(stacks);
+
+        require(!NpcInventoryTransfer.applyCraftingSteps(stacks, List.of(step)),
+                "table-required step must reject in inventory-only mode");
+        require(stacksEqual(stacks, snapshot), "inventory-only table step rejection must be atomic");
+        require(NpcInventoryTransfer.applyCraftingSteps(stacks, List.of(step), true),
+                "table-required step must apply when table capability is present");
+    }
+
+    private static void exactDepositMovesRequestedCountAtomically() {
+        NonNullList<ItemStack> npc = emptyInventory();
+        NonNullList<ItemStack> container = NonNullList.withSize(9, ItemStack.EMPTY);
+        npc.set(0, new ItemStack(Items.BREAD, 2));
+        npc.set(10, new ItemStack(Items.BREAD, 3));
+
+        require(NpcInventoryTransfer.depositExactItem(npc, container, Items.BREAD, 4),
+                "exact deposit must move requested count");
+        require(NpcInventoryTransfer.countItem(npc, Items.BREAD, 0, 31) == 1, "NPC must keep bread remainder");
+        require(NpcInventoryTransfer.countItem(container, Items.BREAD, 0, container.size()) == 4,
+                "container must receive exact bread count");
+    }
+
+    private static void exactDepositFullContainerRollsBack() {
+        NonNullList<ItemStack> npc = emptyInventory();
+        NonNullList<ItemStack> container = NonNullList.withSize(1, new ItemStack(Items.STONE, 64));
+        npc.set(0, new ItemStack(Items.BREAD, 2));
+        List<ItemStack> npcSnapshot = NpcInventoryTransfer.copyStacks(npc);
+        List<ItemStack> containerSnapshot = NpcInventoryTransfer.copyStacks(container);
+
+        require(!NpcInventoryTransfer.depositExactItem(npc, container, Items.BREAD, 2),
+                "full container exact deposit must reject");
+        require(stacksEqual(npc, npcSnapshot), "failed exact deposit must restore NPC inventory");
+        require(stacksEqual(container, containerSnapshot), "failed exact deposit must restore container");
+    }
+
+    private static void exactDepositPreservesStackData() {
+        NonNullList<ItemStack> npc = emptyInventory();
+        NonNullList<ItemStack> container = NonNullList.withSize(9, ItemStack.EMPTY);
+        ItemStack taggedBread = taggedStack(Items.BREAD, 3, "phase7a-source");
+        npc.set(0, taggedBread.copy());
+
+        require(NpcInventoryTransfer.depositExactItem(npc, container, Items.BREAD, 2),
+                "exact deposit must move tagged stacks");
+        require(container.get(0).getCount() == 2, "container must receive requested tagged count");
+        require(ItemStack.isSameItemSameTags(container.get(0), taggedBread),
+                "exact deposit must preserve source stack tag data");
+        require(npc.get(0).getCount() == 1, "NPC must keep tagged remainder");
+        require(ItemStack.isSameItemSameTags(npc.get(0), taggedBread),
+                "exact deposit remainder must preserve source stack tag data");
+    }
+
+    private static void exactDepositRejectsIncompatibleTaggedMergeAtomically() {
+        NonNullList<ItemStack> npc = emptyInventory();
+        NonNullList<ItemStack> container = NonNullList.withSize(1, new ItemStack(Items.BREAD, 63));
+        npc.set(0, taggedStack(Items.BREAD, 2, "phase7a-incompatible"));
+        List<ItemStack> npcSnapshot = NpcInventoryTransfer.copyStacks(npc);
+        List<ItemStack> containerSnapshot = NpcInventoryTransfer.copyStacks(container);
+
+        require(!NpcInventoryTransfer.depositExactItem(npc, container, Items.BREAD, 2),
+                "exact deposit must reject incompatible tagged merge when no compatible capacity exists");
+        require(stacksEqual(npc, npcSnapshot), "incompatible exact deposit must restore NPC inventory");
+        require(stacksEqual(container, containerSnapshot), "incompatible exact deposit must restore container");
+    }
+
+    private static void exactWithdrawMovesRequestedCountAtomically() {
+        NonNullList<ItemStack> npc = emptyInventory();
+        NonNullList<ItemStack> container = NonNullList.withSize(9, ItemStack.EMPTY);
+        container.set(0, new ItemStack(Items.BREAD, 5));
+
+        require(NpcInventoryTransfer.withdrawExactItem(npc, container, Items.BREAD, 3),
+                "exact withdraw must move requested count");
+        require(NpcInventoryTransfer.countItem(npc, Items.BREAD, 0, 31) == 3, "NPC must receive bread");
+        require(NpcInventoryTransfer.countItem(container, Items.BREAD, 0, container.size()) == 2,
+                "container must keep bread remainder");
+    }
+
+    private static void exactWithdrawFullNpcInventoryRollsBack() {
+        NonNullList<ItemStack> npc = emptyInventory();
+        NonNullList<ItemStack> container = NonNullList.withSize(9, ItemStack.EMPTY);
+        for (int slot = 0; slot < 31; slot++) {
+            npc.set(slot, new ItemStack(Items.STONE, 64));
+        }
+        container.set(0, new ItemStack(Items.BREAD, 1));
+        List<ItemStack> npcSnapshot = NpcInventoryTransfer.copyStacks(npc);
+        List<ItemStack> containerSnapshot = NpcInventoryTransfer.copyStacks(container);
+
+        require(!NpcInventoryTransfer.withdrawExactItem(npc, container, Items.BREAD, 1),
+                "full NPC inventory withdraw must reject");
+        require(stacksEqual(npc, npcSnapshot), "failed withdraw must restore NPC inventory");
+        require(stacksEqual(container, containerSnapshot), "failed withdraw must restore container");
+    }
+
+    private static void exactWithdrawPreservesStackData() {
+        NonNullList<ItemStack> npc = emptyInventory();
+        NonNullList<ItemStack> container = NonNullList.withSize(9, ItemStack.EMPTY);
+        ItemStack taggedBread = taggedStack(Items.BREAD, 4, "phase7a-container");
+        container.set(0, taggedBread.copy());
+
+        require(NpcInventoryTransfer.withdrawExactItem(npc, container, Items.BREAD, 3),
+                "exact withdraw must move tagged stacks");
+        require(npc.get(0).getCount() == 3, "NPC must receive requested tagged count");
+        require(ItemStack.isSameItemSameTags(npc.get(0), taggedBread),
+                "exact withdraw must preserve source stack tag data");
+        require(container.get(0).getCount() == 1, "container must keep tagged remainder");
+        require(ItemStack.isSameItemSameTags(container.get(0), taggedBread),
+                "exact withdraw remainder must preserve source stack tag data");
+    }
+
+    private static void depositAllRequiresEveryNormalStackToFit() {
+        NonNullList<ItemStack> npc = emptyInventory();
+        NonNullList<ItemStack> container = NonNullList.withSize(1, ItemStack.EMPTY);
+        npc.set(0, new ItemStack(Items.BREAD, 1));
+        npc.set(1, new ItemStack(Items.APPLE, 1));
+        List<ItemStack> npcSnapshot = NpcInventoryTransfer.copyStacks(npc);
+        List<ItemStack> containerSnapshot = NpcInventoryTransfer.copyStacks(container);
+
+        require(!NpcInventoryTransfer.depositAllNormalInventory(npc, container),
+                "deposit-all must reject unless every normal stack can fit");
+        require(stacksEqual(npc, npcSnapshot), "failed deposit-all must restore NPC inventory");
+        require(stacksEqual(container, containerSnapshot), "failed deposit-all must restore container");
+
+        NonNullList<ItemStack> largerContainer = NonNullList.withSize(2, ItemStack.EMPTY);
+        require(NpcInventoryTransfer.depositAllNormalInventory(npc, largerContainer),
+                "deposit-all must succeed when every normal stack fits");
+        require(NpcInventoryTransfer.countItem(npc, Items.BREAD, 0, 31) == 0, "successful deposit-all clears bread");
+        require(NpcInventoryTransfer.countItem(largerContainer, Items.APPLE, 0, largerContainer.size()) == 1,
+                "successful deposit-all moves apple");
+    }
+
+    private static void containerTransferIgnoresArmorAndOffhand() {
+        NonNullList<ItemStack> npc = emptyInventory();
+        NonNullList<ItemStack> container = NonNullList.withSize(4, ItemStack.EMPTY);
+        npc.set(31, new ItemStack(Items.DIAMOND_BOOTS));
+        npc.set(35, new ItemStack(Items.SHIELD));
+
+        require(NpcInventoryTransfer.depositAllNormalInventory(npc, container),
+                "deposit-all with only equipment should be a no-op success");
+        require(npc.get(31).is(Items.DIAMOND_BOOTS), "armor slot must not be deposited");
+        require(npc.get(35).is(Items.SHIELD), "offhand slot must not be deposited");
+        require(NpcInventoryTransfer.countItem(container, Items.DIAMOND_BOOTS, 0, container.size()) == 0,
+                "container must not receive armor slot contents");
+    }
+
     private static NonNullList<ItemStack> emptyInventory() {
         return NonNullList.withSize(NpcInventoryTransfer.INVENTORY_SIZE, ItemStack.EMPTY);
+    }
+
+    private static ItemStack taggedStack(Item item, int count, String marker) {
+        ItemStack stack = new ItemStack(item, count);
+        stack.getOrCreateTag().putString("openplayer_test_marker", marker);
+        return stack;
     }
 
     private static boolean stacksEqual(List<ItemStack> left, List<ItemStack> right) {

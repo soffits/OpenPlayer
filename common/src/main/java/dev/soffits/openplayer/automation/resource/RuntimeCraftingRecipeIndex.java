@@ -45,7 +45,7 @@ public final class RuntimeCraftingRecipeIndex implements CraftingRecipeIndex {
         }
         for (List<RecipePlanEntry> recipes : recipesByOutput.values()) {
             recipes.sort(Comparator
-                    .comparing(RecipePlanEntry::executable).reversed()
+                    .comparing((RecipePlanEntry recipe) -> recipe.executable()).reversed()
                     .thenComparingInt((RecipePlanEntry recipe) -> recipe.ingredients().size())
                     .thenComparing(RecipePlanEntry::recipeId)
                     .thenComparing(recipe -> itemId(recipe.result().getItem()))

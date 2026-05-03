@@ -5,6 +5,7 @@ import dev.soffits.openplayer.automation.AutomationInstructionParser.Coordinate;
 import dev.soffits.openplayer.automation.InventoryActionInstructionParser.ParsedItemInstruction;
 import dev.soffits.openplayer.automation.resource.GetItemRequest;
 import dev.soffits.openplayer.automation.resource.ResourceDependencyPlanner;
+import dev.soffits.openplayer.automation.resource.ResourcePlanningCapabilities;
 import dev.soffits.openplayer.automation.resource.ResourcePlanResult;
 import dev.soffits.openplayer.automation.resource.RuntimeCraftingRecipeIndex;
 import dev.soffits.openplayer.debug.OpenPlayerDebugEvents;
@@ -27,10 +28,14 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.Container;
 import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
@@ -66,6 +71,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private static final double BLOCK_TASK_MAX_DISTANCE = 24.0D;
         private static final double BLOCK_INTERACTION_DISTANCE = 4.0D;
         private static final double OWNER_ITEM_TRANSFER_DISTANCE = 4.0D;
+        private static final int CONTAINER_SCAN_RADIUS = 4;
+        private static final int CRAFTING_TABLE_SCAN_RADIUS = 4;
         private static final double ATTACK_DEFAULT_RADIUS = 12.0D;
         private static final double ATTACK_MAX_RADIUS = 24.0D;
         private static final double ATTACK_REACH_DISTANCE = 2.5D;
@@ -296,6 +303,56 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 entity.swingMainHandAction();
                 return accepted("GIVE_ITEM accepted");
             }
+            if (kind == IntentKind.DEPOSIT_ITEM || kind == IntentKind.STASH_ITEM) {
+                ParsedItemInstruction parsed = null;
+                if (!AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
+                    parsed = InventoryActionInstructionParser.parseItemCountOrNull(intent.instruction(), false);
+                    if (parsed == null) {
+                        return rejected(kind.name() + " requires blank or instruction: <item_id> [count]");
+                    }
+                }
+                SafeContainerTarget target = kind == IntentKind.STASH_ITEM ? preferredStashContainer() : nearestSafeContainer();
+                if (target == null) {
+                    return rejected(kind.name() + " requires a loaded nearby vanilla chest or barrel");
+                }
+                if (!canAcquireInteractionCooldown()) {
+                    return rejected(interactionCooldownMessage());
+                }
+                boolean transferred = acquireInteractionCooldown() && depositToContainer(target.container(), parsed);
+                if (!transferred) {
+                    rollbackInteractionCooldown();
+                    return rejected(kind.name() + " requires all requested normal inventory items to fit in the container");
+                }
+                if (kind == IntentKind.STASH_ITEM) {
+                    entity.rememberStash(dimensionId(serverLevel()), target.blockPos());
+                }
+                target.container().setChanged();
+                entity.swingMainHandAction();
+                return accepted(kind.name() + " accepted: container " + target.blockPos().toShortString());
+            }
+            if (kind == IntentKind.WITHDRAW_ITEM) {
+                ParsedItemInstruction parsed = InventoryActionInstructionParser.parseItemCountOrNull(intent.instruction(), false);
+                if (parsed == null) {
+                    return rejected("WITHDRAW_ITEM requires instruction: <item_id> [count]");
+                }
+                SafeContainerTarget target = preferredStashContainer();
+                if (target == null) {
+                    return rejected("WITHDRAW_ITEM requires a loaded nearby vanilla chest or barrel");
+                }
+                if (!canAcquireInteractionCooldown()) {
+                    return rejected(interactionCooldownMessage());
+                }
+                boolean transferred = acquireInteractionCooldown()
+                        && withdrawFromContainer(target.container(), parsed.item(), parsed.count());
+                if (!transferred) {
+                    rollbackInteractionCooldown();
+                    return rejected("WITHDRAW_ITEM requires exact item count in the container and NPC inventory capacity");
+                }
+                target.container().setChanged();
+                entity.swingMainHandAction();
+                return accepted("WITHDRAW_ITEM accepted: " + parsed.itemId() + " x" + parsed.count()
+                        + " from container " + target.blockPos().toShortString());
+            }
             if (kind == IntentKind.GET_ITEM) {
                 ParsedItemInstruction parsed = InventoryActionInstructionParser.parseItemCountOrNull(intent.instruction(), false);
                 if (parsed == null) {
@@ -313,21 +370,25 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 ResourceDependencyPlanner resourceDependencyPlanner = new ResourceDependencyPlanner(
                         RuntimeCraftingRecipeIndex.fromServer(server)
                 );
+                boolean hasCraftingTable = hasNearbyCraftingTable();
                 ResourcePlanResult plan = resourceDependencyPlanner.plan(
                         new GetItemRequest(parsed.itemId(), parsed.item(), parsed.count()),
-                        entity.inventorySnapshot()
+                        entity.inventorySnapshot(),
+                        hasCraftingTable
+                                ? ResourcePlanningCapabilities.NEARBY_CRAFTING_TABLE
+                                : ResourcePlanningCapabilities.INVENTORY_ONLY
                 );
                 if (plan.status() == ResourcePlanResult.Status.CRAFTING_STEPS) {
                     if (!canAcquireInteractionCooldown()) {
                         return rejected(interactionCooldownMessage());
                     }
-                    if (!acquireInteractionCooldown() || !entity.applyInventoryCraftingSteps(plan.steps())) {
+                    if (!acquireInteractionCooldown() || !entity.applyInventoryCraftingSteps(plan.steps(), hasCraftingTable)) {
                         rollbackInteractionCooldown();
                         return rejected("GET_ITEM atomic apply failure: inventory crafting could not be applied");
                     }
                     entity.swingMainHandAction();
                     return accepted("GET_ITEM accepted: crafted " + parsed.itemId() + " x" + parsed.count()
-                            + " using " + plan.steps().size() + " inventory crafting step(s)");
+                            + " using " + plan.steps().size() + " bounded crafting step(s)");
                 }
                 if (plan.status() == ResourcePlanResult.Status.ALREADY_AVAILABLE) {
                     return accepted("GET_ITEM accepted: " + parsed.itemId() + " x" + parsed.count()
@@ -794,6 +855,124 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
         }
 
+        private boolean depositToContainer(Container container, ParsedItemInstruction parsed) {
+            List<ItemStack> containerStacks = containerSnapshot(container);
+            boolean transferred;
+            if (parsed == null) {
+                transferred = entity.depositAllNormalInventoryTo(containerStacks);
+            } else {
+                transferred = entity.depositInventoryItemTo(containerStacks, parsed.item(), parsed.count());
+            }
+            if (!transferred) {
+                return false;
+            }
+            restoreContainer(container, containerStacks);
+            return true;
+        }
+
+        private boolean withdrawFromContainer(Container container, Item item, int count) {
+            List<ItemStack> containerStacks = containerSnapshot(container);
+            if (!entity.withdrawInventoryItemFrom(containerStacks, item, count)) {
+                return false;
+            }
+            restoreContainer(container, containerStacks);
+            return true;
+        }
+
+        private SafeContainerTarget preferredStashContainer() {
+            ServerLevel serverLevel = serverLevel();
+            if (serverLevel == null) {
+                return null;
+            }
+            BlockPos remembered = entity.rememberedStashPos(dimensionId(serverLevel));
+            SafeContainerTarget rememberedTarget = safeContainerAt(serverLevel, remembered);
+            if (rememberedTarget != null) {
+                return rememberedTarget;
+            }
+            return nearestSafeContainer();
+        }
+
+        private SafeContainerTarget nearestSafeContainer() {
+            ServerLevel serverLevel = serverLevel();
+            if (serverLevel == null) {
+                return null;
+            }
+            BlockPos center = entity.blockPosition();
+            List<SafeContainerTarget> targets = new ArrayList<>();
+            for (BlockPos candidate : BlockPos.betweenClosed(
+                    center.offset(-CONTAINER_SCAN_RADIUS, -CONTAINER_SCAN_RADIUS, -CONTAINER_SCAN_RADIUS),
+                    center.offset(CONTAINER_SCAN_RADIUS, CONTAINER_SCAN_RADIUS, CONTAINER_SCAN_RADIUS)
+            )) {
+                SafeContainerTarget target = safeContainerAt(serverLevel, candidate);
+                if (target != null) {
+                    targets.add(target);
+                }
+            }
+            return targets.stream()
+                    .min(Comparator
+                            .comparingDouble((SafeContainerTarget target) -> target.blockPos().distSqr(center))
+                            .thenComparingInt(target -> target.blockPos().getX())
+                            .thenComparingInt(target -> target.blockPos().getY())
+                            .thenComparingInt(target -> target.blockPos().getZ()))
+                    .orElse(null);
+        }
+
+        private SafeContainerTarget safeContainerAt(ServerLevel serverLevel, BlockPos blockPos) {
+            if (serverLevel == null || blockPos == null || !serverLevel.hasChunkAt(blockPos)) {
+                return null;
+            }
+            if (entity.distanceToSqr(Vec3.atCenterOf(blockPos)) > CONTAINER_SCAN_RADIUS * CONTAINER_SCAN_RADIUS) {
+                return null;
+            }
+            BlockState blockState = serverLevel.getBlockState(blockPos);
+            if (!blockState.is(Blocks.CHEST) && !blockState.is(Blocks.BARREL)) {
+                return null;
+            }
+            BlockEntity blockEntity = serverLevel.getBlockEntity(blockPos);
+            if (!(blockEntity instanceof Container container)) {
+                return null;
+            }
+            return new SafeContainerTarget(blockPos.immutable(), container);
+        }
+
+        private boolean hasNearbyCraftingTable() {
+            ServerLevel serverLevel = serverLevel();
+            if (serverLevel == null) {
+                return false;
+            }
+            BlockPos center = entity.blockPosition();
+            for (BlockPos candidate : BlockPos.betweenClosed(
+                    center.offset(-CRAFTING_TABLE_SCAN_RADIUS, -CRAFTING_TABLE_SCAN_RADIUS, -CRAFTING_TABLE_SCAN_RADIUS),
+                    center.offset(CRAFTING_TABLE_SCAN_RADIUS, CRAFTING_TABLE_SCAN_RADIUS, CRAFTING_TABLE_SCAN_RADIUS)
+            )) {
+                if (serverLevel.hasChunkAt(candidate)
+                        && entity.distanceToSqr(Vec3.atCenterOf(candidate))
+                        <= CRAFTING_TABLE_SCAN_RADIUS * CRAFTING_TABLE_SCAN_RADIUS
+                        && serverLevel.getBlockState(candidate).is(Blocks.CRAFTING_TABLE)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static List<ItemStack> containerSnapshot(Container container) {
+            List<ItemStack> stacks = new ArrayList<>(container.getContainerSize());
+            for (int slot = 0; slot < container.getContainerSize(); slot++) {
+                stacks.add(container.getItem(slot).copy());
+            }
+            return stacks;
+        }
+
+        private static void restoreContainer(Container container, List<ItemStack> snapshot) {
+            for (int slot = 0; slot < container.getContainerSize() && slot < snapshot.size(); slot++) {
+                container.setItem(slot, snapshot.get(slot).copy());
+            }
+        }
+
+        private static String dimensionId(ServerLevel serverLevel) {
+            return serverLevel.dimension().location().toString();
+        }
+
         private String statusSummary() {
             return snapshot().summary();
         }
@@ -939,6 +1118,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return "";
             }
             return ": " + plan.reason();
+        }
+
+        private record SafeContainerTarget(BlockPos blockPos, Container container) {
         }
 
         private static final class QueuedCommand {

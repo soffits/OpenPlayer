@@ -22,6 +22,7 @@ public final class AutomationWorldActionPolicyTest {
                 IntentKind.GIVE_ITEM,
                 IntentKind.DEPOSIT_ITEM,
                 IntentKind.STASH_ITEM,
+                IntentKind.WITHDRAW_ITEM,
                 IntentKind.GET_ITEM,
                 IntentKind.COLLECT_FOOD,
                 IntentKind.FARM_NEARBY,

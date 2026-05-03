@@ -68,8 +68,8 @@ public final class OpenAiCompatibleIntentProviderTest {
 
     private static void systemPromptIncludesPlannedUnsupportedInstruction() {
         String prompt = OpenAiCompatibleIntentProvider.systemPrompt();
-        require(prompt.contains("Planned PlayerEngine-style intents may be recognized but are unsupported until implemented"),
-                "system prompt must include deterministic planned unsupported instruction");
+        require(prompt.contains("Smelting and online/commercial-service features are unavailable"),
+                "system prompt must include deterministic unavailable feature instruction");
         require(prompt.contains("use UNAVAILABLE when the vanilla runtime cannot perform the requested action"),
                 "system prompt must tell providers not to overclaim unsupported planned actions");
     }
@@ -79,25 +79,35 @@ public final class OpenAiCompatibleIntentProviderTest {
         require(prompt.contains("INVENTORY_QUERY"), "system prompt must document inventory query syntax");
         require(prompt.contains("For EQUIP_ITEM use exact item id <item_id>"),
                 "system prompt must document exact equip item ids");
-        require(prompt.contains("DROP_ITEM use blank to drop selected hotbar stack or exact one-stack MVP item id syntax <item_id> [count]"),
+        require(prompt.contains("DROP_ITEM use blank to drop selected hotbar stack or exact one-stack item id syntax <item_id> [count]"),
                 "system prompt must document drop item count syntax");
-        require(prompt.contains("GIVE_ITEM use exact owner-only one-stack MVP syntax <item_id> [count]"),
+        require(prompt.contains("GIVE_ITEM use exact owner-only one-stack syntax <item_id> [count]"),
                 "system prompt must document owner-only give syntax");
+        require(prompt.contains("For DEPOSIT_ITEM and STASH_ITEM, instruction must be blank to move all normal inventory or exact item id syntax <item_id> [count]"),
+                "system prompt must document deposit and stash syntax");
+        require(prompt.contains("WITHDRAW_ITEM, instruction must contain only exact item id syntax <item_id> [count]"),
+                "system prompt must document withdraw syntax");
+        require(prompt.contains("loaded nearby vanilla chests or barrels"),
+                "system prompt must document bounded container limits");
+        require(prompt.contains("STASH_ITEM remembers a successful local stash container"),
+                "system prompt must document stash memory");
         require(prompt.contains("For kind GET_ITEM, instruction must contain only exact item id syntax <item_id> [count]"),
                 "system prompt must document get item instruction syntax without the kind token");
         require(prompt.contains("do not include the literal GET_ITEM in instruction"),
                 "system prompt must prevent providers from putting GET_ITEM in the instruction field");
         require(!prompt.contains("GET_ITEM <item_id> [count]"),
                 "system prompt must not include misleading GET_ITEM instruction syntax");
-        require(prompt.contains("bounded one-stack local inventory/crafting MVP"),
+        require(prompt.contains("bounded one-stack local inventory/crafting"),
                 "system prompt must document bounded GET_ITEM scope");
-        require(prompt.contains("server recipe data for supported simple inventory recipes"),
+        require(prompt.contains("server recipe data for supported simple recipes"),
                 "system prompt must document dynamic GET_ITEM recipe data");
         require(prompt.contains("simple datapack/mod recipes visible to the server"),
                 "system prompt must document simple datapack/mod recipe visibility");
         require(prompt.contains("finite tag-backed ingredient alternatives"),
                 "system prompt must document finite tag-backed alternative support");
-        require(prompt.contains("Crafting-table-only, special/custom, NBT-bearing ingredient/result, and crafting remainder recipes may be rejected with a reason"),
+        require(prompt.contains("Crafting-table recipes require a loaded nearby crafting table capability gate"),
+                "system prompt must document crafting table capability gate");
+        require(prompt.contains("special/custom, NBT-bearing ingredient/result, and crafting remainder recipes may be rejected with a reason"),
                 "system prompt must document GET_ITEM recipe support limits");
         require(!prompt.contains("NBT/tag"),
                 "system prompt must not group finite tag-backed ingredients with unsupported NBT");

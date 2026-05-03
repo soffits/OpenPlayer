@@ -93,17 +93,75 @@ public final class NpcInventoryTransfer {
     }
 
     public static boolean applyCraftingSteps(List<ItemStack> stacks, List<ResourcePlanStep> steps) {
+        return applyCraftingSteps(stacks, steps, false);
+    }
+
+    public static boolean applyCraftingSteps(List<ItemStack> stacks, List<ResourcePlanStep> steps,
+                                             boolean allowCraftingTableSteps) {
         if (steps == null || steps.isEmpty()) {
             return false;
         }
         List<ItemStack> snapshot = copyStacks(stacks);
         for (ResourcePlanStep step : steps) {
+            if (step != null && step.requiresCraftingTable() && !allowCraftingTableSteps) {
+                return false;
+            }
             if (!applyCraftingStep(snapshot, step)) {
                 return false;
             }
         }
         for (int slot = 0; slot < stacks.size() && slot < snapshot.size(); slot++) {
             stacks.set(slot, snapshot.get(slot).copy());
+        }
+        return true;
+    }
+
+    public static boolean depositAllNormalInventory(List<ItemStack> npcStacks, List<ItemStack> containerStacks) {
+        List<ItemStack> npcSnapshot = copyStacks(npcStacks);
+        List<ItemStack> containerSnapshot = copyStacks(containerStacks);
+        for (int slot = FIRST_NORMAL_SLOT; slot < boundedEnd(npcStacks, FIRST_EQUIPMENT_SLOT); slot++) {
+            ItemStack stack = npcStacks.get(slot);
+            if (stack.isEmpty()) {
+                continue;
+            }
+            if (!insertAll(containerStacks, stack.copy(), 0, containerStacks.size())) {
+                restoreStacks(npcStacks, npcSnapshot);
+                restoreStacks(containerStacks, containerSnapshot);
+                return false;
+            }
+            npcStacks.set(slot, ItemStack.EMPTY);
+        }
+        return true;
+    }
+
+    public static boolean depositExactItem(List<ItemStack> npcStacks, List<ItemStack> containerStacks, Item item, int count) {
+        requireItem(item);
+        if (count < 1) {
+            return false;
+        }
+        List<ItemStack> npcSnapshot = copyStacks(npcStacks);
+        List<ItemStack> containerSnapshot = copyStacks(containerStacks);
+        List<ItemStack> removedStacks = removeExactStacks(npcStacks, item, count, FIRST_NORMAL_SLOT, FIRST_EQUIPMENT_SLOT);
+        if (removedStacks.isEmpty() || !insertAll(containerStacks, removedStacks, 0, containerStacks.size())) {
+            restoreStacks(npcStacks, npcSnapshot);
+            restoreStacks(containerStacks, containerSnapshot);
+            return false;
+        }
+        return true;
+    }
+
+    public static boolean withdrawExactItem(List<ItemStack> npcStacks, List<ItemStack> containerStacks, Item item, int count) {
+        requireItem(item);
+        if (count < 1) {
+            return false;
+        }
+        List<ItemStack> npcSnapshot = copyStacks(npcStacks);
+        List<ItemStack> containerSnapshot = copyStacks(containerStacks);
+        List<ItemStack> removedStacks = removeExactStacks(containerStacks, item, count, 0, containerStacks.size());
+        if (removedStacks.isEmpty() || !insertAll(npcStacks, removedStacks, FIRST_NORMAL_SLOT, FIRST_EQUIPMENT_SLOT)) {
+            restoreStacks(npcStacks, npcSnapshot);
+            restoreStacks(containerStacks, containerSnapshot);
+            return false;
         }
         return true;
     }
@@ -196,6 +254,43 @@ public final class NpcInventoryTransfer {
         for (int slot = 0; slot < stacks.size() && slot < snapshot.size(); slot++) {
             stacks.set(slot, snapshot.get(slot).copy());
         }
+    }
+
+    private static List<ItemStack> removeExactStacks(List<ItemStack> stacks, Item item, int count,
+                                                     int startSlotInclusive, int endSlotExclusive) {
+        requireItem(item);
+        if (count < 1 || countItem(stacks, item, startSlotInclusive, endSlotExclusive) < count) {
+            return List.of();
+        }
+        List<ItemStack> removedStacks = new ArrayList<>();
+        int remaining = count;
+        for (int slot = boundedStart(startSlotInclusive); slot < boundedEnd(stacks, endSlotExclusive) && remaining > 0; slot++) {
+            ItemStack stack = stacks.get(slot);
+            if (!stack.isEmpty() && stack.is(item)) {
+                int moved = Math.min(remaining, stack.getCount());
+                ItemStack removed = stack.copy();
+                removed.setCount(moved);
+                removedStacks.add(removed);
+                stack.shrink(moved);
+                remaining -= moved;
+                if (stack.isEmpty()) {
+                    stacks.set(slot, ItemStack.EMPTY);
+                }
+            }
+        }
+        return remaining == 0 ? removedStacks : List.of();
+    }
+
+    private static boolean insertAll(List<ItemStack> stacks, List<ItemStack> insertedStacks,
+                                     int startSlotInclusive, int endSlotExclusive) {
+        List<ItemStack> snapshot = copyStacks(stacks);
+        for (ItemStack insertedStack : insertedStacks) {
+            if (!insertAll(snapshot, insertedStack, startSlotInclusive, endSlotExclusive)) {
+                return false;
+            }
+        }
+        restoreStacks(stacks, snapshot);
+        return true;
     }
 
     private static boolean canFit(List<ItemStack> stacks, ItemStack stack,
