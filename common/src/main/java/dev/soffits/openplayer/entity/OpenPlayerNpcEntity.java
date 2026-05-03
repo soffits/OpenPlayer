@@ -3,6 +3,7 @@ package dev.soffits.openplayer.entity;
 import dev.soffits.openplayer.api.AiPlayerNpcCommand;
 import dev.soffits.openplayer.api.CommandSubmissionResult;
 import dev.soffits.openplayer.api.NpcOwnerId;
+import dev.soffits.openplayer.automation.resource.ResourcePlanStep;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -264,6 +265,26 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
 
     public String inventorySummary() {
         return NpcInventorySummary.format(internalInventory, selectedMainHandSlot);
+    }
+
+    public List<ItemStack> inventorySnapshot() {
+        return NpcInventoryTransfer.copyStacks(internalInventory);
+    }
+
+    public int normalInventoryCount(Item item) {
+        if (item == null) {
+            return 0;
+        }
+        return NpcInventoryTransfer.countItem(
+                internalInventory,
+                item,
+                NpcInventoryTransfer.FIRST_NORMAL_SLOT,
+                NpcInventoryTransfer.FIRST_EQUIPMENT_SLOT
+        );
+    }
+
+    public boolean applyInventoryCraftingSteps(List<ResourcePlanStep> steps) {
+        return NpcInventoryTransfer.applyCraftingSteps(internalInventory, steps);
     }
 
     public boolean equipMatchingItem(Item item) {

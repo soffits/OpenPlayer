@@ -3,6 +3,10 @@ package dev.soffits.openplayer.automation;
 import dev.soffits.openplayer.api.NpcOwnerId;
 import dev.soffits.openplayer.automation.AutomationInstructionParser.Coordinate;
 import dev.soffits.openplayer.automation.InventoryActionInstructionParser.ParsedItemInstruction;
+import dev.soffits.openplayer.automation.resource.GetItemRequest;
+import dev.soffits.openplayer.automation.resource.ResourceDependencyPlanner;
+import dev.soffits.openplayer.automation.resource.ResourcePlanResult;
+import dev.soffits.openplayer.automation.resource.RuntimeCraftingRecipeIndex;
 import dev.soffits.openplayer.debug.OpenPlayerDebugEvents;
 import dev.soffits.openplayer.debug.OpenPlayerRawTrace;
 import dev.soffits.openplayer.entity.OpenPlayerNpcEntity;
@@ -15,6 +19,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Queue;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.LivingEntity;
@@ -289,6 +295,50 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 }
                 entity.swingMainHandAction();
                 return accepted("GIVE_ITEM accepted");
+            }
+            if (kind == IntentKind.GET_ITEM) {
+                ParsedItemInstruction parsed = InventoryActionInstructionParser.parseItemCountOrNull(intent.instruction(), false);
+                if (parsed == null) {
+                    return rejected("GET_ITEM requires instruction: <item_id> [count]");
+                }
+                int currentCount = entity.normalInventoryCount(parsed.item());
+                if (currentCount >= parsed.count()) {
+                    return accepted("GET_ITEM accepted: " + parsed.itemId() + " x" + parsed.count()
+                            + " already available in NPC inventory");
+                }
+                MinecraftServer server = entity.getServer();
+                if (server == null) {
+                    return rejected("GET_ITEM requires server recipe data for inventory crafting");
+                }
+                ResourceDependencyPlanner resourceDependencyPlanner = new ResourceDependencyPlanner(
+                        RuntimeCraftingRecipeIndex.fromServer(server)
+                );
+                ResourcePlanResult plan = resourceDependencyPlanner.plan(
+                        new GetItemRequest(parsed.itemId(), parsed.item(), parsed.count()),
+                        entity.inventorySnapshot()
+                );
+                if (plan.status() == ResourcePlanResult.Status.CRAFTING_STEPS) {
+                    if (!canAcquireInteractionCooldown()) {
+                        return rejected(interactionCooldownMessage());
+                    }
+                    if (!acquireInteractionCooldown() || !entity.applyInventoryCraftingSteps(plan.steps())) {
+                        rollbackInteractionCooldown();
+                        return rejected("GET_ITEM atomic apply failure: inventory crafting could not be applied");
+                    }
+                    entity.swingMainHandAction();
+                    return accepted("GET_ITEM accepted: crafted " + parsed.itemId() + " x" + parsed.count()
+                            + " using " + plan.steps().size() + " inventory crafting step(s)");
+                }
+                if (plan.status() == ResourcePlanResult.Status.ALREADY_AVAILABLE) {
+                    return accepted("GET_ITEM accepted: " + parsed.itemId() + " x" + parsed.count()
+                            + " already available in NPC inventory");
+                }
+                if (plan.status() == ResourcePlanResult.Status.MISSING_MATERIALS) {
+                    return rejected("GET_ITEM missing materials for " + parsed.itemId() + " x" + parsed.count()
+                            + ": " + missingItemsSummary(plan));
+                }
+                return rejected("GET_ITEM unsupported for bounded inventory crafting: " + parsed.itemId()
+                        + reasonSuffix(plan));
             }
             if (kind == IntentKind.BREAK_BLOCK) {
                 Coordinate coordinate = AutomationInstructionParser.parseCoordinateOrNull(intent.instruction());
@@ -871,6 +921,24 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
         private String interactionCooldownMessage() {
             return "Interaction cooldown active for " + interactionCooldown.remainingTicks() + " ticks";
+        }
+
+        private static String missingItemsSummary(ResourcePlanResult plan) {
+            if (plan.missingItems().isEmpty()) {
+                return "none";
+            }
+            List<String> entries = new ArrayList<>(plan.missingItems().size());
+            for (ItemStack stack : plan.missingItems()) {
+                entries.add(BuiltInRegistries.ITEM.getKey(stack.getItem()) + " x" + stack.getCount());
+            }
+            return String.join(", ", entries);
+        }
+
+        private static String reasonSuffix(ResourcePlanResult plan) {
+            if (plan.reason().isEmpty()) {
+                return "";
+            }
+            return ": " + plan.reason();
         }
 
         private static final class QueuedCommand {

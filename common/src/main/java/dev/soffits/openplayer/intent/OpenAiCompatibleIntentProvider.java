@@ -120,7 +120,8 @@ public final class OpenAiCompatibleIntentProvider implements IntentProvider {
             + "Return JSON only, with no secrets, credentials, markdown, or explanatory text. "
             + "Use x y z for MOVE, LOOK, PATROL, BREAK_BLOCK, and PLACE_BLOCK; blank instruction for COLLECT_ITEMS, EQUIP_BEST_ITEM, EQUIP_ARMOR, USE_SELECTED_ITEM, SWAP_TO_OFFHAND, REPORT_STATUS, and INVENTORY_QUERY; blank or radius number for ATTACK_NEAREST and GUARD_OWNER. "
             + "For EQUIP_ITEM use exact item id <item_id>; for DROP_ITEM use blank to drop selected hotbar stack or exact one-stack MVP item id syntax <item_id> [count]; for GIVE_ITEM use exact owner-only one-stack MVP syntax <item_id> [count] or <item_id> [count] owner. "
-            + "Planned PlayerEngine-style intents may be recognized but are unsupported until implemented; use UNAVAILABLE when the vanilla runtime cannot perform the requested action. "
+            + "For kind GET_ITEM, instruction must contain only exact item id syntax <item_id> [count]; do not include the literal GET_ITEM in instruction. This is a bounded one-stack local inventory/crafting MVP that can use server recipe data for supported simple inventory recipes, including simple datapack/mod recipes visible to the server and finite tag-backed ingredient alternatives, and reports missing materials instead of searching indefinitely. Crafting-table-only, special/custom, NBT-bearing ingredient/result, and crafting remainder recipes may be rejected with a reason until later phases. "
+            + "Planned PlayerEngine-style intents may be recognized but are unsupported until implemented except GET_ITEM's bounded MVP; use UNAVAILABLE when the vanilla runtime cannot perform the requested action. "
             + "Only select world, inventory, or combat actions when the user prompt says the selected character allows world actions.";
     }
 

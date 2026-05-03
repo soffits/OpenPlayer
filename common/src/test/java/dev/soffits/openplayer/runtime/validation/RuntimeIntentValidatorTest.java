@@ -19,6 +19,7 @@ public final class RuntimeIntentValidatorTest {
         validatesWorldActionGate();
         validatesBlankOnlyInstructions();
         validatesPhaseFiveInventoryInstructions();
+        validatesGetItemInstruction();
         validatesCoordinateInstructions();
         validatesRadiusInstructions();
         rejectsNonAutomationConversationKinds();
@@ -97,6 +98,25 @@ public final class RuntimeIntentValidatorTest {
                 "DROP_ITEM should accept exact item count syntax");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.DROP_ITEM, "minecraft:cobblestone 0"), true),
                 "DROP_ITEM requires blank or instruction: <item_id> [count]");
+    }
+
+    private static void validatesGetItemInstruction() {
+        require(RuntimeIntentValidator.validate(intent(IntentKind.GET_ITEM, "minecraft:stick"), true).isAccepted(),
+                "GET_ITEM should accept exact item id with default count");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.GET_ITEM, "minecraft:stick 64"), true).isAccepted(),
+                "GET_ITEM should accept one stack count for stackable items");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.GET_ITEM, "stick 1"), true),
+                "GET_ITEM requires instruction: <item_id> [count]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.GET_ITEM, "minecraft:air 1"), true),
+                "GET_ITEM requires instruction: <item_id> [count]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.GET_ITEM, "minecraft:stick 65"), true),
+                "GET_ITEM requires instruction: <item_id> [count]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.GET_ITEM, "minecraft:stick 0"), true),
+                "GET_ITEM requires instruction: <item_id> [count]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.GET_ITEM, "minecraft:stick 1 owner"), true),
+                "GET_ITEM requires instruction: <item_id> [count]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.GET_ITEM, "minecraft:stick 1"), false),
+                "World actions are disabled for this OpenPlayer character");
     }
 
     private static void validatesCoordinateInstructions() {
@@ -190,9 +210,9 @@ public final class RuntimeIntentValidatorTest {
             case INVENTORY_QUERY -> "";
             case EQUIP_ITEM -> "minecraft:iron_sword";
             case GIVE_ITEM -> "minecraft:bread 1 owner";
+            case GET_ITEM -> "minecraft:stick 1";
             case DEPOSIT_ITEM,
                     STASH_ITEM,
-                    GET_ITEM,
                     COLLECT_FOOD,
                     FARM_NEARBY,
                     FISH,
@@ -227,7 +247,6 @@ public final class RuntimeIntentValidatorTest {
         return EnumSet.of(
                 IntentKind.DEPOSIT_ITEM,
                 IntentKind.STASH_ITEM,
-                IntentKind.GET_ITEM,
                 IntentKind.COLLECT_FOOD,
                 IntentKind.FARM_NEARBY,
                 IntentKind.FISH,

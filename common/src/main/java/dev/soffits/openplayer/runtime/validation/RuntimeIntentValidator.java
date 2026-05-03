@@ -37,6 +37,7 @@ public final class RuntimeIntentValidator {
             case INVENTORY_QUERY -> requireBlankInstruction(intent, "INVENTORY_QUERY");
             case EQUIP_ITEM -> requireItemOnlyInstruction(intent, "EQUIP_ITEM");
             case GIVE_ITEM -> requireGiveItemInstruction(intent);
+            case GET_ITEM -> requireItemCountInstruction(intent, "GET_ITEM");
             case INTERACT -> RuntimeIntentValidationResult.rejected("INTERACT is not implemented by the vanilla runtime");
             case CHAT -> RuntimeIntentValidationResult.rejected("CHAT cannot be submitted to automation");
             case UNAVAILABLE -> RuntimeIntentValidationResult.rejected("UNAVAILABLE cannot be submitted to automation");
@@ -44,7 +45,6 @@ public final class RuntimeIntentValidator {
             case GOTO,
                     DEPOSIT_ITEM,
                     STASH_ITEM,
-                    GET_ITEM,
                     COLLECT_FOOD,
                     FARM_NEARBY,
                     FISH,
@@ -89,6 +89,13 @@ public final class RuntimeIntentValidator {
         }
         if (InventoryActionInstructionParser.parseItemCountOrNull(intent.instruction(), false) == null) {
             return RuntimeIntentValidationResult.rejected(kindName + " requires blank or instruction: <item_id> [count]");
+        }
+        return RuntimeIntentValidationResult.accepted();
+    }
+
+    private static RuntimeIntentValidationResult requireItemCountInstruction(CommandIntent intent, String kindName) {
+        if (InventoryActionInstructionParser.parseItemCountOrNull(intent.instruction(), false) == null) {
+            return RuntimeIntentValidationResult.rejected(kindName + " requires instruction: <item_id> [count]");
         }
         return RuntimeIntentValidationResult.accepted();
     }

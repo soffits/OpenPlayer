@@ -156,15 +156,17 @@ OpenPlayer already has:
 
 ### Phase 6: Resource and Crafting Planner MVP
 
+**Status:** Phase 6B implements a bounded `GET_ITEM <item_id> [count]` one-stack local inventory/crafting MVP backed by the server `RecipeManager`, so supported simple datapack and mod crafting recipes present at execution time can be planned through the common recipe-query seam. It validates exact namespaced item ids, rejects over-stack requests, supports safe non-special exact vanilla 2x2-compatible shaped/shapeless recipes with finite expanded item alternatives including tag-backed ingredients, rejects NBT-bearing ingredients/results and crafting remainders, reports unsupported recipe reasons or deterministic missing materials, and keeps world gathering, physical crafting-table interaction, containers/stash, smelting, and visible resource execution deferred.
+
 **Objective:** Implement clean-room `get <item> <count>` for simple local/offline tasks.
 
 **Capabilities:**
 
-- Vanilla recipe index.
-- Inventory crafting.
-- Crafting table crafting.
+- Dynamic server `RecipeManager` crafting recipe query for supported simple datapack and mod recipes.
+- Inventory crafting for 2x2-compatible safe shaped/shapeless recipes.
+- Crafting table crafting deferred to the workstation/container phase.
 - Material dependency planner.
-- Simple visible/reachable gathering for logs, planks, sticks, stone/cobblestone, dirt/sand, and visible common ores.
+- Visible/reachable resource gathering is deferred until the bounded world-search and navigation phase.
 - Tool selection and progress status.
 
 **Acceptance Criteria:**

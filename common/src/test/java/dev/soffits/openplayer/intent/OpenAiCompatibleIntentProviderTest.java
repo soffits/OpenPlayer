@@ -83,6 +83,26 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must document drop item count syntax");
         require(prompt.contains("GIVE_ITEM use exact owner-only one-stack MVP syntax <item_id> [count]"),
                 "system prompt must document owner-only give syntax");
+        require(prompt.contains("For kind GET_ITEM, instruction must contain only exact item id syntax <item_id> [count]"),
+                "system prompt must document get item instruction syntax without the kind token");
+        require(prompt.contains("do not include the literal GET_ITEM in instruction"),
+                "system prompt must prevent providers from putting GET_ITEM in the instruction field");
+        require(!prompt.contains("GET_ITEM <item_id> [count]"),
+                "system prompt must not include misleading GET_ITEM instruction syntax");
+        require(prompt.contains("bounded one-stack local inventory/crafting MVP"),
+                "system prompt must document bounded GET_ITEM scope");
+        require(prompt.contains("server recipe data for supported simple inventory recipes"),
+                "system prompt must document dynamic GET_ITEM recipe data");
+        require(prompt.contains("simple datapack/mod recipes visible to the server"),
+                "system prompt must document simple datapack/mod recipe visibility");
+        require(prompt.contains("finite tag-backed ingredient alternatives"),
+                "system prompt must document finite tag-backed alternative support");
+        require(prompt.contains("Crafting-table-only, special/custom, NBT-bearing ingredient/result, and crafting remainder recipes may be rejected with a reason"),
+                "system prompt must document GET_ITEM recipe support limits");
+        require(!prompt.contains("NBT/tag"),
+                "system prompt must not group finite tag-backed ingredients with unsupported NBT");
+        require(prompt.contains("reports missing materials instead of searching indefinitely"),
+                "system prompt must document GET_ITEM missing material behavior");
     }
 
     private static String normalize(String value) throws Exception {
