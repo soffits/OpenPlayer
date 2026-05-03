@@ -12,12 +12,15 @@ public record LocalCharacterListEntry(String id, String displayName, String desc
     }
 
     public static LocalCharacterListEntry from(LocalCharacterDefinition character, String lifecycleStatus) {
+        return from(character, lifecycleStatus, null);
+    }
+
+    public static LocalCharacterListEntry from(LocalCharacterDefinition character, String lifecycleStatus,
+                                              LocalSkinPathResolver localSkinPathResolver) {
         if (character == null) {
             throw new IllegalArgumentException("character cannot be null");
         }
-        String skinStatus = character.localSkinFile() == null && character.skinTexture() == null
-                ? "default"
-                : "configured";
+        String skinStatus = skinStatus(character, localSkinPathResolver);
         String conversationStatus = character.conversationPrompt() == null && character.conversationSettings() == null
                 ? "not configured"
                 : "configured for later phases";
@@ -29,6 +32,20 @@ public record LocalCharacterListEntry(String id, String displayName, String desc
                 lifecycleStatus,
                 conversationStatus
         );
+    }
+
+    private static String skinStatus(LocalCharacterDefinition character, LocalSkinPathResolver localSkinPathResolver) {
+        if (character.localSkinFile() != null) {
+            if (localSkinPathResolver != null) {
+                LocalSkinPathResolution resolution = localSkinPathResolver.resolve(character.localSkinFile());
+                return resolution.isResolved() ? "local file" : "local file unavailable";
+            }
+            return "local file";
+        }
+        if (character.skinTexture() != null) {
+            return "resource";
+        }
+        return "default";
     }
 
     private static String requireText(String value, String fieldName) {

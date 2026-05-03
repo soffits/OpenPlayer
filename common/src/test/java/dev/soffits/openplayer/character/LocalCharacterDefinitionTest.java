@@ -2,6 +2,9 @@ package dev.soffits.openplayer.character;
 
 import dev.soffits.openplayer.api.NpcOwnerId;
 import dev.soffits.openplayer.api.NpcSpawnLocation;
+import dev.soffits.openplayer.client.LocalSkinImageValidator;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
@@ -18,6 +21,11 @@ public final class LocalCharacterDefinitionTest {
         convertsToNpcSpec();
         createsSafeListView();
         sanitizesExceptionPathsInListView();
+        resolvesSafeLocalSkinPaths();
+        rejectsUnsafeLocalSkinPaths();
+        rejectsSymlinkEscapedLocalSkinPaths();
+        rejectsSymlinkedSkinDirectory();
+        validatesPlayerSkinImageDimensions();
     }
 
     private static void rejectsUnsafeId() {
@@ -28,6 +36,8 @@ public final class LocalCharacterDefinitionTest {
     private static void rejectsUnsafeSkinPath() {
         List<String> errors = LocalCharacterDefinition.validate("alex_01", "Alex", null, null, "../skins/alex.png", null, null, null);
         require(!errors.isEmpty(), "parent traversal skin paths must be rejected");
+        errors = LocalCharacterDefinition.validate("alex_01", "Alex", null, null, "alex.png", null, null, null);
+        require(!errors.isEmpty(), "skin paths outside skins/ must be rejected");
     }
 
     private static void rejectsSecretMarkers() {
@@ -135,6 +145,84 @@ public final class LocalCharacterDefinitionTest {
         );
         LocalCharacterListView view = LocalCharacterListView.fromRepositoryResult(result, ignored -> "despawned");
         require("bad.properties: Unable to read character file: bad.properties".equals(view.errors().get(0)), "UI errors must sanitize exception paths: " + view.errors());
+    }
+
+    private static void resolvesSafeLocalSkinPaths() {
+        Path directory = createTempDirectory();
+        try {
+            Path skin = directory.resolve("skins").resolve("alex.png");
+            Files.createDirectories(skin.getParent());
+            Files.write(skin, new byte[]{1, 2, 3});
+            LocalSkinPathResolution resolution = new LocalSkinPathResolver(directory).resolve("skins/alex.png");
+            require(resolution.isResolved(), "safe existing local skin must resolve: " + resolution.rejectionReason());
+            require(skin.toAbsolutePath().normalize().equals(resolution.path()), "resolved skin path must be normalized under skins/");
+        } catch (IOException exception) {
+            throw new AssertionError("unable to create local skin test file", exception);
+        }
+    }
+
+    private static void rejectsUnsafeLocalSkinPaths() {
+        Path directory = createTempDirectory();
+        LocalSkinPathResolver resolver = new LocalSkinPathResolver(directory);
+        require(!resolver.resolve("../alex.png").isResolved(), "parent traversal must be rejected");
+        require(!resolver.resolve(directory.resolve("skins/alex.png").toString()).isResolved(), "absolute paths must be rejected");
+        require(!resolver.resolve("skins/alex.txt").isResolved(), "non-PNG paths must be rejected");
+        require(!resolver.resolve("skins/missing.png").isResolved(), "missing PNG files must be rejected");
+        require(!resolver.resolve("other/alex.png").isResolved(), "paths outside skins/ must be rejected");
+    }
+
+    private static void rejectsSymlinkEscapedLocalSkinPaths() {
+        Path directory = createTempDirectory();
+        Path outsideSkin = createTempDirectory().resolve("escaped.png");
+        Path link = directory.resolve("skins").resolve("escaped.png");
+        try {
+            Files.write(outsideSkin, new byte[]{1, 2, 3});
+            Files.createDirectories(link.getParent());
+        } catch (IOException exception) {
+            throw new AssertionError("unable to create symlink escape test files", exception);
+        }
+        try {
+            Files.createSymbolicLink(link, outsideSkin);
+        } catch (UnsupportedOperationException | IOException | SecurityException exception) {
+            return;
+        }
+        LocalSkinPathResolution resolution = new LocalSkinPathResolver(directory).resolve("skins/escaped.png");
+        require(!resolution.isResolved(), "symlink escape must be rejected");
+    }
+
+    private static void rejectsSymlinkedSkinDirectory() {
+        Path directory = createTempDirectory();
+        Path outsideDirectory = createTempDirectory();
+        Path skinDirectory = directory.resolve("skins");
+        try {
+            Files.write(outsideDirectory.resolve("alex.png"), new byte[]{1, 2, 3});
+        } catch (IOException exception) {
+            throw new AssertionError("unable to create symlinked skin directory test file", exception);
+        }
+        try {
+            Files.createSymbolicLink(skinDirectory, outsideDirectory);
+        } catch (UnsupportedOperationException | IOException | SecurityException exception) {
+            return;
+        }
+        LocalSkinPathResolution resolution = new LocalSkinPathResolver(directory).resolve("skins/alex.png");
+        require(!resolution.isResolved(), "symlinked skins directory must be rejected");
+        require(!resolution.rejectionReason().contains(directory.toAbsolutePath().normalize().toString()), "rejection reason must not expose config path");
+        require(!resolution.rejectionReason().contains(outsideDirectory.toAbsolutePath().normalize().toString()), "rejection reason must not expose external path");
+    }
+
+    private static void validatesPlayerSkinImageDimensions() {
+        require(LocalSkinImageValidator.isSupportedPlayerSkinSize(64, 32), "legacy player skins must be accepted");
+        require(LocalSkinImageValidator.isSupportedPlayerSkinSize(64, 64), "modern player skins must be accepted");
+        require(!LocalSkinImageValidator.isSupportedPlayerSkinSize(32, 32), "non-player skin dimensions must be rejected");
+        require(!LocalSkinImageValidator.isSupportedPlayerSkinSize(128, 128), "non-standard skin dimensions must be rejected");
+    }
+
+    private static Path createTempDirectory() {
+        try {
+            return Files.createTempDirectory("openplayer-skin-test");
+        } catch (IOException exception) {
+            throw new AssertionError("unable to create temp directory", exception);
+        }
     }
 
     private static void require(boolean condition, String message) {

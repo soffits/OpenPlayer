@@ -93,7 +93,7 @@ public record LocalCharacterDefinition(String id, String displayName, String des
         validateDisplayName(errors, displayName);
         validateOptionalText(errors, "description", description, MAX_DESCRIPTION_LENGTH);
         validateOptionalResourceLocation(errors, "skinTexture", skinTexture);
-        validateOptionalSkinPath(errors, localSkinFile);
+        errors.addAll(validateLocalSkinFile(localSkinFile));
         validateOptionalId(errors, "defaultRoleId", defaultRoleId);
         validateOptionalText(errors, "conversationPrompt", conversationPrompt, MAX_PROMPT_LENGTH);
         validateOptionalText(errors, "conversationSettings", conversationSettings, MAX_SETTINGS_LENGTH);
@@ -106,6 +106,12 @@ public record LocalCharacterDefinition(String id, String displayName, String des
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    public static List<String> validateLocalSkinFile(String value) {
+        List<String> errors = new ArrayList<>();
+        validateOptionalSkinPath(errors, value);
+        return List.copyOf(errors);
     }
 
     private static String normalizeRequired(String value, String fieldName) {
@@ -185,6 +191,9 @@ public record LocalCharacterDefinition(String id, String displayName, String des
         }
         if (value.equals(".") || value.contains("../") || value.startsWith("../") || value.endsWith("/..") || value.contains("/../")) {
             errors.add("localSkinFile must not contain parent traversal");
+        }
+        if (!value.startsWith("skins/")) {
+            errors.add("localSkinFile must point under the skins/ directory");
         }
         if (!SAFE_SKIN_PATH_PATTERN.matcher(value).matches()) {
             errors.add("localSkinFile must be a safe relative .png path using ASCII letters, digits, dot, underscore, hyphen, or slash");

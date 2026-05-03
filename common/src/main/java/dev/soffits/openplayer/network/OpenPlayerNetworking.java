@@ -16,6 +16,7 @@ import dev.soffits.openplayer.character.LocalCharacterDefinition;
 import dev.soffits.openplayer.character.LocalCharacterListEntry;
 import dev.soffits.openplayer.character.LocalCharacterListView;
 import dev.soffits.openplayer.character.LocalCharacterRepositoryResult;
+import dev.soffits.openplayer.character.LocalSkinPathResolver;
 import dev.soffits.openplayer.character.OpenPlayerLocalCharacters;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentKind;
@@ -217,7 +218,11 @@ public final class OpenPlayerNetworking {
 
     private static void sendCharacterListResponse(ServerPlayer player) {
         LocalCharacterRepositoryResult result = OpenPlayerLocalCharacters.repository().loadAll();
-        LocalCharacterListView view = LocalCharacterListView.fromRepositoryResult(result, character -> lifecycleStatus(player, character));
+        LocalCharacterListView view = LocalCharacterListView.fromRepositoryResult(
+                result,
+                character -> lifecycleStatus(player, character),
+                new LocalSkinPathResolver(OpenPlayerLocalCharacters.openPlayerDirectory())
+        );
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
         buffer.writeVarInt(view.characters().size());
         for (LocalCharacterListEntry character : view.characters()) {
