@@ -253,8 +253,12 @@ public final class CompanionLifecycleManagerTest {
     }
 
     private static void acceptedConversationCommandRecordsSafeActionSummary() {
-        String previousEnabled = System.getProperty("OPENPLAYER_INTENT_PARSER_ENABLED");
-        System.setProperty("OPENPLAYER_INTENT_PARSER_ENABLED", "true");
+        String previousEndpoint = System.getProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT");
+        String previousModel = System.getProperty("OPENPLAYER_INTENT_PROVIDER_MODEL");
+        String previousApiKey = System.getProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY");
+        System.setProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT", "https://example.invalid/v1/chat/completions");
+        System.setProperty("OPENPLAYER_INTENT_PROVIDER_MODEL", "test-model");
+        System.setProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY", "test-key");
         try {
             TestNpcService service = new TestNpcService();
             LocalCharacterDefinition character = conversationCharacter();
@@ -277,17 +281,19 @@ public final class CompanionLifecycleManagerTest {
             require(events.stream().noneMatch(event -> event.length() > 128),
                     "accepted command summary must stay bounded for client display");
         } finally {
-            if (previousEnabled == null) {
-                System.clearProperty("OPENPLAYER_INTENT_PARSER_ENABLED");
-            } else {
-                System.setProperty("OPENPLAYER_INTENT_PARSER_ENABLED", previousEnabled);
-            }
+            restoreProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT", previousEndpoint);
+            restoreProperty("OPENPLAYER_INTENT_PROVIDER_MODEL", previousModel);
+            restoreProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY", previousApiKey);
         }
     }
 
     private static void acceptedConversationHistoryDoesNotRetainProviderInstruction() {
-        String previousEnabled = System.getProperty("OPENPLAYER_INTENT_PARSER_ENABLED");
-        System.setProperty("OPENPLAYER_INTENT_PARSER_ENABLED", "true");
+        String previousEndpoint = System.getProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT");
+        String previousModel = System.getProperty("OPENPLAYER_INTENT_PROVIDER_MODEL");
+        String previousApiKey = System.getProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY");
+        System.setProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT", "https://example.invalid/v1/chat/completions");
+        System.setProperty("OPENPLAYER_INTENT_PROVIDER_MODEL", "test-model");
+        System.setProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY", "test-key");
         try {
             TestNpcService service = new TestNpcService();
             LocalCharacterDefinition character = conversationCharacter();
@@ -316,17 +322,19 @@ public final class CompanionLifecycleManagerTest {
             require(secondPrompt.contains("Action accepted: FOLLOW_OWNER"),
                     "conversation history must retain only deterministic server-authored action summaries");
         } finally {
-            if (previousEnabled == null) {
-                System.clearProperty("OPENPLAYER_INTENT_PARSER_ENABLED");
-            } else {
-                System.setProperty("OPENPLAYER_INTENT_PARSER_ENABLED", previousEnabled);
-            }
+            restoreProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT", previousEndpoint);
+            restoreProperty("OPENPLAYER_INTENT_PROVIDER_MODEL", previousModel);
+            restoreProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY", previousApiKey);
         }
     }
 
     private static void conversationHistoryEvictsOldOwnerKeysFromLaterPrompts() {
-        String previousEnabled = System.getProperty("OPENPLAYER_INTENT_PARSER_ENABLED");
-        System.setProperty("OPENPLAYER_INTENT_PARSER_ENABLED", "true");
+        String previousEndpoint = System.getProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT");
+        String previousModel = System.getProperty("OPENPLAYER_INTENT_PROVIDER_MODEL");
+        String previousApiKey = System.getProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY");
+        System.setProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT", "https://example.invalid/v1/chat/completions");
+        System.setProperty("OPENPLAYER_INTENT_PROVIDER_MODEL", "test-model");
+        System.setProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY", "test-key");
         try {
             TestNpcService service = new TestNpcService();
             LocalCharacterDefinition character = conversationCharacter();
@@ -361,17 +369,19 @@ public final class CompanionLifecycleManagerTest {
             require(!laterPrompt.contains("evicted owner history"),
                     "old owner conversation history key must be evicted from later prompts");
         } finally {
-            if (previousEnabled == null) {
-                System.clearProperty("OPENPLAYER_INTENT_PARSER_ENABLED");
-            } else {
-                System.setProperty("OPENPLAYER_INTENT_PARSER_ENABLED", previousEnabled);
-            }
+            restoreProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT", previousEndpoint);
+            restoreProperty("OPENPLAYER_INTENT_PROVIDER_MODEL", previousModel);
+            restoreProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY", previousApiKey);
         }
     }
 
     private static void conversationHistoryEvictsOldAssignmentKeysFromLaterPrompts() {
-        String previousEnabled = System.getProperty("OPENPLAYER_INTENT_PARSER_ENABLED");
-        System.setProperty("OPENPLAYER_INTENT_PARSER_ENABLED", "true");
+        String previousEndpoint = System.getProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT");
+        String previousModel = System.getProperty("OPENPLAYER_INTENT_PROVIDER_MODEL");
+        String previousApiKey = System.getProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY");
+        System.setProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT", "https://example.invalid/v1/chat/completions");
+        System.setProperty("OPENPLAYER_INTENT_PROVIDER_MODEL", "test-model");
+        System.setProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY", "test-key");
         try {
             TestNpcService service = new TestNpcService();
             LocalCharacterDefinition character = conversationCharacter();
@@ -405,11 +415,9 @@ public final class CompanionLifecycleManagerTest {
             require(!laterPrompt.contains("evicted assignment history"),
                     "old assignment conversation history key must be evicted from later prompts");
         } finally {
-            if (previousEnabled == null) {
-                System.clearProperty("OPENPLAYER_INTENT_PARSER_ENABLED");
-            } else {
-                System.setProperty("OPENPLAYER_INTENT_PARSER_ENABLED", previousEnabled);
-            }
+            restoreProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT", previousEndpoint);
+            restoreProperty("OPENPLAYER_INTENT_PROVIDER_MODEL", previousModel);
+            restoreProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY", previousApiKey);
         }
     }
 
@@ -467,6 +475,14 @@ public final class CompanionLifecycleManagerTest {
     private static void require(boolean condition, String message) {
         if (!condition) {
             throw new AssertionError(message);
+        }
+    }
+
+    private static void restoreProperty(String key, String value) {
+        if (value == null) {
+            System.clearProperty(key);
+        } else {
+            System.setProperty(key, value);
         }
     }
 

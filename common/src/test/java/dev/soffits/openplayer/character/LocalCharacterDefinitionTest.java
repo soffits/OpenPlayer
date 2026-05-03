@@ -112,6 +112,10 @@ public final class LocalCharacterDefinitionTest {
                 new NpcOwnerId(UUID.fromString("00000000-0000-0000-0000-000000000001")),
                 new NpcSpawnLocation("minecraft:overworld", 0.0D, 64.0D, 0.0D)
         ).roleId().value()), "AiPlayerNpcSpec role id must use stable local character session identity");
+        require(!character.toNpcSpec(
+                new NpcOwnerId(UUID.fromString("00000000-0000-0000-0000-000000000001")),
+                new NpcSpawnLocation("minecraft:overworld", 0.0D, 64.0D, 0.0D)
+        ).allowWorldActions(), "allowWorldActions must default false");
     }
 
     private static void createsSafeListView() {

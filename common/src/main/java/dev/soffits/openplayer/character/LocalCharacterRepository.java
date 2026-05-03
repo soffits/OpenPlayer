@@ -29,7 +29,8 @@ public final class LocalCharacterRepository {
             "localSkinFile",
             "defaultRoleId",
             "conversationPrompt",
-            "conversationSettings"
+            "conversationSettings",
+            "allowWorldActions"
     );
 
     private final Path directory;
@@ -256,6 +257,9 @@ public final class LocalCharacterRepository {
                 writeOptionalProperty(writer, "defaultRoleId", character.defaultRoleId());
                 writeOptionalProperty(writer, "conversationPrompt", character.conversationPrompt());
                 writeOptionalProperty(writer, "conversationSettings", character.conversationSettings());
+                if (character.allowWorldActions()) {
+                    writeProperty(writer, "allowWorldActions", "true");
+                }
             }
             try {
                 rejectSymbolicLinkTarget(target);
@@ -421,7 +425,8 @@ public final class LocalCharacterRepository {
                     properties.getProperty("localSkinFile"),
                     properties.getProperty("defaultRoleId"),
                     properties.getProperty("conversationPrompt"),
-                    properties.getProperty("conversationSettings")
+                    properties.getProperty("conversationSettings"),
+                    Boolean.parseBoolean(properties.getProperty("allowWorldActions"))
             ), List.of());
         } catch (IllegalArgumentException exception) {
             return new LocalCharacterFileResult(null, List.of(
@@ -450,6 +455,12 @@ public final class LocalCharacterRepository {
                 properties.getProperty("conversationSettings")
         )) {
             errors.add(new LocalCharacterValidationError(file, message));
+        }
+        String allowWorldActions = properties.getProperty("allowWorldActions");
+        if (allowWorldActions != null
+                && !allowWorldActions.equalsIgnoreCase("true")
+                && !allowWorldActions.equalsIgnoreCase("false")) {
+            errors.add(new LocalCharacterValidationError(file, "allowWorldActions must be true or false"));
         }
         return List.copyOf(errors);
     }

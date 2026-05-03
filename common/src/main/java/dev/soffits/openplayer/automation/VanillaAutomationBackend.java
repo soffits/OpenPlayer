@@ -1,6 +1,5 @@
 package dev.soffits.openplayer.automation;
 
-import dev.soffits.openplayer.OpenPlayerAutomationConfig;
 import dev.soffits.openplayer.api.NpcOwnerId;
 import dev.soffits.openplayer.automation.AutomationInstructionParser.Coordinate;
 import dev.soffits.openplayer.entity.OpenPlayerNpcEntity;
@@ -26,6 +25,19 @@ import net.minecraft.world.phys.Vec3;
 
 public final class VanillaAutomationBackend implements AutomationBackend {
     public static final String NAME = "vanilla";
+
+    static boolean isLocalWorldOrInventoryAction(IntentKind kind) {
+        return kind == IntentKind.COLLECT_ITEMS
+                || kind == IntentKind.BREAK_BLOCK
+                || kind == IntentKind.PLACE_BLOCK
+                || kind == IntentKind.ATTACK_NEAREST
+                || kind == IntentKind.GUARD_OWNER
+                || kind == IntentKind.EQUIP_BEST_ITEM
+                || kind == IntentKind.EQUIP_ARMOR
+                || kind == IntentKind.USE_SELECTED_ITEM
+                || kind == IntentKind.SWAP_TO_OFFHAND
+                || kind == IntentKind.DROP_ITEM;
+    }
 
     @Override
     public String name() {
@@ -152,12 +164,12 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 queuedCommands.add(QueuedCommand.patrol(coordinate));
                 return accepted("PATROL accepted");
             }
+            if (isLocalWorldOrInventoryAction(kind) && !entity.allowWorldActions()) {
+                return rejected("World actions are disabled for this OpenPlayer character");
+            }
             if (kind == IntentKind.COLLECT_ITEMS) {
                 queuedCommands.add(QueuedCommand.collectItems());
                 return accepted("COLLECT_ITEMS accepted");
-            }
-            if (isLocalWorldOrInventoryAction(kind) && !OpenPlayerAutomationConfig.allowWorldActions()) {
-                return rejected("World actions are disabled by local OpenPlayer automation config");
             }
             if (kind == IntentKind.EQUIP_BEST_ITEM) {
                 if (!AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
@@ -744,18 +756,6 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
         private static AutomationCommandResult rejected(String message) {
             return new AutomationCommandResult(AutomationCommandStatus.REJECTED, message);
-        }
-
-        private static boolean isLocalWorldOrInventoryAction(IntentKind kind) {
-            return kind == IntentKind.BREAK_BLOCK
-                    || kind == IntentKind.PLACE_BLOCK
-                    || kind == IntentKind.ATTACK_NEAREST
-                    || kind == IntentKind.GUARD_OWNER
-                    || kind == IntentKind.EQUIP_BEST_ITEM
-                    || kind == IntentKind.EQUIP_ARMOR
-                    || kind == IntentKind.USE_SELECTED_ITEM
-                    || kind == IntentKind.SWAP_TO_OFFHAND
-                    || kind == IntentKind.DROP_ITEM;
         }
 
         private boolean acquireInteractionCooldown() {

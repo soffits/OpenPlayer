@@ -81,9 +81,8 @@ public final class OpenPlayerRequestSender {
         NetworkManager.sendToServer(OpenPlayerConstants.CHARACTER_IMPORT_REQUEST_PACKET_ID, buffer);
     }
 
-    public static void sendProviderConfigSaveRequest(boolean enabled, String endpoint, String model, String apiKey, boolean clearApiKey) {
+    public static void sendProviderConfigSaveRequest(String endpoint, String model, String apiKey, boolean clearApiKey) {
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
-        buffer.writeBoolean(enabled);
         buffer.writeUtf(endpoint == null ? "" : endpoint, OpenPlayerIntentParserConfig.MAX_ENDPOINT_LENGTH);
         buffer.writeUtf(model == null ? "" : model, OpenPlayerIntentParserConfig.MAX_MODEL_LENGTH);
         buffer.writeUtf(apiKey == null ? "" : apiKey, OpenPlayerIntentParserConfig.MAX_API_KEY_LENGTH);

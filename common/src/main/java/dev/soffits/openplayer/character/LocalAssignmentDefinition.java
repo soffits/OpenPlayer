@@ -64,7 +64,8 @@ public record LocalAssignmentDefinition(String id, String characterId, String di
                 toSessionRoleId(),
                 ownerId,
                 new NpcProfileSpec(resolvedDisplayName(character), character.skinTexture()),
-                spawnLocation
+                spawnLocation,
+                character.allowWorldActions()
         );
     }
 

@@ -54,6 +54,7 @@ public final class ConversationLoopTest {
         );
         require(prompt.contains("Speak briefly"), "prompt must include per-character conversationPrompt text");
         require(prompt.contains("No secrets"), "prompt must include per-character conversationSettings text");
+        require(prompt.contains("world, inventory, and combat actions are disabled"), "prompt must include selected character action policy");
         require(prompt.contains("Player: follow me"), "prompt must include the current player message");
     }
 

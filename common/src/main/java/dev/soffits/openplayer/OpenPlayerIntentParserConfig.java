@@ -14,18 +14,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.util.Locale;
 import java.util.Properties;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
 public final class OpenPlayerIntentParserConfig {
-    public static final String ENABLED_KEY = "OPENPLAYER_INTENT_PARSER_ENABLED";
     public static final String ENDPOINT_KEY = "OPENPLAYER_INTENT_PROVIDER_ENDPOINT";
     public static final String API_KEY_KEY = "OPENPLAYER_INTENT_PROVIDER_API_KEY";
     public static final String MODEL_KEY = "OPENPLAYER_INTENT_PROVIDER_MODEL";
     public static final String PROVIDER_CONFIG_FILE_NAME = "provider.properties";
-    static final String PROVIDER_ENABLED_PROPERTY = "parserEnabled";
     static final String PROVIDER_ENDPOINT_PROPERTY = "endpoint";
     static final String PROVIDER_API_KEY_PROPERTY = "apiKey";
     static final String PROVIDER_MODEL_PROPERTY = "model";
@@ -52,7 +49,7 @@ public final class OpenPlayerIntentParserConfig {
         ResolvedConfigValue model = configValue(MODEL_KEY, PROVIDER_MODEL_PROPERTY);
         ResolvedConfigValue apiKey = configValue(API_KEY_KEY, PROVIDER_API_KEY_PROPERTY);
         return new IntentParserRuntimeStatus(
-                enabled(),
+                enabled(endpoint, model, apiKey),
                 safeEndpointStatus(endpoint.value()),
                 endpoint.source(),
                 hasValue(model.value()),
@@ -71,12 +68,14 @@ public final class OpenPlayerIntentParserConfig {
     }
 
     private static boolean enabled() {
-        String value = configValue(ENABLED_KEY, PROVIDER_ENABLED_PROPERTY).value();
-        if (value == null || value.isBlank()) {
-            return false;
-        }
-        String normalizedValue = value.trim().toLowerCase(Locale.ROOT);
-        return normalizedValue.equals("true") || normalizedValue.equals("1") || normalizedValue.equals("yes");
+        ResolvedConfigValue endpoint = configValue(ENDPOINT_KEY, PROVIDER_ENDPOINT_PROPERTY);
+        ResolvedConfigValue model = configValue(MODEL_KEY, PROVIDER_MODEL_PROPERTY);
+        ResolvedConfigValue apiKey = configValue(API_KEY_KEY, PROVIDER_API_KEY_PROPERTY);
+        return enabled(endpoint, model, apiKey);
+    }
+
+    private static boolean enabled(ResolvedConfigValue endpoint, ResolvedConfigValue model, ResolvedConfigValue apiKey) {
+        return hasValue(endpoint.value()) && hasValue(model.value()) && hasValue(apiKey.value());
     }
 
     private static String requiredValue(String key) {
@@ -189,21 +188,12 @@ public final class OpenPlayerIntentParserConfig {
         }
         try {
             Properties properties = readProviderProperties(providerConfigPath);
-            properties.setProperty(PROVIDER_ENABLED_PROPERTY, Boolean.toString(request.enabled()));
             setOrRemove(properties, PROVIDER_ENDPOINT_PROPERTY, request.endpoint());
             setOrRemove(properties, PROVIDER_MODEL_PROPERTY, request.model());
             if (request.clearApiKey()) {
                 properties.remove(PROVIDER_API_KEY_PROPERTY);
             } else if (!request.apiKey().isBlank()) {
                 properties.setProperty(PROVIDER_API_KEY_PROPERTY, request.apiKey().trim());
-            }
-            ProviderConfigValidation effectiveValidation = ProviderConfigValidation.validateEffective(
-                    properties,
-                    propertyResolver,
-                    environmentResolver
-            );
-            if (!effectiveValidation.accepted()) {
-                return new ProviderConfigSaveResult(false, effectiveValidation.message());
             }
             writeProviderProperties(providerConfigPath, properties);
             return new ProviderConfigSaveResult(true, request.apiKey().isBlank() && !request.clearApiKey()
@@ -236,7 +226,6 @@ public final class OpenPlayerIntentParserConfig {
 
     private static String providerPropertyName(String key) {
         return switch (key) {
-            case ENABLED_KEY -> PROVIDER_ENABLED_PROPERTY;
             case ENDPOINT_KEY -> PROVIDER_ENDPOINT_PROPERTY;
             case API_KEY_KEY -> PROVIDER_API_KEY_PROPERTY;
             case MODEL_KEY -> PROVIDER_MODEL_PROPERTY;
@@ -280,7 +269,7 @@ public final class OpenPlayerIntentParserConfig {
         }
     }
 
-    public record ProviderConfigSaveRequest(boolean enabled, String endpoint, String model, String apiKey, boolean clearApiKey) {
+    public record ProviderConfigSaveRequest(String endpoint, String model, String apiKey, boolean clearApiKey) {
         public ProviderConfigSaveRequest {
             endpoint = endpoint == null ? "" : endpoint.trim();
             model = model == null ? "" : model.trim();
@@ -326,52 +315,6 @@ public final class OpenPlayerIntentParserConfig {
                 }
             }
             return new ProviderConfigValidation(true, "accepted");
-        }
-
-        static ProviderConfigValidation validateEffective(
-                Properties properties,
-                Function<String, String> propertyResolver,
-                Function<String, String> environmentResolver
-        ) {
-            if (!enabled(effectiveValue(ENABLED_KEY, PROVIDER_ENABLED_PROPERTY, properties, propertyResolver, environmentResolver))) {
-                return new ProviderConfigValidation(true, "accepted");
-            }
-            if (!hasValue(effectiveValue(ENDPOINT_KEY, PROVIDER_ENDPOINT_PROPERTY, properties, propertyResolver, environmentResolver))) {
-                return rejected("Provider endpoint is required when provider config is enabled");
-            }
-            if (!hasValue(effectiveValue(MODEL_KEY, PROVIDER_MODEL_PROPERTY, properties, propertyResolver, environmentResolver))) {
-                return rejected("Provider model is required when provider config is enabled");
-            }
-            if (!hasValue(effectiveValue(API_KEY_KEY, PROVIDER_API_KEY_PROPERTY, properties, propertyResolver, environmentResolver))) {
-                return rejected("Provider API key is required when provider config is enabled");
-            }
-            return new ProviderConfigValidation(true, "accepted");
-        }
-
-        private static boolean enabled(String value) {
-            if (value == null || value.isBlank()) {
-                return false;
-            }
-            String normalizedValue = value.trim().toLowerCase(Locale.ROOT);
-            return normalizedValue.equals("true") || normalizedValue.equals("1") || normalizedValue.equals("yes");
-        }
-
-        private static String effectiveValue(
-                String key,
-                String providerPropertyName,
-                Properties properties,
-                Function<String, String> propertyResolver,
-                Function<String, String> environmentResolver
-        ) {
-            String propertyValue = propertyResolver.apply(key);
-            if (propertyValue != null) {
-                return propertyValue;
-            }
-            String environmentValue = environmentResolver.apply(key);
-            if (environmentValue != null) {
-                return environmentValue;
-            }
-            return properties.getProperty(providerPropertyName);
         }
 
         private static ProviderConfigValidation rejected(String message) {

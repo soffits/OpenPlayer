@@ -31,8 +31,6 @@ public final class OpenPlayerControlScreen extends Screen {
     private EditBox providerEndpointInput;
     private EditBox providerModelInput;
     private EditBox providerApiKeyInput;
-    private boolean providerEnabled;
-    private boolean providerEnabledEdited;
     private boolean clearApiKeyOnSave;
     private String selectedAssignmentId;
     private String renderedCharacterKey = "";
@@ -72,9 +70,6 @@ public final class OpenPlayerControlScreen extends Screen {
     private void rebuildControlWidgets(boolean keepSelectedVisible) {
         this.clearWidgets();
         renderedCharacterKey = characterKey();
-        if (!providerEnabledEdited) {
-            providerEnabled = OpenPlayerClientStatus.parserEnabled();
-        }
         int margin = 12;
         int listWidth = Math.min(210, Math.max(124, this.width / 3));
         int rightLeft = margin + listWidth + 12;
@@ -160,24 +155,17 @@ public final class OpenPlayerControlScreen extends Screen {
                 .bounds(controlsLeft, top + (BUTTON_HEIGHT + BUTTON_SPACING) * 8, controlWidth, BUTTON_HEIGHT)
                 .build());
         int providerTop = top + (BUTTON_HEIGHT + BUTTON_SPACING) * 9 + 8;
-        this.addRenderableWidget(Button.builder(Component.literal(providerEnabled ? "Parser Enabled" : "Parser Disabled"), button -> {
-                    providerEnabled = !providerEnabled;
-                    providerEnabledEdited = true;
-                    rebuildControlWidgetsPreservingCommandText(true);
-                })
-                .bounds(controlsLeft, providerTop, controlWidth, BUTTON_HEIGHT)
-                .build());
         int inputLeft = rightLeft + Math.max(0, (rightWidth - COMMAND_INPUT_WIDTH) / 2);
         int inputWidth = Math.min(COMMAND_INPUT_WIDTH, rightWidth);
-        providerEndpointInput = new EditBox(this.font, inputLeft, providerTop + BUTTON_HEIGHT + 4, inputWidth, BUTTON_HEIGHT, PROVIDER_ENDPOINT_INPUT);
+        providerEndpointInput = new EditBox(this.font, inputLeft, providerTop, inputWidth, BUTTON_HEIGHT, PROVIDER_ENDPOINT_INPUT);
         providerEndpointInput.setMaxLength(512);
         providerEndpointInput.setHint(PROVIDER_ENDPOINT_INPUT);
         this.addRenderableWidget(providerEndpointInput);
-        providerModelInput = new EditBox(this.font, inputLeft, providerTop + (BUTTON_HEIGHT + 4) * 2, inputWidth, BUTTON_HEIGHT, PROVIDER_MODEL_INPUT);
+        providerModelInput = new EditBox(this.font, inputLeft, providerTop + (BUTTON_HEIGHT + 4), inputWidth, BUTTON_HEIGHT, PROVIDER_MODEL_INPUT);
         providerModelInput.setMaxLength(128);
         providerModelInput.setHint(PROVIDER_MODEL_INPUT);
         this.addRenderableWidget(providerModelInput);
-        providerApiKeyInput = new EditBox(this.font, inputLeft, providerTop + (BUTTON_HEIGHT + 4) * 3, inputWidth, BUTTON_HEIGHT, PROVIDER_API_KEY_INPUT);
+        providerApiKeyInput = new EditBox(this.font, inputLeft, providerTop + (BUTTON_HEIGHT + 4) * 2, inputWidth, BUTTON_HEIGHT, PROVIDER_API_KEY_INPUT);
         providerApiKeyInput.setMaxLength(512);
         providerApiKeyInput.setHint(PROVIDER_API_KEY_INPUT);
         this.addRenderableWidget(providerApiKeyInput);
@@ -185,10 +173,10 @@ public final class OpenPlayerControlScreen extends Screen {
                     clearApiKeyOnSave = !clearApiKeyOnSave;
                     rebuildControlWidgetsPreservingCommandText(true);
                 })
-                .bounds(controlsLeft, providerTop + (BUTTON_HEIGHT + 4) * 4, controlWidth, BUTTON_HEIGHT)
+                .bounds(controlsLeft, providerTop + (BUTTON_HEIGHT + 4) * 3, controlWidth, BUTTON_HEIGHT)
                 .build());
         this.addRenderableWidget(Button.builder(Component.literal("Save Provider Config"), button -> sendProviderConfig())
-                .bounds(controlsLeft, providerTop + (BUTTON_HEIGHT + 4) * 5, controlWidth, BUTTON_HEIGHT)
+                .bounds(controlsLeft, providerTop + (BUTTON_HEIGHT + 4) * 4, controlWidth, BUTTON_HEIGHT)
                 .build());
     }
 
@@ -329,7 +317,6 @@ public final class OpenPlayerControlScreen extends Screen {
 
     private void sendProviderConfig() {
         OpenPlayerRequestSender.sendProviderConfigSaveRequest(
-                providerEnabled,
                 providerEndpointInput.getValue(),
                 providerModelInput.getValue(),
                 providerApiKeyInput.getValue(),
