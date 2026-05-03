@@ -4,9 +4,11 @@ import dev.soffits.openplayer.api.AiPlayerNpcCommand;
 import dev.soffits.openplayer.api.CommandSubmissionResult;
 import dev.soffits.openplayer.api.NpcOwnerId;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Predicate;
 import net.minecraft.core.NonNullList;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -20,8 +22,12 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.core.BlockPos;
 
 public final class OpenPlayerNpcEntity extends PathfinderMob {
     private static final String INVENTORY_TAG = "OpenPlayerInventory";
@@ -33,6 +39,7 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
     private static final String PROFILE_SKIN_TEXTURE_TAG = "OpenPlayerProfileSkinTexture";
     private static final int INVENTORY_SIZE = 36;
     private static final int FIRST_NORMAL_INVENTORY_SLOT = 0;
+    private static final int HOTBAR_SLOT_COUNT = NpcHotbarSelection.HOTBAR_SIZE;
     private static final int NORMAL_INVENTORY_SLOT_COUNT = 31;
     private static final int FIRST_EQUIPMENT_INVENTORY_SLOT = FIRST_NORMAL_INVENTORY_SLOT
             + NORMAL_INVENTORY_SLOT_COUNT;
@@ -169,6 +176,57 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
         runtimeCommandExecutor.stopAll();
     }
 
+    public int selectedHotbarSlot() {
+        return selectedMainHandSlot;
+    }
+
+    public boolean selectHotbarSlot(int slot) {
+        if (!NpcHotbarSelection.isHotbarSlot(slot)) {
+            return false;
+        }
+        selectedMainHandSlot = slot;
+        return true;
+    }
+
+    public ItemStack getInventoryItem(int slot) {
+        if (slot < 0 || slot >= internalInventory.size()) {
+            return ItemStack.EMPTY;
+        }
+        return internalInventory.get(slot);
+    }
+
+    public boolean setInventoryItem(int slot, ItemStack itemStack) {
+        if (slot < 0 || slot >= internalInventory.size() || itemStack == null) {
+            return false;
+        }
+        internalInventory.set(slot, itemStack.copy());
+        return true;
+    }
+
+    public boolean selectBestToolFor(BlockState blockState, Level level, BlockPos blockPos) {
+        if (blockState == null || level == null || blockPos == null) {
+            return false;
+        }
+        int slot = NpcHotbarSelection.bestScoredSlot(hotbarItems(), itemStack -> toolScore(itemStack, blockState));
+        return slot >= 0 && selectHotbarSlot(slot);
+    }
+
+    public boolean selectFirstHotbarBlockItem() {
+        return selectFirstHotbarItem(itemStack -> itemStack.getItem() instanceof BlockItem);
+    }
+
+    public boolean selectFirstHotbarItem(Predicate<ItemStack> predicate) {
+        if (predicate == null) {
+            return false;
+        }
+        int slot = NpcHotbarSelection.firstMatchingSlot(hotbarItems(), itemStack -> !itemStack.isEmpty() && predicate.test(itemStack));
+        return slot >= 0 && selectHotbarSlot(slot);
+    }
+
+    public void swingMainHandAction() {
+        swing(InteractionHand.MAIN_HAND);
+    }
+
     public static AttributeSupplier.Builder createAttributes() {
         return PathfinderMob.createMobAttributes()
                 .add(Attributes.MAX_HEALTH, 20.0D)
@@ -293,10 +351,30 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
     }
 
     private int validatedMainHandSlot(int slot) {
-        if (slot >= FIRST_NORMAL_INVENTORY_SLOT && slot < FIRST_EQUIPMENT_INVENTORY_SLOT) {
-            return slot;
+        return NpcHotbarSelection.validatedHotbarSlot(slot);
+    }
+
+    private List<ItemStack> hotbarItems() {
+        List<ItemStack> items = new ArrayList<>(HOTBAR_SLOT_COUNT);
+        for (int slot = FIRST_NORMAL_INVENTORY_SLOT; slot < HOTBAR_SLOT_COUNT; slot++) {
+            items.add(internalInventory.get(slot));
         }
-        return DEFAULT_SELECTED_MAIN_HAND_SLOT;
+        return items;
+    }
+
+    private static double toolScore(ItemStack itemStack, BlockState blockState) {
+        if (itemStack.isEmpty()) {
+            return 0.0D;
+        }
+        float destroySpeed = itemStack.getDestroySpeed(blockState);
+        if (destroySpeed <= 1.0F && !itemStack.isCorrectToolForDrops(blockState)) {
+            return 0.0D;
+        }
+        double score = destroySpeed;
+        if (itemStack.isCorrectToolForDrops(blockState)) {
+            score += 1000.0D;
+        }
+        return score;
     }
 
     private void collectNearbyItems() {
