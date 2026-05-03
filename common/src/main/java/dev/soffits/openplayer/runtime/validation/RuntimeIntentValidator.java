@@ -21,6 +21,7 @@ public final class RuntimeIntentValidator {
             case STOP -> requireBlankInstruction(intent, "STOP");
             case REPORT_STATUS -> requireBlankInstruction(intent, "REPORT_STATUS");
             case MOVE -> requireCoordinateInstruction(intent, "MOVE");
+            case GOTO -> requireGotoInstruction(intent);
             case LOOK -> requireCoordinateInstruction(intent, "LOOK");
             case PATROL -> requireCoordinateInstruction(intent, "PATROL");
             case FOLLOW_OWNER -> requireBlankInstruction(intent, "FOLLOW_OWNER");
@@ -45,8 +46,7 @@ public final class RuntimeIntentValidator {
             case CHAT -> RuntimeIntentValidationResult.rejected("CHAT cannot be submitted to automation");
             case UNAVAILABLE -> RuntimeIntentValidationResult.rejected("UNAVAILABLE cannot be submitted to automation");
             case OBSERVE -> RuntimeIntentValidationResult.rejected("OBSERVE cannot be submitted to automation");
-            case GOTO,
-                    COLLECT_FOOD,
+            case COLLECT_FOOD,
                     FARM_NEARBY,
                     FISH,
                     ATTACK_TARGET,
@@ -73,6 +73,15 @@ public final class RuntimeIntentValidator {
     private static RuntimeIntentValidationResult requireCoordinateInstruction(CommandIntent intent, String kindName) {
         if (AutomationInstructionParser.parseCoordinateOrNull(intent.instruction()) == null) {
             return RuntimeIntentValidationResult.rejected(kindName + " requires instruction: x y z");
+        }
+        return RuntimeIntentValidationResult.accepted();
+    }
+
+    private static RuntimeIntentValidationResult requireGotoInstruction(CommandIntent intent) {
+        if (AutomationInstructionParser.parseGotoInstructionOrNull(intent.instruction(), 16.0D, 32.0D) == null) {
+            return RuntimeIntentValidationResult.rejected(
+                    "GOTO requires instruction: x y z, owner, block <block_or_item_id> [radius], or entity <entity_type_id> [radius]"
+            );
         }
         return RuntimeIntentValidationResult.accepted();
     }

@@ -219,6 +219,7 @@ OpenPlayer already has:
 **Progress:**
 
 - Phase 8 adds first-party navigation telemetry, replan, loaded-target checks, and bounded stuck recovery around the vanilla NPC navigation backend.
+- Phase 8 now includes first-party `GOTO` execution for deterministic `x y z`, `owner`, `block <block_or_item_id> [radius]`, and `entity <entity_type_id> [radius]` syntax. Block/entity targeting uses a capped loaded-area search helper that scans only server-visible loaded chunks, reports bounded diagnostics, and queues observable/cancellable navigation through the existing controller snapshot and monitor.
 - External pathfinder dependencies remain deferred pending license and provenance review; no Baritone, AltoClef, Automatone, PlayerEngine, or opaque jar dependency is included.
 
 ---

@@ -497,7 +497,6 @@ public final class OpenPlayerNetworking {
                     CHAT,
                     UNAVAILABLE,
                     OBSERVE,
-                    GOTO,
                     INVENTORY_QUERY,
                     EQUIP_ITEM,
                     GIVE_ITEM,
@@ -516,6 +515,7 @@ public final class OpenPlayerNetworking {
                     RESET_MEMORY,
                     BODY_LANGUAGE,
                     BUILD_STRUCTURE -> intentKind.name();
+            case GOTO -> "owner";
         };
     }
 

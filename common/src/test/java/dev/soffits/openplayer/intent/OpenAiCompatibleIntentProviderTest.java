@@ -77,6 +77,12 @@ public final class OpenAiCompatibleIntentProviderTest {
     private static void systemPromptIncludesPhaseFiveSyntax() {
         String prompt = OpenAiCompatibleIntentProvider.systemPrompt();
         require(prompt.contains("INVENTORY_QUERY"), "system prompt must document inventory query syntax");
+        require(prompt.contains("for GOTO use exactly one of: x y z, owner, block <block_or_item_id> [radius], or entity <entity_type_id> [radius]"),
+                "system prompt must document deterministic GOTO syntax");
+        require(prompt.contains("GOTO block/entity only searches already-loaded server-visible area with bounded radius"),
+                "system prompt must document bounded loaded-area GOTO search");
+        require(prompt.contains("do not include the literal GOTO in instruction"),
+                "system prompt must prevent providers from putting GOTO in the instruction field");
         require(prompt.contains("For EQUIP_ITEM use exact item id <item_id>"),
                 "system prompt must document exact equip item ids");
         require(prompt.contains("DROP_ITEM use blank to drop selected hotbar stack or exact one-stack item id syntax <item_id> [count]"),

@@ -8,6 +8,7 @@ public final class NavigationRuntimeTest {
         targetAndReasonAreSanitizedAndBounded();
         recoveryBudgetCannotExceedConfiguredMax();
         replanCountIsTrackedDeterministically();
+        failureKeepsRejectedPathUnreachable();
     }
 
     private static void targetAndReasonAreSanitizedAndBounded() {
@@ -56,6 +57,19 @@ public final class NavigationRuntimeTest {
         require(snapshot.replanCount() == 2, "runtime must count replans");
         require(snapshot.loadedStatus() == NavigationTargetStatus.NO, "runtime must expose unloaded target status");
         require(snapshot.distanceSquared() == 1.0D, "runtime must expose latest distance");
+    }
+
+    private static void failureKeepsRejectedPathUnreachable() {
+        NavigationRuntime runtime = new NavigationRuntime(1);
+        runtime.start(NavigationTarget.position(1.0D, 64.0D, 1.0D), 4.0D, true);
+        runtime.markReachable(false);
+        runtime.fail("navigation_position_rejected");
+        NavigationSnapshot snapshot = runtime.snapshot();
+
+        require(snapshot.state() == NavigationState.FAILED, "rejected path must fail navigation");
+        require("navigation_position_rejected".equals(snapshot.lastReason()), "rejection reason must be deterministic");
+        require(snapshot.loadedStatus() == NavigationTargetStatus.YES, "loaded target status must be preserved");
+        require(snapshot.reachableStatus() == NavigationTargetStatus.NO, "rejected path must stay unreachable");
     }
 
     private static void require(boolean condition, String message) {

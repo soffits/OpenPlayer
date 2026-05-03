@@ -2,7 +2,9 @@ package dev.soffits.openplayer.automation;
 
 import dev.soffits.openplayer.api.NpcOwnerId;
 import dev.soffits.openplayer.automation.AutomationInstructionParser.Coordinate;
+import dev.soffits.openplayer.automation.AutomationInstructionParser.GotoInstruction;
 import dev.soffits.openplayer.automation.InventoryActionInstructionParser.ParsedItemInstruction;
+import dev.soffits.openplayer.automation.navigation.LoadedAreaNavigator;
 import dev.soffits.openplayer.automation.navigation.NavigationRuntime;
 import dev.soffits.openplayer.automation.navigation.NavigationTarget;
 import dev.soffits.openplayer.automation.resource.GetItemRequest;
@@ -92,6 +94,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private static final double GUARD_DEFAULT_RADIUS = 12.0D;
         private static final double GUARD_MAX_RADIUS = 16.0D;
         private static final double PATROL_MAX_DISTANCE = 32.0D;
+        private static final double GOTO_DEFAULT_RADIUS = LoadedAreaNavigator.DEFAULT_RADIUS;
+        private static final double GOTO_MAX_RADIUS = LoadedAreaNavigator.MAX_RADIUS;
+        private static final double GOTO_REACH_DISTANCE = 2.0D;
         private static final int MOVE_MAX_TICKS = 20 * 60;
         private static final int SHORT_TASK_MAX_TICKS = 20 * 30;
         private static final int COLLECT_MAX_TICKS = 20 * 45;
@@ -109,6 +114,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private final InteractionCooldown interactionCooldown = new InteractionCooldown(INTERACTION_COOLDOWN_TICKS);
         private final NavigationRuntime navigationRuntime = new NavigationRuntime(NAVIGATION_MAX_RECOVERIES);
         private final WorkstationLocator workstationLocator = new WorkstationLocator();
+        private final LoadedAreaNavigator loadedAreaNavigator = new LoadedAreaNavigator();
         private QueuedCommand activeCommand;
         private AutomationControllerMonitor activeMonitor;
         private NpcOwnerId ownerId;
@@ -160,6 +166,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 }
                 queuedCommands.add(QueuedCommand.move(coordinate));
                 return accepted("MOVE accepted");
+            }
+            if (kind == IntentKind.GOTO) {
+                return submitGoto(intent.instruction());
             }
             if (kind == IntentKind.LOOK) {
                 Coordinate coordinate = AutomationInstructionParser.parseCoordinateOrNull(intent.instruction());
@@ -523,6 +532,74 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             return rejected("Unsupported intent: " + kind.name());
         }
 
+        private AutomationCommandResult submitGoto(String instruction) {
+            GotoInstruction gotoInstruction = AutomationInstructionParser.parseGotoInstructionOrNull(
+                    instruction, GOTO_DEFAULT_RADIUS, GOTO_MAX_RADIUS
+            );
+            if (gotoInstruction == null) {
+                return rejected("GOTO requires instruction: x y z, owner, block <block_or_item_id> [radius], or entity <entity_type_id> [radius]");
+            }
+            return switch (gotoInstruction.kind()) {
+                case COORDINATE -> submitGotoCoordinate(gotoInstruction.coordinate());
+                case OWNER -> submitGotoOwner();
+                case BLOCK -> submitGotoBlock(gotoInstruction.resourceId(), gotoInstruction.radius());
+                case ENTITY -> submitGotoEntity(gotoInstruction.resourceId(), gotoInstruction.radius());
+            };
+        }
+
+        private AutomationCommandResult submitGotoCoordinate(Coordinate coordinate) {
+            if (!isCoordinateLoaded(coordinate)) {
+                return rejected("GOTO target chunk is not loaded");
+            }
+            queuedCommands.add(QueuedCommand.gotoCoordinate(coordinate));
+            return accepted("GOTO accepted: position");
+        }
+
+        private AutomationCommandResult submitGotoOwner() {
+            if (ownerId == null) {
+                return rejected("GOTO owner requires an NPC owner");
+            }
+            ServerPlayer owner = owner();
+            if (owner == null || !owner.isAlive()) {
+                return rejected("GOTO owner requires the NPC owner online and alive in this dimension");
+            }
+            if (!isBlockLoaded(owner.blockPosition())) {
+                return rejected("GOTO owner target chunk is not loaded");
+            }
+            queuedCommands.add(QueuedCommand.gotoOwnerCommand());
+            return accepted("GOTO accepted: owner");
+        }
+
+        private AutomationCommandResult submitGotoBlock(String blockOrItemId, double radius) {
+            ServerLevel serverLevel = serverLevel();
+            LoadedAreaNavigator.BlockSearchResult result = loadedAreaNavigator.nearestLoadedBlock(
+                    serverLevel, entity.position(), blockOrItemId, radius
+            );
+            if (!result.found()) {
+                return rejected("GOTO block target not found in loaded area: " + result.diagnostics().summary());
+            }
+            queuedCommands.add(QueuedCommand.gotoBlock(result.blockPos()));
+            return accepted("GOTO accepted: block " + result.blockPos().toShortString()
+                    + " diagnostics=" + result.diagnostics().summary());
+        }
+
+        private AutomationCommandResult submitGotoEntity(String entityTypeId, double radius) {
+            ServerLevel serverLevel = serverLevel();
+            LoadedAreaNavigator.EntitySearchResult result = loadedAreaNavigator.nearestLoadedEntity(
+                    serverLevel,
+                    entity.position(),
+                    entityTypeId,
+                    radius,
+                    candidate -> candidate != entity && candidate.isAlive()
+            );
+            if (!result.found()) {
+                return rejected("GOTO entity target not found in loaded area: " + result.diagnostics().summary());
+            }
+            queuedCommands.add(QueuedCommand.gotoEntity(result.entity()));
+            return accepted("GOTO accepted: entity " + entityTypeId
+                    + " diagnostics=" + result.diagnostics().summary());
+        }
+
         @Override
         public void tick() {
             if (entity.level().isClientSide) {
@@ -597,6 +674,10 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 moveToPosition(coordinate);
                 return;
             }
+            if (command.kind() == IntentKind.GOTO) {
+                startGoto(command);
+                return;
+            }
             if (command.kind() == IntentKind.LOOK) {
                 Coordinate coordinate = command.coordinate();
                 entity.getLookControl().setLookAt(coordinate.x(), coordinate.y(), coordinate.z());
@@ -627,6 +708,10 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 if (entity.getNavigation().isDone()) {
                     completeActiveCommand();
                 }
+                return;
+            }
+            if (activeCommand.kind() == IntentKind.GOTO) {
+                continueGoto(activeCommand);
                 return;
             }
             if (activeCommand.kind() == IntentKind.FOLLOW_OWNER) {
@@ -662,6 +747,77 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
         }
 
+        private void startGoto(QueuedCommand command) {
+            if (command.coordinate() != null) {
+                moveToPosition(command.coordinate());
+                return;
+            }
+            if (command.blockTarget() != null) {
+                moveToBlock(command.blockTarget());
+                return;
+            }
+            if (command.gotoOwner()) {
+                ServerPlayer owner = owner();
+                if (owner == null || !owner.isAlive()) {
+                    failActiveCommand("goto_owner_unavailable");
+                    return;
+                }
+                moveToEntity(owner, NavigationTarget.owner());
+                return;
+            }
+            Entity target = command.entityTarget();
+            if (target == null || !target.isAlive()) {
+                failActiveCommand("goto_entity_unavailable");
+                return;
+            }
+            moveToEntity(target, NavigationTarget.entity(entityTypeId(target)));
+        }
+
+        private void continueGoto(QueuedCommand command) {
+            if (command.gotoOwner()) {
+                ServerPlayer owner = owner();
+                if (owner == null || !owner.isAlive()) {
+                    failActiveCommand("goto_owner_unavailable");
+                    return;
+                }
+                navigationRuntime.updateDistance(entity.distanceToSqr(owner));
+                if (entity.distanceToSqr(owner) <= GOTO_REACH_DISTANCE * GOTO_REACH_DISTANCE) {
+                    stopNavigation();
+                    completeActiveCommand();
+                    return;
+                }
+                if (entity.getNavigation().isDone()) {
+                    moveToEntity(owner, NavigationTarget.owner());
+                }
+                return;
+            }
+            Entity target = command.entityTarget();
+            if (target != null) {
+                if (!target.isAlive() || !isBlockLoaded(target.blockPosition())) {
+                    failActiveCommand("goto_entity_unavailable");
+                    return;
+                }
+                navigationRuntime.updateDistance(entity.distanceToSqr(target));
+                if (entity.distanceToSqr(target) <= GOTO_REACH_DISTANCE * GOTO_REACH_DISTANCE) {
+                    stopNavigation();
+                    completeActiveCommand();
+                    return;
+                }
+                if (entity.getNavigation().isDone()) {
+                    moveToEntity(target, NavigationTarget.entity(entityTypeId(target)));
+                }
+                return;
+            }
+            if (command.blockTarget() != null) {
+                navigationRuntime.updateDistance(distanceTo(command.blockTarget()));
+            } else {
+                navigationRuntime.updateDistance(distanceTo(command.coordinate()));
+            }
+            if (entity.getNavigation().isDone()) {
+                completeActiveCommand();
+            }
+        }
+
         private void collectItems(QueuedCommand command) {
             ServerLevel serverLevel = serverLevel();
             if (serverLevel == null) {
@@ -680,7 +836,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             entity.getLookControl().setLookAt(itemEntity);
             if (entity.distanceToSqr(itemEntity) > COLLECT_REACH_DISTANCE * COLLECT_REACH_DISTANCE) {
-                moveToEntity(itemEntity, NavigationTarget.entity(entityTypeId(itemEntity)));
+                if (!moveToEntity(itemEntity, NavigationTarget.entity(entityTypeId(itemEntity)))) {
+                    return;
+                }
                 command.resetReachTicks();
                 return;
             }
@@ -961,7 +1119,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             double distanceSquared = entity.distanceToSqr(owner);
             if (distanceSquared > FOLLOW_START_DISTANCE * FOLLOW_START_DISTANCE) {
-                moveToEntity(owner, NavigationTarget.owner());
+                if (!moveToEntity(owner, NavigationTarget.owner())) {
+                    return;
+                }
             } else if (distanceSquared <= FOLLOW_STOP_DISTANCE * FOLLOW_STOP_DISTANCE) {
                 stopNavigation();
             }
@@ -1285,6 +1445,10 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 moveToPosition(activeCommand.coordinate());
                 return;
             }
+            if (kind == IntentKind.GOTO) {
+                startGoto(activeCommand);
+                return;
+            }
             if (kind == IntentKind.PATROL) {
                 if (activeCommand.returningToStart() && activeCommand.startPosition() != null) {
                     moveToBlock(activeCommand.startPosition());
@@ -1302,43 +1466,58 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
         }
 
-        private void moveToPosition(Coordinate coordinate) {
+        private boolean moveToPosition(Coordinate coordinate) {
             boolean loaded = isCoordinateLoaded(coordinate);
             navigationRuntime.plan(NavigationTarget.position(coordinate.x(), coordinate.y(), coordinate.z()),
                     distanceTo(coordinate), loaded);
             if (!loaded) {
                 failActiveCommand("navigation_target_unloaded");
-                return;
+                return false;
             }
             boolean accepted = entity.getNavigation().moveTo(
                     coordinate.x(), coordinate.y(), coordinate.z(), PLAYER_LIKE_NAVIGATION_SPEED
             );
-            navigationRuntime.markReachable(accepted);
+            if (!accepted) {
+                failActiveCommand("navigation_position_rejected");
+                return false;
+            }
+            navigationRuntime.markReachable(true);
+            return true;
         }
 
-        private void moveToBlock(BlockPos blockPos) {
+        private boolean moveToBlock(BlockPos blockPos) {
             boolean loaded = isBlockLoaded(blockPos);
             navigationRuntime.plan(NavigationTarget.block(blockPos.getX(), blockPos.getY(), blockPos.getZ()),
                     distanceTo(blockPos), loaded);
             if (!loaded) {
                 failActiveCommand("navigation_target_unloaded");
-                return;
+                return false;
             }
             boolean accepted = entity.getNavigation().moveTo(
                     blockPos.getX() + 0.5D, blockPos.getY(), blockPos.getZ() + 0.5D, PLAYER_LIKE_NAVIGATION_SPEED
             );
-            navigationRuntime.markReachable(accepted);
+            if (!accepted) {
+                failActiveCommand("navigation_block_rejected");
+                return false;
+            }
+            navigationRuntime.markReachable(true);
+            return true;
         }
 
-        private void moveToEntity(Entity target, NavigationTarget navigationTarget) {
+        private boolean moveToEntity(Entity target, NavigationTarget navigationTarget) {
             boolean loaded = isBlockLoaded(target.blockPosition());
             navigationRuntime.plan(navigationTarget, entity.distanceToSqr(target), loaded);
             if (!loaded) {
                 failActiveCommand("navigation_target_unloaded");
-                return;
+                return false;
             }
             boolean accepted = entity.getNavigation().moveTo(target, PLAYER_LIKE_NAVIGATION_SPEED);
-            navigationRuntime.markReachable(accepted);
+            if (!accepted) {
+                failActiveCommand("navigation_entity_rejected");
+                return false;
+            }
+            navigationRuntime.markReachable(true);
+            return true;
         }
 
         private void stopNavigation() {
@@ -1387,7 +1566,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (command.maxTicks() > 0) {
                 return command.maxTicks();
             }
-            if (kind == IntentKind.MOVE) {
+            if (kind == IntentKind.MOVE || kind == IntentKind.GOTO) {
                 return MOVE_MAX_TICKS;
             }
             if (kind == IntentKind.COLLECT_ITEMS) {
@@ -1491,6 +1670,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             private final IntentKind kind;
             private final Coordinate coordinate;
             private final double radius;
+            private final BlockPos blockTarget;
+            private final Entity entityTarget;
+            private final boolean gotoOwner;
             private final BlockPos furnacePos;
             private final SmeltingPlan smeltingPlan;
             private final FuelPlan fuelPlan;
@@ -1501,14 +1683,18 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             private boolean smeltStarted;
 
             private QueuedCommand(IntentKind kind, Coordinate coordinate, double radius) {
-                this(kind, coordinate, radius, null, null, null, 0);
+                this(kind, coordinate, radius, null, null, false, null, null, null, 0);
             }
 
-            private QueuedCommand(IntentKind kind, Coordinate coordinate, double radius, BlockPos furnacePos,
+            private QueuedCommand(IntentKind kind, Coordinate coordinate, double radius, BlockPos blockTarget,
+                                  Entity entityTarget, boolean gotoOwner, BlockPos furnacePos,
                                   SmeltingPlan smeltingPlan, FuelPlan fuelPlan, int maxTicks) {
                 this.kind = kind;
                 this.coordinate = coordinate;
                 this.radius = radius;
+                this.blockTarget = blockTarget;
+                this.entityTarget = entityTarget;
+                this.gotoOwner = gotoOwner;
                 this.furnacePos = furnacePos;
                 this.smeltingPlan = smeltingPlan;
                 this.fuelPlan = fuelPlan;
@@ -1517,6 +1703,24 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
             private static QueuedCommand move(Coordinate coordinate) {
                 return new QueuedCommand(IntentKind.MOVE, coordinate, 0.0D);
+            }
+
+            private static QueuedCommand gotoCoordinate(Coordinate coordinate) {
+                return new QueuedCommand(IntentKind.GOTO, coordinate, 0.0D);
+            }
+
+            private static QueuedCommand gotoOwnerCommand() {
+                return new QueuedCommand(IntentKind.GOTO, null, 0.0D, null, null, true, null, null, null, 0);
+            }
+
+            private static QueuedCommand gotoBlock(BlockPos blockPos) {
+                return new QueuedCommand(
+                        IntentKind.GOTO, null, 0.0D, blockPos.immutable(), null, false, null, null, null, 0
+                );
+            }
+
+            private static QueuedCommand gotoEntity(Entity entity) {
+                return new QueuedCommand(IntentKind.GOTO, null, 0.0D, null, entity, false, null, null, null, 0);
             }
 
             private static QueuedCommand look(Coordinate coordinate) {
@@ -1559,6 +1763,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                         IntentKind.SMELT_ITEM,
                         null,
                         0.0D,
+                        null,
+                        null,
+                        false,
                         furnacePos.immutable(),
                         smeltingPlan,
                         fuelPlan,
@@ -1576,6 +1783,18 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
             private double radius() {
                 return radius;
+            }
+
+            private BlockPos blockTarget() {
+                return blockTarget;
+            }
+
+            private Entity entityTarget() {
+                return entityTarget;
+            }
+
+            private boolean gotoOwner() {
+                return gotoOwner;
             }
 
             private BlockPos furnacePos() {

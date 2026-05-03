@@ -23,6 +23,7 @@ public final class RuntimeIntentValidatorTest {
         validatesGetItemInstruction();
         validatesSmeltItemInstruction();
         validatesCoordinateInstructions();
+        validatesGotoInstructions();
         validatesRadiusInstructions();
         rejectsNonAutomationConversationKinds();
         rejectsPlannedIntentKinds();
@@ -183,6 +184,24 @@ public final class RuntimeIntentValidatorTest {
         }
     }
 
+    private static void validatesGotoInstructions() {
+        require(RuntimeIntentValidator.validate(intent(IntentKind.GOTO, "1 64 -2"), true).isAccepted(),
+                "GOTO should accept coordinate syntax");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.GOTO, "owner"), true).isAccepted(),
+                "GOTO should accept owner syntax");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.GOTO, "block minecraft:oak_log 24"), true).isAccepted(),
+                "GOTO should accept block id and radius syntax");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.GOTO, "entity minecraft:zombie"), true).isAccepted(),
+                "GOTO should accept entity id syntax");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.GOTO, "home"), true),
+                "GOTO requires instruction: x y z, owner, block <block_or_item_id> [radius], or entity <entity_type_id> [radius]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.GOTO, "block oak_log"), true),
+                "GOTO requires instruction: x y z, owner, block <block_or_item_id> [radius], or entity <entity_type_id> [radius]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.GOTO, "entity minecraft:zombie 0"), true),
+                "GOTO requires instruction: x y z, owner, block <block_or_item_id> [radius], or entity <entity_type_id> [radius]");
+    }
+
+
     private static void validatesRadiusInstructions() {
         IntentKind[] radiusKinds = {IntentKind.ATTACK_NEAREST, IntentKind.GUARD_OWNER};
         for (IntentKind kind : radiusKinds) {
@@ -250,7 +269,7 @@ public final class RuntimeIntentValidatorTest {
             case MOVE, LOOK, PATROL, BREAK_BLOCK, PLACE_BLOCK -> "1 64 1";
             case ATTACK_NEAREST, GUARD_OWNER -> "12";
             case INTERACT, CHAT, UNAVAILABLE -> "details";
-            case GOTO -> "home";
+            case GOTO -> "owner";
             case INVENTORY_QUERY -> "";
             case EQUIP_ITEM -> "minecraft:iron_sword";
             case GIVE_ITEM -> "minecraft:bread 1 owner";
@@ -301,7 +320,6 @@ public final class RuntimeIntentValidatorTest {
 
     private static EnumSet<IntentKind> plannedNonGatedKinds() {
         return EnumSet.of(
-                IntentKind.GOTO,
                 IntentKind.PAUSE,
                 IntentKind.UNPAUSE,
                 IntentKind.RESET_MEMORY,
