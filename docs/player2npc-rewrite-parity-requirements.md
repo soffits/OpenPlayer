@@ -301,6 +301,282 @@ Provide enough automated and manual verification for implementation agents to co
 - Owner disconnect, reconnect, dimension change, and server restart do not create duplicate companions.
 - Disabled AI and disabled world actions are visibly unavailable and do not perform work.
 
+## Near-1:1 Local Parity Extension Phases
+
+These extension phases define future clean-room work for near-1:1 local Player2NPC-style parity after the baseline rewrite phases. They must remain local/offline by default and must not add commercial account login, online character services, remote skin downloads, opaque jars, Player2NPC code, PlayerEngine vendoring, provider secrets in files, or unreviewed dependencies.
+
+## Phase H: Local Assignments And Multi-Companion Lifecycle
+
+### Goal
+
+Allow one owner to run multiple selected local companions with explicit local assignments while preserving stable identity, duplicate prevention, and server-authoritative lifecycle control.
+
+### Requirements
+
+- Extend selected-character identity with a stable local assignment id so the same character definition can support more than one companion slot when the player explicitly creates those slots.
+- Support listing, selecting, spawning, despawning, stopping, and status reporting per assignment.
+- Keep assignment data local and non-secret; do not include account ids, provider credentials, external service ids, or mutable absolute paths.
+- Preserve owner checks, session cleanup, duplicate prevention, persisted restore, and dimension/server-stop safety for each companion.
+- Add bounded limits for active companions per owner and reject requests above the configured local limit.
+
+### Implementation Guidance
+
+- Build on `CompanionLifecycleManager` and the existing stable local character role derivation instead of replacing runtime services.
+- Treat assignment id as runtime action identity and character id as reusable profile/source data.
+- Keep validation pure Java where practical and keep UI/network packets small.
+- Prefer explicit user-created assignments over implicit auto-spawning from all character files.
+
+### Acceptance Criteria
+
+- A player can spawn two different local assignments without either overwriting the other's lifecycle state.
+- Spawning the same assignment twice reuses or relocates that assignment instead of duplicating it.
+- Logout, reconnect, server stop, restore, and despawn clean up or restore each assignment independently.
+- Invalid assignment ids, deleted character files, and over-limit spawn requests reject with clear English status.
+
+### Non-Goals
+
+- No account login, cloud roster, online character service, or external assignment sync.
+- No automatic party behavior, squad tactics, or shared long-term memory.
+- No remote character import or Player2NPC file compatibility unless a later task explicitly approves it.
+
+## Phase I: Character Gallery And Detail UI Polish
+
+### Goal
+
+Polish the in-game local character selection surface into a clearer gallery/detail experience without introducing a large GUI framework.
+
+### Requirements
+
+- Add a local character gallery view with readable empty, loading, validation-error, selected, spawned, and unavailable states.
+- Improve detail presentation for display name, id, description, local skin status, assignment/lifecycle status, conversation availability, and action permissions.
+- Keep all UI actions server-authoritative and keep client packets limited to stable ids and user intent.
+- Ensure the screen remains usable at common small Minecraft window sizes.
+- Never display provider secrets, absolute filesystem paths, stack traces, or raw provider responses.
+
+### Implementation Guidance
+
+- Continue extending the existing control screen unless a concrete Minecraft UI limitation requires a focused replacement.
+- Use concise English labels and status text.
+- Keep visual previews local-only and tolerant of missing local skin files.
+- Avoid speculative widgets that are not needed for character selection, assignment status, or action submission.
+
+### Acceptance Criteria
+
+- Players can browse, select, inspect, spawn, despawn, and command local characters or assignments from one coherent UI.
+- Invalid character files are visible with safe file names and actionable validation messages.
+- The UI does not leak secrets or host filesystem details.
+- Fabric and Forge clients expose equivalent controls and status text.
+
+### Non-Goals
+
+- No webview, embedded browser, online gallery, account avatar lookup, or remote skin preview.
+- No new GUI dependency unless a future approved task documents provenance and license posture.
+- No full character editing in this phase; editing belongs to Phase J.
+
+## Phase J: In-Game Local Character Editor, Import, And Export
+
+### Goal
+
+Add safe in-game management for local character files so players can create, edit, import, and export local character definitions without leaving Minecraft.
+
+### Requirements
+
+- Support creating and editing approved character fields: id, display name, description, local skin file reference, skin resource id, default role metadata, conversation prompt, and non-secret conversation settings.
+- Validate edited data through the same repository rules used for file loading.
+- Support import/export only from explicit local files chosen under documented mod-owned directories.
+- Reject secrets, absolute paths, parent traversal, non-PNG local skin references, unknown fields, malformed data, and duplicate ids.
+- Writes must avoid partial file corruption where practical and report save failures clearly.
+
+### Implementation Guidance
+
+- Reuse the repository service and validation errors rather than duplicating editor-specific rules.
+- Keep import/export formats dependency-free unless a later task explicitly approves a format and documents its license posture.
+- Treat imported text as untrusted input, even when it came from the local filesystem.
+- Prefer a compact form flow over a broad content-management UI.
+
+### Acceptance Criteria
+
+- A player can create, edit, save, reload, export, and re-import a valid local character without adding dependencies or secrets.
+- Invalid edits cannot be saved over a valid character without a clear rejection.
+- Exported files contain only approved fields and portable relative references.
+- Imported files cannot escape the mod-owned directory or overwrite unrelated files.
+
+### Non-Goals
+
+- No Player2NPC compatibility importer by default.
+- No online character service, cloud backup, account binding, or marketplace-style sharing.
+- No remote skin download or automatic conversion from player account names.
+
+## Phase K: Spoken Conversation UX, Greeting, And Response Surface
+
+### Goal
+
+Provide a small local conversation UX that shows companion greetings and spoken responses while keeping provider-backed parsing optional and disabled by default.
+
+### Requirements
+
+- Add local greeting text and response display surfaces for selected companions when conversation settings are present.
+- Keep AI/provider use disabled unless explicitly configured through existing safe runtime configuration.
+- Show clear statuses for offline, parser disabled, provider unavailable, rejected output, rate-limited, and response accepted states.
+- Keep conversation history bounded, local, and free of secrets or raw provider credentials.
+- Never execute raw model text; actions must still pass through constrained intent validation.
+
+### Implementation Guidance
+
+- Build on the existing conversation loop, `IntentParser`, and `CommandSubmissionResult` paths.
+- Keep response rendering minimal, such as chat/status lines or a small UI panel, before adding richer presentation.
+- Separate spoken text from action intents so a rejected action can still report safely.
+- Treat provider responses and imported prompt text as untrusted.
+
+### Acceptance Criteria
+
+- A configured local character can show a deterministic greeting without contacting a provider.
+- With parser disabled, the UI reports disabled conversation and performs no provider request.
+- With an enabled provider, accepted output can show a bounded spoken response and submit only validated intents.
+- Rejected or unsafe output is visible as a safe status and performs no world action.
+
+### Non-Goals
+
+- No voice synthesis, speech recognition, remote memory service, or persisted private chat logs.
+- No per-character API keys or provider credentials in character files.
+- No arbitrary command execution from free-form model text.
+
+## Phase L: Expanded Intent And Action Vocabulary
+
+### Goal
+
+Expand the clean-room command vocabulary for local companions while keeping every action bounded, permissioned, and server-authoritative.
+
+### Requirements
+
+- Add explicit intents for common companion tasks such as waiting, guarding, patrolling between local points, returning to owner, equipping items, using selected items, interacting with blocks/entities, transferring inventory when approved, and cancelling grouped tasks.
+- Keep world-mutating and violent actions disabled by default unless local automation safety settings allow them.
+- Return deterministic accept/reject statuses for missing targets, unsafe permissions, unavailable items, unloaded chunks, reach failures, cooldowns, and unknown sessions.
+- Preserve `STOP` as a reliable interruption path for all new actions.
+- Keep action parsing constrained; do not add arbitrary scripts or raw command execution.
+
+### Implementation Guidance
+
+- Extend existing `CommandIntent`, automation backend, and validation seams incrementally.
+- Prefer small action records and explicit target shapes over broad stringly typed payloads.
+- Add pure Java tests for parsing and validation before Minecraft runtime tests.
+- Keep unsupported actions honest in status text rather than silently falling back.
+
+### Acceptance Criteria
+
+- Each new intent has validation tests for accepted, rejected, disabled, and unknown-session cases.
+- Active tasks remain bounded and stop on owner disconnect, despawn, server stop, or explicit stop.
+- Disabled world actions cannot mutate the world or attack entities.
+- Existing commands continue to behave as before unless intentionally expanded.
+
+### Non-Goals
+
+- No full scripting language, macro runtime, or arbitrary server command bridge.
+- No PlayerEngine, Automatone, or opaque automation jar integration in this phase.
+- No client-authoritative world mutation.
+
+## Phase M: NPC-Backed Navigation And Controller Foundation
+
+### Goal
+
+Create a clean NPC-backed movement/controller foundation for OpenPlayer NPCs so future pathfinding claims are accurate and not based on controlling the local player.
+
+### Requirements
+
+- Provide a server-side controller abstraction that drives `OpenPlayerNpcEntity` movement, looking, stopping, and task progress directly.
+- Support bounded navigation requests with explicit target, range, timeout, stuck detection, and unloaded-chunk rejection.
+- Keep backend status honest: distinguish vanilla NPC-backed control, optional reflective player-command bridges, unavailable adapters, and unsupported actions.
+- Preserve owner checks and server authority for all movement requests.
+- Avoid hard dependencies or vendored jars.
+
+### Implementation Guidance
+
+- Start with vanilla Minecraft navigation/control APIs available to the NPC entity before considering adapters.
+- Keep a narrow adapter boundary so future pathfinding integrations can be reviewed independently.
+- Do not claim Baritone or another player-controller backend drives `OpenPlayerNpcEntity` until a true NPC-backed adapter exists.
+- Add instrumentation/status that helps diagnose stuck or rejected navigation without leaking coordinates beyond normal local UI needs.
+
+### Acceptance Criteria
+
+- Movement, follow, return, and stop can run through a documented NPC-backed controller path.
+- Unreachable, unloaded, too-distant, or timed-out targets reject or stop safely.
+- Status text accurately identifies the active controller and its limitations.
+- Fabric and Forge behavior is manually verified for basic navigation tasks.
+
+### Non-Goals
+
+- No vendored PlayerEngine, Baritone, Automatone, or opaque pathfinding jar.
+- No claim that stock local-player automation controls server-side NPCs.
+- No advanced parkour, mining routes, or combat navigation beyond explicitly accepted bounded tasks.
+
+## Phase N: Player-Like Interaction Manager Expansion
+
+### Goal
+
+Expand player-like NPC interactions through a safe manager that centralizes inventory, equipment, item use, block/entity interaction, cooldown, and permission checks.
+
+### Requirements
+
+- Add a server-side interaction manager for selected hotbar slot, equipment changes, item use, block interaction, entity interaction, drops, pickup policy, and inventory transfer where explicitly approved.
+- Respect reach, line-of-sight where practical, loaded chunks, permissions, cooldowns, owner safety, and disabled-by-default world action settings.
+- Keep inventory and equipment persistence compatible with existing NPC entity storage.
+- Reject interactions that require a real `Player` when no safe NPC-backed substitute exists.
+- Report clear accept/reject reasons for UI and conversation surfaces.
+
+### Implementation Guidance
+
+- Build on existing `OpenPlayerNpcEntity` helpers and vanilla automation backend behavior.
+- Keep each interaction path small and independently testable where possible.
+- Prefer conservative rejection over partial emulation that can duplicate items, bypass permissions, or mutate the world unexpectedly.
+- Document every interaction that is intentionally approximate rather than truly player-equivalent.
+
+### Acceptance Criteria
+
+- Hotbar selection, equipment changes, drops, pickup behavior, and approved block/entity interactions work through one manager path.
+- Unsafe, disabled, unreachable, unloaded, or unsupported interactions reject without side effects.
+- Inventory persistence remains stable across despawn, restore, and server restart.
+- Manual QA confirms no obvious item duplication or owner-bypass behavior in supported flows.
+
+### Non-Goals
+
+- No full real-player emulation, commercial account session, client inventory authority, crafting automation, or container automation unless later approved.
+- No bypass of server permissions, protections, cooldowns, or reach checks.
+- No opaque helper jars or copied Player2NPC/PlayerEngine logic.
+
+## Phase O: Cross-Loader Manual QA And Release Packaging
+
+### Goal
+
+Complete cross-loader verification and package clean local parity releases with accurate scope, licensing, and known limitations.
+
+### Requirements
+
+- Run Fabric and Forge manual QA for local characters, skins, UI, lifecycle, multi-companion assignments, conversation disabled/enabled states, navigation, interactions, and packaging metadata.
+- Verify docs, README, changelog/release notes where present, mod metadata, license declarations, and dependency provenance remain accurate.
+- Ensure release artifacts contain no secrets, local character files with credentials, remote skin caches, vendored opaque jars, or copied proprietary code.
+- Keep packaging targeted to Minecraft 1.20.1 and Java 17 unless the project intentionally changes targets.
+- Record known gaps honestly and do not market unsupported behavior as implemented.
+
+### Implementation Guidance
+
+- Use a repeatable manual QA checklist split by Fabric, Forge, single-player, and multiplayer/server-hosted scenarios.
+- Run `./gradlew build` with Java 17 before implementation release candidates when available.
+- Run `git diff --check` for documentation and packaging changes.
+- Keep release notes concise and explicit about local/offline defaults and optional provider configuration.
+
+### Acceptance Criteria
+
+- Fabric and Forge builds launch and pass the manual local parity checklist.
+- Packaged artifacts and repository-visible metadata declare `AGPL-3.0-only` and contain no secrets or opaque vendored jars.
+- README and parity docs describe implemented behavior, disabled defaults, and known gaps accurately.
+- Release notes identify clean-room scope and unsupported online/account features.
+
+### Non-Goals
+
+- No release gating on online services, account login, remote skins, cloud character sync, or proprietary dependencies.
+- No hiding known limitations behind vague parity language.
+- No committing or publishing artifacts without an explicit release task.
+
 ## Implementation Order
 
 1. Add the local character model, validation, and repository tests.
