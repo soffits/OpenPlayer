@@ -27,6 +27,7 @@ public final class RuntimeIntentValidatorTest {
         validatesRadiusInstructions();
         rejectsNonAutomationConversationKinds();
         validatesSurvivalRadiusInstructions();
+        validatesWorkLoopInstructions();
         rejectsPlannedIntentKinds();
         gatesPlannedWorldActionKindsBeforeUnimplementedRejection();
         rejectsPlannedNonGatedKindsAsUnimplemented();
@@ -239,6 +240,32 @@ public final class RuntimeIntentValidatorTest {
         }
     }
 
+    private static void validatesWorkLoopInstructions() {
+        require(RuntimeIntentValidator.validate(intent(IntentKind.FARM_NEARBY, ""), true).isAccepted(),
+                "FARM_NEARBY should accept blank radius instruction");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.FARM_NEARBY, "8"), true).isAccepted(),
+                "FARM_NEARBY should accept positive radius instruction");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.FARM_NEARBY, "wide"), true),
+                "FARM_NEARBY instruction must be blank or a positive radius number");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.FARM_NEARBY, "8"), false),
+                "World actions are disabled for this OpenPlayer character");
+
+        require(RuntimeIntentValidator.validate(intent(IntentKind.FISH, ""), true).isAccepted(),
+                "FISH should accept blank duration instruction");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.FISH, "45"), true).isAccepted(),
+                "FISH should accept positive seconds instruction");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.FISH, "stop"), true).isAccepted(),
+                "FISH should accept stop instruction");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.FISH, "cancel"), true).isAccepted(),
+                "FISH should accept cancel instruction");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.FISH, "0"), true),
+                "FISH instruction must be blank, stop, cancel, or a positive duration in seconds");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.FISH, "soon"), true),
+                "FISH instruction must be blank, stop, cancel, or a positive duration in seconds");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.FISH, "45"), false),
+                "World actions are disabled for this OpenPlayer character");
+    }
+
     private static void rejectsNonAutomationConversationKinds() {
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.CHAT, "hello"), true),
                 "CHAT cannot be submitted to automation");
@@ -328,8 +355,6 @@ public final class RuntimeIntentValidatorTest {
 
     private static EnumSet<IntentKind> plannedGatedKinds() {
         return EnumSet.of(
-                IntentKind.FARM_NEARBY,
-                IntentKind.FISH,
                 IntentKind.ATTACK_TARGET,
                 IntentKind.BUILD_STRUCTURE
         );

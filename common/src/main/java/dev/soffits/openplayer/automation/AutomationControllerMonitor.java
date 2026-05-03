@@ -84,8 +84,12 @@ public final class AutomationControllerMonitor {
     }
 
     public void complete() {
+        complete("completed");
+    }
+
+    public void complete(String reason) {
         status = AutomationControllerMonitorStatus.COMPLETED;
-        reason = "completed";
+        this.reason = bounded(reason);
     }
 
     public void cancel() {

@@ -249,6 +249,8 @@ OpenPlayer already has:
 
 ### Phase 10: Farming, Fishing, and Repeatable Work Loops
 
+**Status:** Phase 10 implements bounded `FARM_NEARBY` and truthful `FISH` command handling. `FARM_NEARBY` accepts blank or a capped positive radius, scans only loaded nearby blocks, harvests one mature vanilla crop per queued task, uses vanilla block drops, and replants only after successful placement when the NPC carries the matching seed/item. `FISH` accepts blank, capped positive seconds, `stop`, or `cancel`, but actual cast/reel execution is deterministically rejected until a safe NPC fishing-hook adapter exists because vanilla fishing hooks are player-bound; OpenPlayer does not simulate fake hook or loot. Both commands remain gated by `allowWorldActions` and surface bounded monitor/rejection reasons for no target, harvested/replanted counts, no-replant cases, unsupported fishing, and cancel paths.
+
 **Objective:** Implement common repeatable work commands.
 
 **Capabilities:**

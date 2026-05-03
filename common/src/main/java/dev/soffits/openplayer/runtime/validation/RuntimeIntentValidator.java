@@ -1,6 +1,7 @@
 package dev.soffits.openplayer.runtime.validation;
 
 import dev.soffits.openplayer.automation.AutomationInstructionParser;
+import dev.soffits.openplayer.automation.work.FishingWorkPolicy;
 import dev.soffits.openplayer.automation.InventoryActionInstructionParser;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentKind;
@@ -36,6 +37,8 @@ public final class RuntimeIntentValidator {
             case ATTACK_NEAREST -> requireBlankOrPositiveRadius(intent, "ATTACK_NEAREST");
             case GUARD_OWNER -> requireBlankOrPositiveRadius(intent, "GUARD_OWNER");
             case COLLECT_FOOD -> requireBlankOrPositiveRadius(intent, "COLLECT_FOOD");
+            case FARM_NEARBY -> requireBlankOrPositiveRadius(intent, "FARM_NEARBY");
+            case FISH -> requireFishInstruction(intent);
             case DEFEND_OWNER -> requireBlankOrPositiveRadius(intent, "DEFEND_OWNER");
             case INVENTORY_QUERY -> requireBlankInstruction(intent, "INVENTORY_QUERY");
             case EQUIP_ITEM -> requireItemOnlyInstruction(intent, "EQUIP_ITEM");
@@ -48,9 +51,7 @@ public final class RuntimeIntentValidator {
             case CHAT -> RuntimeIntentValidationResult.rejected("CHAT cannot be submitted to automation");
             case UNAVAILABLE -> RuntimeIntentValidationResult.rejected("UNAVAILABLE cannot be submitted to automation");
             case OBSERVE -> RuntimeIntentValidationResult.rejected("OBSERVE cannot be submitted to automation");
-            case FARM_NEARBY,
-                    FISH,
-                    ATTACK_TARGET,
+            case ATTACK_TARGET,
                     PAUSE,
                     UNPAUSE,
                     RESET_MEMORY,
@@ -115,6 +116,16 @@ public final class RuntimeIntentValidator {
             return RuntimeIntentValidationResult.rejected("GIVE_ITEM requires instruction: <item_id> [count] [owner]");
         }
         return RuntimeIntentValidationResult.accepted();
+    }
+
+    private static RuntimeIntentValidationResult requireFishInstruction(CommandIntent intent) {
+        if (FishingWorkPolicy.isStopInstruction(intent.instruction())
+                || FishingWorkPolicy.parseDurationTicksOrNegative(intent.instruction()) >= 0) {
+            return RuntimeIntentValidationResult.accepted();
+        }
+        return RuntimeIntentValidationResult.rejected(
+                "FISH instruction must be blank, stop, cancel, or a positive duration in seconds"
+        );
     }
 
     private static RuntimeIntentValidationResult requireBlankOrPositiveRadius(CommandIntent intent, String kindName) {

@@ -20,6 +20,8 @@ import dev.soffits.openplayer.automation.survival.SurvivalDangerPolicy;
 import dev.soffits.openplayer.automation.survival.SurvivalFoodPolicy;
 import dev.soffits.openplayer.automation.survival.SurvivalHealthPolicy;
 import dev.soffits.openplayer.automation.survival.SurvivalTargetPolicy;
+import dev.soffits.openplayer.automation.work.FarmingWorkPolicy;
+import dev.soffits.openplayer.automation.work.FishingWorkPolicy;
 import dev.soffits.openplayer.automation.workstation.WorkstationCapability;
 import dev.soffits.openplayer.automation.workstation.WorkstationDiagnostics;
 import dev.soffits.openplayer.automation.workstation.WorkstationKind;
@@ -52,6 +54,7 @@ import net.minecraft.world.Container;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.level.block.Block;
@@ -104,6 +107,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private static final double GUARD_MAX_RADIUS = 16.0D;
         private static final double DEFEND_DEFAULT_RADIUS = 12.0D;
         private static final double DEFEND_MAX_RADIUS = 16.0D;
+        private static final double FARM_DEFAULT_RADIUS = FarmingWorkPolicy.DEFAULT_RADIUS;
+        private static final double FARM_MAX_RADIUS = FarmingWorkPolicy.MAX_RADIUS;
         private static final double PATROL_MAX_DISTANCE = 32.0D;
         private static final double GOTO_DEFAULT_RADIUS = LoadedAreaNavigator.DEFAULT_RADIUS;
         private static final double GOTO_MAX_RADIUS = LoadedAreaNavigator.MAX_RADIUS;
@@ -241,6 +246,27 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 }
                 queuedCommands.add(QueuedCommand.collectFood(radius));
                 return accepted("COLLECT_FOOD accepted");
+            }
+            if (kind == IntentKind.FARM_NEARBY) {
+                double radius = AutomationInstructionParser.parseOptionalRadiusOrNegative(
+                        intent.instruction(), FARM_DEFAULT_RADIUS, FARM_MAX_RADIUS
+                );
+                if (radius < 0.0D) {
+                    return rejected("FARM_NEARBY instruction must be blank or a positive radius number");
+                }
+                queuedCommands.add(QueuedCommand.farmNearby(radius));
+                return accepted("FARM_NEARBY accepted: radius=" + formatRadius(radius));
+            }
+            if (kind == IntentKind.FISH) {
+                if (FishingWorkPolicy.isStopInstruction(intent.instruction())) {
+                    stopAll();
+                    return accepted("FISH stop accepted");
+                }
+                int durationTicks = FishingWorkPolicy.parseDurationTicksOrNegative(intent.instruction());
+                if (durationTicks < 0) {
+                    return rejected("FISH instruction must be blank, stop, cancel, or a positive duration in seconds");
+                }
+                return rejected("FISH requires a safe NPC fishing hook adapter; vanilla fishing is player-bound and is not simulated");
             }
             if (kind == IntentKind.EQUIP_BEST_ITEM) {
                 if (!AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
@@ -740,9 +766,11 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             if (command.kind() == IntentKind.COLLECT_ITEMS
                     || command.kind() == IntentKind.COLLECT_FOOD
+                    || command.kind() == IntentKind.FARM_NEARBY
                     || command.kind() == IntentKind.BREAK_BLOCK
                     || command.kind() == IntentKind.PLACE_BLOCK
                     || command.kind() == IntentKind.SMELT_ITEM
+                    || command.kind() == IntentKind.FISH
                     || command.kind() == IntentKind.ATTACK_NEAREST
                     || command.kind() == IntentKind.GUARD_OWNER
                     || command.kind() == IntentKind.DEFEND_OWNER
@@ -780,6 +808,14 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             if (activeCommand.kind() == IntentKind.COLLECT_FOOD) {
                 collectFood(activeCommand);
+                return;
+            }
+            if (activeCommand.kind() == IntentKind.FARM_NEARBY) {
+                farmNearby(activeCommand);
+                return;
+            }
+            if (activeCommand.kind() == IntentKind.FISH) {
+                fish(activeCommand);
                 return;
             }
             if (activeCommand.kind() == IntentKind.BREAK_BLOCK) {
@@ -1111,6 +1147,114 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                     .min(Comparator.comparingDouble((ItemEntity itemEntity) -> entity.distanceToSqr(itemEntity))
                             .thenComparing(itemEntity -> itemEntity.getUUID().toString()))
                     .orElse(null);
+        }
+
+        private void farmNearby(QueuedCommand command) {
+            ServerLevel serverLevel = serverLevel();
+            if (serverLevel == null) {
+                failActiveCommand("server_level_unavailable");
+                return;
+            }
+            if (!isWithinStartDistance(command, entity.position(), command.radius())) {
+                failActiveCommand("outside_farm_radius");
+                return;
+            }
+            BlockPos cropPos = nearestMatureCrop(serverLevel, command);
+            if (cropPos == null) {
+                stopNavigation();
+                completeActiveCommand("farm:no_mature_crop radius=" + formatRadius(command.radius()));
+                return;
+            }
+            BlockState cropState = serverLevel.getBlockState(cropPos);
+            Item replantItem = FarmingWorkPolicy.replantItem(cropState);
+            BlockState replantState = FarmingWorkPolicy.replantState(cropState);
+            lookAtBlock(cropPos);
+            if (!isWithinInteractionDistance(cropPos)) {
+                moveNearBlock(cropPos);
+                return;
+            }
+            stopNavigation();
+            entity.swingMainHandAction();
+            boolean destroyed = serverLevel.destroyBlock(cropPos, true, entity);
+            if (!destroyed) {
+                failActiveCommand("crop_harvest_failed");
+                return;
+            }
+            if (replantItem == null || replantState == null) {
+                completeActiveCommand("farm:harvested_no_replant unsupported_mapping harvested=1");
+                return;
+            }
+            if (entity.normalInventoryCount(replantItem) <= 0) {
+                completeActiveCommand("farm:harvested_no_replant missing=" + itemId(replantItem) + " harvested=1");
+                return;
+            }
+            if (!serverLevel.getBlockState(cropPos).isAir() || !replantState.canSurvive(serverLevel, cropPos)) {
+                completeActiveCommand("farm:harvested_no_replant invalid_soil harvested=1");
+                return;
+            }
+            if (!serverLevel.setBlock(cropPos, replantState, Block.UPDATE_ALL)) {
+                completeActiveCommand("farm:harvested_no_replant placement_failed harvested=1");
+                return;
+            }
+            if (!entity.consumeOneNormalInventoryItem(replantItem)) {
+                serverLevel.destroyBlock(cropPos, false, entity);
+                completeActiveCommand("farm:harvested_no_replant seed_race harvested=1");
+                return;
+            }
+            completeActiveCommand("farm:harvested=1 replanted=1 item=" + itemId(replantItem));
+        }
+
+        private BlockPos nearestMatureCrop(ServerLevel serverLevel, QueuedCommand command) {
+            int radius = (int) Math.ceil(command.radius());
+            BlockPos origin = command.startPosition() == null ? entity.blockPosition() : command.startPosition();
+            BlockPos bestPos = null;
+            double bestDistance = Double.MAX_VALUE;
+            for (int x = origin.getX() - radius; x <= origin.getX() + radius; x++) {
+                for (int y = origin.getY() - radius; y <= origin.getY() + radius; y++) {
+                    for (int z = origin.getZ() - radius; z <= origin.getZ() + radius; z++) {
+                        BlockPos candidate = new BlockPos(x, y, z);
+                        if (!serverLevel.hasChunkAt(candidate)
+                                || !isWithinStartDistance(command, Vec3.atCenterOf(candidate), command.radius())) {
+                            continue;
+                        }
+                        BlockState blockState = serverLevel.getBlockState(candidate);
+                        if (!FarmingWorkPolicy.isSupportedCrop(blockState) || !FarmingWorkPolicy.isMature(blockState)) {
+                            continue;
+                        }
+                        double distance = entity.distanceToSqr(Vec3.atCenterOf(candidate));
+                        if (distance < bestDistance || (distance == bestDistance && compareBlockPos(candidate, bestPos) < 0)) {
+                            bestDistance = distance;
+                            bestPos = candidate.immutable();
+                        }
+                    }
+                }
+            }
+            return bestPos;
+        }
+
+        private void fish(QueuedCommand command) {
+            ServerLevel serverLevel = serverLevel();
+            if (serverLevel == null) {
+                failActiveCommand("server_level_unavailable");
+                return;
+            }
+            if (!entity.getMainHandItem().is(Items.FISHING_ROD)
+                    && !entity.selectOrMoveNormalItemToHotbar(Items.FISHING_ROD)) {
+                failActiveCommand("missing_fishing_rod");
+                return;
+            }
+            if (!command.fishingCast()) {
+                stopNavigation();
+                entity.getLookControl().setLookAt(entity.getX(), entity.getEyeY() - 0.2D, entity.getZ() + 4.0D);
+                entity.swingMainHandAction();
+                command.markFishingCast();
+                return;
+            }
+            command.incrementFishingTicks();
+            if (command.fishingTicks() >= command.maxTicks()) {
+                entity.swingMainHandAction();
+                completeActiveCommand("fish:cast_wait_reel ticks=" + command.fishingTicks() + " loot=none hook=unsupported");
+            }
         }
 
         private void breakBlock(QueuedCommand command) {
@@ -1656,14 +1800,19 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         }
 
         private void completeActiveCommand() {
+            completeActiveCommand("completed");
+        }
+
+        private void completeActiveCommand(String reason) {
             if (activeCommand != null) {
                 OpenPlayerDebugEvents.record("automation", "completed", null, null, null,
-                        "kind=" + activeCommand.kind().name());
+                        "kind=" + activeCommand.kind().name() + " reason=" + AutomationControllerMonitor.bounded(reason));
                 OpenPlayerRawTrace.automationOperation("completed", activeCommand.kind().name(),
-                        "entity=" + entity.getUUID() + " position=" + entity.position());
+                        "entity=" + entity.getUUID() + " position=" + entity.position()
+                                + " reason=" + AutomationControllerMonitor.bounded(reason));
             }
             if (activeMonitor != null) {
-                activeMonitor.complete();
+                activeMonitor.complete(reason);
             }
             navigationRuntime.complete();
             activeCommand = null;
@@ -1752,6 +1901,18 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             if (kind == IntentKind.BREAK_BLOCK || kind == IntentKind.PLACE_BLOCK) {
                 moveNearBlock(activeCommand.blockPos());
+                return;
+            }
+            if (kind == IntentKind.FARM_NEARBY) {
+                ServerLevel serverLevel = serverLevel();
+                if (serverLevel == null) {
+                    failActiveCommand("server_level_unavailable");
+                    return;
+                }
+                BlockPos cropPos = nearestMatureCrop(serverLevel, activeCommand);
+                if (cropPos != null) {
+                    moveNearBlock(cropPos);
+                }
                 return;
             }
             if (kind == IntentKind.SMELT_ITEM && activeCommand.furnacePos() != null) {
@@ -1946,6 +2107,28 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             return BuiltInRegistries.ITEM.getKey(item).toString();
         }
 
+        private static int compareBlockPos(BlockPos first, BlockPos second) {
+            if (second == null) {
+                return -1;
+            }
+            int y = Integer.compare(first.getY(), second.getY());
+            if (y != 0) {
+                return y;
+            }
+            int x = Integer.compare(first.getX(), second.getX());
+            if (x != 0) {
+                return x;
+            }
+            return Integer.compare(first.getZ(), second.getZ());
+        }
+
+        private static String formatRadius(double radius) {
+            if (radius == Math.rint(radius)) {
+                return Integer.toString((int) radius);
+            }
+            return Double.toString(radius);
+        }
+
         private static String reasonSuffix(ResourcePlanResult plan) {
             if (plan.reason().isEmpty()) {
                 return "";
@@ -1975,6 +2158,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             private int reachTicks;
             private boolean patrolReturn;
             private boolean smeltStarted;
+            private boolean fishingCast;
+            private int fishingTicks;
 
             private QueuedCommand(IntentKind kind, Coordinate coordinate, double radius) {
                 this(kind, coordinate, radius, null, null, false, null, null, null, 0, false);
@@ -2032,6 +2217,16 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
             private static QueuedCommand collectFood(double radius) {
                 return new QueuedCommand(IntentKind.COLLECT_FOOD, null, radius);
+            }
+
+            private static QueuedCommand farmNearby(double radius) {
+                return new QueuedCommand(IntentKind.FARM_NEARBY, null, radius);
+            }
+
+            private static QueuedCommand fish(int maxTicks) {
+                return new QueuedCommand(
+                        IntentKind.FISH, null, 0.0D, null, null, false, null, null, null, maxTicks, false
+                );
             }
 
             private static QueuedCommand breakBlock(Coordinate coordinate) {
@@ -2133,6 +2328,22 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
             private void markSmeltStarted() {
                 smeltStarted = true;
+            }
+
+            private boolean fishingCast() {
+                return fishingCast;
+            }
+
+            private void markFishingCast() {
+                fishingCast = true;
+            }
+
+            private int fishingTicks() {
+                return fishingTicks;
+            }
+
+            private void incrementFishingTicks() {
+                fishingTicks++;
             }
 
             private int reachTicks() {

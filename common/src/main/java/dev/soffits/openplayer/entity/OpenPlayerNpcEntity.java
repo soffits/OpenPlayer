@@ -249,6 +249,24 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
         return slot >= 0 && selectHotbarSlot(slot);
     }
 
+    public boolean selectOrMoveNormalItemToHotbar(Item item) {
+        if (item == null) {
+            return false;
+        }
+        int hotbarSlot = NpcInventoryTransfer.firstHotbarSlotMatchingItem(internalInventory, item);
+        if (hotbarSlot >= 0) {
+            return selectHotbarSlot(hotbarSlot);
+        }
+        int inventorySlot = firstNormalInventorySlotMatching(item, HOTBAR_SLOT_COUNT, FIRST_EQUIPMENT_INVENTORY_SLOT);
+        if (inventorySlot < 0) {
+            return false;
+        }
+        ItemStack selectedStack = internalInventory.get(selectedMainHandSlot).copy();
+        internalInventory.set(selectedMainHandSlot, internalInventory.get(inventorySlot).copy());
+        internalInventory.set(inventorySlot, selectedStack);
+        return true;
+    }
+
     public boolean selectBestAttackItem() {
         int slot = NpcHotbarSelection.bestScoredSlot(hotbarItems(), OpenPlayerNpcEntity::attackItemScore);
         return slot >= 0 && selectHotbarSlot(slot);
@@ -375,6 +393,19 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
         return true;
     }
 
+    public boolean consumeOneNormalInventoryItem(Item item) {
+        if (item == null) {
+            return false;
+        }
+        return !NpcInventoryTransfer.removeExactCount(
+                internalInventory,
+                item,
+                1,
+                NpcInventoryTransfer.FIRST_NORMAL_SLOT,
+                NpcInventoryTransfer.FIRST_EQUIPMENT_SLOT
+        ).isEmpty();
+    }
+
     public boolean giveInventoryItemToPlayer(ServerPlayer player, Item item, int count) {
         if (player == null || item == null || count < 1) {
             return false;
@@ -494,6 +525,17 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
         internalInventory.set(selectedMainHandSlot, foodStack);
         internalInventory.set(slot, selectedStack);
         return true;
+    }
+
+    private int firstNormalInventorySlotMatching(Item item, int startSlotInclusive, int endSlotExclusive) {
+        int end = Math.min(endSlotExclusive, internalInventory.size());
+        for (int slot = Math.max(FIRST_NORMAL_INVENTORY_SLOT, startSlotInclusive); slot < end; slot++) {
+            ItemStack stack = internalInventory.get(slot);
+            if (!stack.isEmpty() && stack.is(item)) {
+                return slot;
+            }
+        }
+        return -1;
     }
 
     public static boolean canUseSelectedMainHandItemLocally(ItemStack selectedStack) {
