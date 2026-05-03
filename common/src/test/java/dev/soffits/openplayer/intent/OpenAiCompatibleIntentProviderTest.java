@@ -11,6 +11,7 @@ public final class OpenAiCompatibleIntentProviderTest {
         preservesCompleteChatCompletionsEndpoint();
         preservesOtherExplicitEndpoints();
         preservesQueryWhenResolvingV1BaseEndpoint();
+        systemPromptConstrainConversationReplies();
     }
 
     private static void resolvesV1BaseEndpoint() throws Exception {
@@ -43,6 +44,16 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "https://api.example.invalid/v1/chat/completions?api-version=2024-01-01".equals(normalize("https://api.example.invalid/v1?api-version=2024-01-01")),
                 "query must be preserved when resolving base endpoint"
         );
+    }
+
+    private static void systemPromptConstrainConversationReplies() {
+        String prompt = OpenAiCompatibleIntentProvider.systemPrompt();
+        require(prompt.contains("For CHAT, instruction must be the selected character's concise conversational reply"),
+                "system prompt must make CHAT instruction an NPC reply");
+        require(prompt.contains("For UNAVAILABLE, instruction may be blank or a short safe reason"),
+                "system prompt must allow a short safe UNAVAILABLE reason");
+        require(prompt.contains("Return JSON only"), "system prompt must constrain output to JSON only");
+        require(prompt.contains("no secrets"), "system prompt must prohibit secrets");
     }
 
     private static String normalize(String value) throws Exception {

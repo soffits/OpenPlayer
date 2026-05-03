@@ -47,7 +47,7 @@ public final class OpenPlayerRuntime {
     private static void installServerService(MinecraftServer server) {
         reloadIntentParser();
         activeService = new RuntimeAiPlayerNpcService(server, activeIntentParser);
-        activeService.removeStalePersistedNpcs();
+        activeService.reattachPersistedNpcs();
         OpenPlayerApi.registerNpcService(activeService);
     }
 

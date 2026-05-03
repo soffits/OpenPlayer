@@ -39,6 +39,8 @@ public final class ConversationPromptAssembler {
         character.optionalConversationSettings().ifPresent(value -> builder.append("Conversation settings: ").append(value).append("\n"));
         builder.append("Return only an OpenPlayer intent JSON object accepted by the configured intent parser. ");
         builder.append("Do not include provider credentials, secrets, markdown, or free-form command text.\n");
+        builder.append("When kind is CHAT, instruction must be the selected character's concise conversational reply to the player, following the conversation prompt and settings. ");
+        builder.append("When kind is UNAVAILABLE, instruction may be blank or a short safe reason the selected character cannot help.\n");
         if (!history.isEmpty()) {
             builder.append("Recent bounded history:\n");
             for (ConversationTurn turn : history) {

@@ -54,19 +54,41 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         this.intentParser = intentParser;
     }
 
-    public synchronized void removeStalePersistedNpcs() {
+    public synchronized void reattachPersistedNpcs() {
+        int reattached = 0;
         int removed = 0;
         for (ServerLevel level : server.getAllLevels()) {
             for (Entity entity : level.getAllEntities()) {
                 if (entity instanceof OpenPlayerNpcEntity npcEntity) {
-                    npcEntity.stopRuntimeCommands();
-                    npcEntity.discard();
-                    removed++;
+                    if (!npcEntity.hasValidPersistedIdentity()) {
+                        npcEntity.stopRuntimeCommands();
+                        npcEntity.discard();
+                        removed++;
+                        continue;
+                    }
+                    AiPlayerNpcSpec spec = persistedSpec(level, npcEntity);
+                    RuntimeNpcIdentityKey identityKey = RuntimeNpcIdentityKey.from(spec);
+                    if (sessionIdsByIdentity.containsKey(identityKey)) {
+                        npcEntity.stopRuntimeCommands();
+                        npcEntity.discard();
+                        removed++;
+                        continue;
+                    }
+                    NpcSessionId sessionId = new NpcSessionId(UUID.randomUUID());
+                    RuntimeAiPlayerNpcSession session = new RuntimeAiPlayerNpcSession(this, sessionId, spec, npcEntity.getUUID());
+                    sessions.put(sessionId, session);
+                    sessionIdsByIdentity.put(identityKey, sessionId);
+                    applyProfile(npcEntity, spec);
+                    reattached++;
                 }
             }
         }
+        if (reattached > 0) {
+            OpenPlayerDebugEvents.record("npc_lifecycle", "persisted_reattached", null, null, null,
+                    "count=" + reattached);
+        }
         if (removed > 0) {
-            OpenPlayerDebugEvents.record("npc_lifecycle", "stale_removed", null, null, null, "count=" + removed);
+            OpenPlayerDebugEvents.record("npc_lifecycle", "persisted_removed", null, null, null, "count=" + removed);
         }
     }
 
@@ -99,7 +121,13 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
             sessionIdsByIdentity.remove(identityKey);
         }
 
-        OpenPlayerNpcEntity entity = spawnEntity(level, spec);
+        OpenPlayerNpcEntity entity = persistedEntityFor(level, spec);
+        if (entity == null) {
+            entity = spawnEntity(level, spec);
+        } else {
+            relocate(entity, spec.spawnLocation());
+            applyProfile(entity, spec);
+        }
         NpcSessionId sessionId = new NpcSessionId(UUID.randomUUID());
         RuntimeAiPlayerNpcSession session = new RuntimeAiPlayerNpcSession(this, sessionId, spec, entity.getUUID());
         sessions.put(sessionId, session);
@@ -267,6 +295,50 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
     private RuntimeAiPlayerNpcSession existingSession(RuntimeNpcIdentityKey identityKey) {
         NpcSessionId sessionId = sessionIdsByIdentity.get(identityKey);
         return sessionId == null ? null : sessions.get(sessionId);
+    }
+
+    private AiPlayerNpcSpec persistedSpec(ServerLevel level, OpenPlayerNpcEntity entity) {
+        return new AiPlayerNpcSpec(
+                new dev.soffits.openplayer.api.NpcRoleId(entity.persistedRoleId().orElseThrow()),
+                new NpcOwnerId(entity.persistedOwnerId().orElseThrow()),
+                new dev.soffits.openplayer.api.NpcProfileSpec(
+                        entity.persistedProfileName().orElseThrow(),
+                        entity.persistedProfileSkinTexture().orElse(null)
+                ),
+                new NpcSpawnLocation(
+                        level.dimension().location().toString(),
+                        entity.getX(),
+                        entity.getY(),
+                        entity.getZ()
+                ),
+                entity.allowWorldActions()
+        );
+    }
+
+    private OpenPlayerNpcEntity persistedEntityFor(ServerLevel level, AiPlayerNpcSpec spec) {
+        RuntimeNpcIdentityKey identityKey = RuntimeNpcIdentityKey.from(spec);
+        OpenPlayerNpcEntity matchedEntity = null;
+        for (Entity entity : level.getAllEntities()) {
+            if (!(entity instanceof OpenPlayerNpcEntity npcEntity) || !npcEntity.hasValidPersistedIdentity()) {
+                continue;
+            }
+            RuntimeNpcIdentityKey persistedIdentityKey = RuntimeNpcIdentityKey.from(
+                    npcEntity.persistedOwnerId().orElseThrow(),
+                    npcEntity.persistedRoleId().orElseThrow(),
+                    npcEntity.persistedProfileName().orElseThrow()
+            );
+            if (!persistedIdentityKey.equals(identityKey)) {
+                continue;
+            }
+            if (matchedEntity == null) {
+                matchedEntity = npcEntity;
+            } else {
+                npcEntity.stopRuntimeCommands();
+                npcEntity.discard();
+                OpenPlayerDebugEvents.record("npc_lifecycle", "persisted_removed", null, null, null, "duplicate_identity");
+            }
+        }
+        return matchedEntity;
     }
 
     private void removeIndexes(NpcSessionId sessionId) {

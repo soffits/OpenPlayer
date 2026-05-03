@@ -16,6 +16,8 @@ import dev.soffits.openplayer.api.NpcSpawnLocation;
 import dev.soffits.openplayer.character.LocalAssignmentDefinition;
 import dev.soffits.openplayer.character.LocalAssignmentRepositoryResult;
 import dev.soffits.openplayer.character.LocalCharacterDefinition;
+import dev.soffits.openplayer.debug.OpenPlayerDebugEvent;
+import dev.soffits.openplayer.debug.OpenPlayerDebugEvents;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentKind;
 import dev.soffits.openplayer.intent.IntentParser;
@@ -58,6 +60,8 @@ public final class CompanionLifecycleManagerTest {
         disabledParserRecordsFailureWithoutProviderCall();
         missingConversationConfigIsUnavailableAndDoesNotUseRawParserPath();
         acceptedConversationCommandRecordsSafeActionSummary();
+        chatConversationRecordsNpcReplyWithoutAutomation();
+        unavailableConversationRecordsSafeNpcReplyWithoutAutomation();
         acceptedConversationHistoryDoesNotRetainProviderInstruction();
         conversationHistoryEvictsOldOwnerKeysFromLaterPrompts();
         conversationHistoryEvictsOldAssignmentKeysFromLaterPrompts();
@@ -275,6 +279,7 @@ public final class CompanionLifecycleManagerTest {
         System.setProperty("OPENPLAYER_INTENT_PROVIDER_MODEL", "test-model");
         System.setProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY", "test-key");
         try {
+            OpenPlayerDebugEvents.clearForTests();
             TestNpcService service = new TestNpcService();
             LocalCharacterDefinition character = conversationCharacter();
             CountingIntentParser parser = new CountingIntentParser();
@@ -295,6 +300,76 @@ public final class CompanionLifecycleManagerTest {
                     "accepted command must record a safe intent summary");
             require(events.stream().noneMatch(event -> event.length() > 128),
                     "accepted command summary must stay bounded for client display");
+        } finally {
+            restoreProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT", previousEndpoint);
+            restoreProperty("OPENPLAYER_INTENT_PROVIDER_MODEL", previousModel);
+            restoreProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY", previousApiKey);
+        }
+    }
+
+    private static void chatConversationRecordsNpcReplyWithoutAutomation() {
+        String previousEndpoint = System.getProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT");
+        String previousModel = System.getProperty("OPENPLAYER_INTENT_PROVIDER_MODEL");
+        String previousApiKey = System.getProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY");
+        System.setProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT", "https://example.invalid/v1/chat/completions");
+        System.setProperty("OPENPLAYER_INTENT_PROVIDER_MODEL", "test-model");
+        System.setProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY", "test-key");
+        try {
+            OpenPlayerDebugEvents.clearForTests();
+            TestNpcService service = new TestNpcService();
+            LocalCharacterDefinition character = conversationCharacter();
+            CompanionLifecycleManager manager = CompanionLifecycleManager.withAssignments(
+                    () -> service,
+                    () -> new LocalAssignmentRepositoryResult(List.of(LocalAssignmentDefinition.defaultFor(character)), List.of(character), List.of()),
+                    () -> input -> new CommandIntent(IntentKind.CHAT, IntentPriority.NORMAL, "你好")
+            );
+            manager.spawnSelectedAssignment(new NpcOwnerId(OWNER_ID),
+                    new NpcSpawnLocation("minecraft:overworld", 1.0D, 64.0D, 1.0D), character.id());
+
+            CommandSubmissionResult result = manager.submitSelectedCommandText(OWNER_ID, character.id(), "hello");
+
+            require(result.status() == CommandSubmissionStatus.ACCEPTED, "CHAT conversation must be accepted as a reply");
+            require("你好".equals(result.message()), "CHAT conversation result must expose the NPC reply");
+            require(service.submittedCommandCount == 0, "CHAT conversation must not submit automation");
+            requireProviderParseSuccess(IntentKind.CHAT, "CHAT conversation must record provider_parse success");
+            List<String> events = manager.conversationEventLines(OWNER_ID, LocalAssignmentDefinition.defaultFor(character));
+            require(events.stream().anyMatch(event -> event.contains("你好")),
+                    "CHAT conversation must record the NPC reply for UI display");
+        } finally {
+            restoreProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT", previousEndpoint);
+            restoreProperty("OPENPLAYER_INTENT_PROVIDER_MODEL", previousModel);
+            restoreProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY", previousApiKey);
+        }
+    }
+
+    private static void unavailableConversationRecordsSafeNpcReplyWithoutAutomation() {
+        String previousEndpoint = System.getProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT");
+        String previousModel = System.getProperty("OPENPLAYER_INTENT_PROVIDER_MODEL");
+        String previousApiKey = System.getProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY");
+        System.setProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT", "https://example.invalid/v1/chat/completions");
+        System.setProperty("OPENPLAYER_INTENT_PROVIDER_MODEL", "test-model");
+        System.setProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY", "test-key");
+        try {
+            OpenPlayerDebugEvents.clearForTests();
+            TestNpcService service = new TestNpcService();
+            LocalCharacterDefinition character = conversationCharacter();
+            CompanionLifecycleManager manager = CompanionLifecycleManager.withAssignments(
+                    () -> service,
+                    () -> new LocalAssignmentRepositoryResult(List.of(LocalAssignmentDefinition.defaultFor(character)), List.of(character), List.of()),
+                    () -> input -> new CommandIntent(IntentKind.UNAVAILABLE, IntentPriority.NORMAL, "")
+            );
+            manager.spawnSelectedAssignment(new NpcOwnerId(OWNER_ID),
+                    new NpcSpawnLocation("minecraft:overworld", 1.0D, 64.0D, 1.0D), character.id());
+
+            CommandSubmissionResult result = manager.submitSelectedCommandText(OWNER_ID, character.id(), "cut trees");
+
+            require(result.status() == CommandSubmissionStatus.ACCEPTED, "UNAVAILABLE conversation must be accepted as a reply");
+            require(result.message().contains("safely"), "UNAVAILABLE blank response must use a safe fallback reply");
+            require(service.submittedCommandCount == 0, "UNAVAILABLE conversation must not submit automation");
+            requireProviderParseSuccess(IntentKind.UNAVAILABLE, "UNAVAILABLE conversation must record provider_parse success");
+            List<String> events = manager.conversationEventLines(OWNER_ID, LocalAssignmentDefinition.defaultFor(character));
+            require(events.stream().anyMatch(event -> event.contains("safely")),
+                    "UNAVAILABLE conversation must record a safe NPC reply for UI display");
         } finally {
             restoreProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT", previousEndpoint);
             restoreProperty("OPENPLAYER_INTENT_PROVIDER_MODEL", previousModel);
@@ -491,6 +566,15 @@ public final class CompanionLifecycleManagerTest {
         if (!condition) {
             throw new AssertionError(message);
         }
+    }
+
+    private static void requireProviderParseSuccess(IntentKind kind, String message) {
+        List<OpenPlayerDebugEvent> events = OpenPlayerDebugEvents.recent(OpenPlayerDebugEvents.MAX_MEMORY_EVENTS);
+        require(events.stream().anyMatch(event -> "provider_parse".equals(event.category())
+                        && "success".equals(event.status())
+                        && event.detail().contains("kind=" + kind.name())
+                        && event.detail().contains("instructionLength=")),
+                message);
     }
 
     private static void restoreProperty(String key, String value) {

@@ -10,12 +10,9 @@ public final class ConversationIntentValidator {
     private ConversationIntentValidator() {
     }
 
-    public static CommandIntent requireActionable(CommandIntent intent) throws IntentParseException {
+    public static CommandIntent requireConversationIntent(CommandIntent intent) throws IntentParseException {
         if (intent == null) {
             throw new IntentParseException("conversation parser returned no intent");
-        }
-        if (intent.kind() == IntentKind.UNAVAILABLE) {
-            throw new IntentParseException("conversation parser returned unavailable intent");
         }
         String instruction = intent.instruction();
         if (instruction.length() > MAX_INSTRUCTION_LENGTH) {

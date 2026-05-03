@@ -1,5 +1,17 @@
 # Release Notes
 
+## v0.1.0-alpha.7
+
+- Reattaches valid persisted OpenPlayer NPC entities into runtime sessions on server start so UI and commands can control companions after re-entering a world without spawning duplicates.
+- Shows provider `CHAT` and valid `UNAVAILABLE` conversation responses as visible NPC replies instead of sending them through automation.
+- Adds the canonical `/openplayer` command tree with `chat`, `follow`, `stop`, `spawn`, `despawn`, and `status` subcommands while keeping `/ai` and `/aichat` as legacy chat aliases.
+- Adds assignment id suggestions for command arguments and includes assignment ids in `/openplayer status` output.
+
+Artifacts:
+
+- `openplayer-fabric-0.1.0-alpha.7.jar`
+- `openplayer-forge-0.1.0-alpha.7.jar`
+
 ## v0.1.0-alpha.6
 
 - Adds a local-only bounded raw trace JSONL log at `config/openplayer/logs/raw-trace.jsonl` for full provider payloads/responses, parse inputs/outputs/rejections, command text, and automation operation diagnostics.

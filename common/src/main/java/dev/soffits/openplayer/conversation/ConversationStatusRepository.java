@@ -30,6 +30,10 @@ public final class ConversationStatusRepository {
         record(ownerId, assignmentId, ConversationEventType.ACTION, "Action accepted: " + intent.kind().name());
     }
 
+    public void recordNpcReply(UUID ownerId, String assignmentId, String message) {
+        record(ownerId, assignmentId, ConversationEventType.ACTION, sanitize(message));
+    }
+
     public void recordFailure(UUID ownerId, String assignmentId, String message) {
         record(ownerId, assignmentId, ConversationEventType.FAILURE, sanitizeFailure(message));
     }

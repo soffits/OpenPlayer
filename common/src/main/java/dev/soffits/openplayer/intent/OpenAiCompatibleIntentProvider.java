@@ -111,10 +111,12 @@ public final class OpenAiCompatibleIntentProvider implements IntentProvider {
             + "}";
     }
 
-    private static String systemPrompt() {
+    static String systemPrompt() {
         return "Parse the user command for an OpenPlayer NPC. Return only compact JSON with string fields kind, priority, and instruction. "
             + "kind must be one of UNAVAILABLE, OBSERVE, STOP, MOVE, LOOK, FOLLOW_OWNER, GUARD_OWNER, PATROL, COLLECT_ITEMS, EQUIP_BEST_ITEM, EQUIP_ARMOR, USE_SELECTED_ITEM, SWAP_TO_OFFHAND, DROP_ITEM, BREAK_BLOCK, PLACE_BLOCK, ATTACK_NEAREST, INTERACT, REPORT_STATUS, CHAT. "
             + "priority must be one of LOW, NORMAL, HIGH. Keep instruction short and actionable. "
+            + "For CHAT, instruction must be the selected character's concise conversational reply, not a restatement of the player text. For UNAVAILABLE, instruction may be blank or a short safe reason. "
+            + "Return JSON only, with no secrets, credentials, markdown, or explanatory text. "
             + "Use x y z for MOVE, LOOK, PATROL, BREAK_BLOCK, and PLACE_BLOCK; blank instruction for COLLECT_ITEMS, DROP_ITEM, EQUIP_BEST_ITEM, EQUIP_ARMOR, USE_SELECTED_ITEM, SWAP_TO_OFFHAND, and REPORT_STATUS; blank or radius number for ATTACK_NEAREST and GUARD_OWNER. "
             + "Only select world, inventory, or combat actions when the user prompt says the selected character allows world actions.";
     }

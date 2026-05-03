@@ -6,11 +6,13 @@ import dev.soffits.openplayer.api.CommandSubmissionResult;
 import dev.soffits.openplayer.api.CommandSubmissionStatus;
 import dev.soffits.openplayer.character.LocalCharacterDefinition;
 import dev.soffits.openplayer.intent.CommandIntent;
+import dev.soffits.openplayer.intent.IntentKind;
 import dev.soffits.openplayer.intent.IntentParseException;
 import dev.soffits.openplayer.intent.IntentParser;
 import dev.soffits.openplayer.intent.IntentProviderException;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public final class ConversationLoop {
@@ -45,11 +47,21 @@ public final class ConversationLoop {
 
     public CommandSubmissionResult submit(LocalCharacterDefinition character, String playerMessage,
                                           List<ConversationTurn> history, CommandSubmitter submitter) {
+        return submit(character, playerMessage, history, submitter, ignored -> {
+        });
+    }
+
+    public CommandSubmissionResult submit(LocalCharacterDefinition character, String playerMessage,
+                                          List<ConversationTurn> history, CommandSubmitter submitter,
+                                          Consumer<CommandIntent> acceptedIntentRecorder) {
         if (character == null) {
             throw new IllegalArgumentException("character cannot be null");
         }
         if (submitter == null) {
             throw new IllegalArgumentException("submitter cannot be null");
+        }
+        if (acceptedIntentRecorder == null) {
+            throw new IllegalArgumentException("acceptedIntentRecorder cannot be null");
         }
         IntentParserRuntimeStatus status = statusSupplier.get();
         if (status == null || !status.enabled()) {
@@ -75,11 +87,28 @@ public final class ConversationLoop {
                 return new CommandSubmissionResult(CommandSubmissionStatus.UNAVAILABLE,
                         "Conversation unavailable: intent parser disabled");
             }
-            intent = ConversationIntentValidator.requireActionable(intentParser.parse(prompt));
+            intent = ConversationIntentValidator.requireConversationIntent(intentParser.parse(prompt));
         } catch (IntentParseException exception) {
             return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, conversationFailureMessage(exception));
         }
+        acceptedIntentRecorder.accept(intent);
+        if (intent.kind() == IntentKind.CHAT) {
+            return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED, chatReply(intent.instruction()));
+        }
+        if (intent.kind() == IntentKind.UNAVAILABLE) {
+            return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED, unavailableReply(intent.instruction()));
+        }
         return submitter.submit(new AiPlayerNpcCommand(UUID.randomUUID(), intent));
+    }
+
+    private static String chatReply(String instruction) {
+        String reply = ConversationStatusRepository.sanitize(instruction);
+        return reply.isBlank() ? "I heard you." : reply;
+    }
+
+    private static String unavailableReply(String instruction) {
+        String reply = ConversationStatusRepository.sanitize(instruction);
+        return reply.isBlank() ? "I cannot do that safely right now." : reply;
     }
 
     private static String conversationFailureMessage(IntentParseException exception) {

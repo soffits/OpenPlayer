@@ -200,10 +200,10 @@ public final class CompanionLifecycleManager {
                 history,
                 command -> {
                     submittedCommand[0] = command;
-                    OpenPlayerDebugEvents.record("provider_parse", "success", assignment.id(), character.id(), sessionId,
-                            "kind=" + command.intent().kind().name() + " instructionLength=" + command.intent().instruction().length());
                     return submitSelectedCommand(ownerId, assignment.id(), command);
-                }
+                },
+                intent -> OpenPlayerDebugEvents.record("provider_parse", "success", assignment.id(), character.id(), sessionId,
+                        "kind=" + intent.kind().name() + " instructionLength=" + intent.instruction().length())
         );
         if (result.status() == CommandSubmissionStatus.ACCEPTED && submittedCommand[0] != null) {
             appendConversationTurn(historyKey, new ConversationTurn("player", commandText));
@@ -212,6 +212,10 @@ public final class CompanionLifecycleManager {
                     "Action accepted: " + submittedCommand[0].intent().kind().name()
             ));
             conversationStatusRepository.recordAction(ownerId, assignment.id(), submittedCommand[0].intent());
+        } else if (result.status() == CommandSubmissionStatus.ACCEPTED) {
+            appendConversationTurn(historyKey, new ConversationTurn("player", commandText));
+            appendConversationTurn(historyKey, new ConversationTurn("openplayer", result.message()));
+            conversationStatusRepository.recordNpcReply(ownerId, assignment.id(), result.message());
         } else if (result.status() != CommandSubmissionStatus.ACCEPTED) {
             conversationStatusRepository.recordFailure(ownerId, assignment.id(), result.message());
             OpenPlayerDebugEvents.record("conversation", result.status().name(), assignment.id(), character.id(), sessionId,

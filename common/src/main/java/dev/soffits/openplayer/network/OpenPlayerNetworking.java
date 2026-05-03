@@ -18,6 +18,8 @@ import dev.soffits.openplayer.api.OpenPlayerApi;
 import dev.soffits.openplayer.character.LocalCharacterListEntry;
 import dev.soffits.openplayer.character.LocalCharacterListView;
 import dev.soffits.openplayer.character.LocalCharacterFileOperationResult;
+import dev.soffits.openplayer.character.LocalAssignmentDefinition;
+import dev.soffits.openplayer.character.LocalAssignmentRepositoryResult;
 import dev.soffits.openplayer.character.LocalCharacterDefinition;
 import dev.soffits.openplayer.character.LocalCharacterRepositoryResult;
 import dev.soffits.openplayer.character.LocalSkinPathResolver;
@@ -37,6 +39,7 @@ import io.netty.buffer.Unpooled;
 import java.util.List;
 import java.util.UUID;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
 public final class OpenPlayerNetworking {
@@ -358,6 +361,7 @@ public final class OpenPlayerNetworking {
         if (characterId != null && !characterId.isBlank()) {
             CommandSubmissionResult result = COMPANION_LIFECYCLE_MANAGER.submitSelectedCommandText(sender.getUUID(), characterId, commandText);
             OpenPlayerDebugEvents.record("command_submission", result.status().name(), characterId, null, null, result.message());
+            sendSelectedCommandTextResultMessage(sender, characterId, result);
             sendCharacterListResponse(sender);
             sendStatusResponse(sender);
             return;
@@ -402,6 +406,85 @@ public final class OpenPlayerNetworking {
 
     public static boolean submitAssignmentCommandText(ServerPlayer sender, String assignmentId, String commandText) {
         return submitAssignmentCommandTextResult(sender, assignmentId, commandText).status() == CommandSubmissionStatus.ACCEPTED;
+    }
+
+    private static void sendSelectedCommandTextResultMessage(ServerPlayer sender, String assignmentId,
+                                                             CommandSubmissionResult result) {
+        if (result.status() == CommandSubmissionStatus.ACCEPTED) {
+            sender.sendSystemMessage(Component.translatable("commands.openplayer.chat.reply", assignmentId, result.message()));
+            return;
+        }
+        if (result.status() == CommandSubmissionStatus.REJECTED || result.status() == CommandSubmissionStatus.UNAVAILABLE
+                || result.status() == CommandSubmissionStatus.UNKNOWN_SESSION) {
+            sender.sendSystemMessage(Component.translatable("commands.openplayer.result", result.message()));
+        }
+    }
+
+    public static CommandSubmissionResult spawnAssignmentResult(ServerPlayer sender, String assignmentId) {
+        if (sender == null || assignmentId == null || assignmentId.isBlank()) {
+            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Unknown local assignment");
+        }
+        CommandSubmissionResult result = COMPANION_LIFECYCLE_MANAGER.spawnSelectedAssignment(
+                new NpcOwnerId(sender.getUUID()),
+                new NpcSpawnLocation(
+                        sender.serverLevel().dimension().location().toString(),
+                        sender.getX(),
+                        sender.getY(),
+                        sender.getZ()
+                ),
+                assignmentId.trim()
+        );
+        sendCharacterListResponse(sender);
+        sendStatusResponse(sender);
+        return result;
+    }
+
+    public static CommandSubmissionResult despawnAssignmentResult(ServerPlayer sender, String assignmentId) {
+        if (sender == null || assignmentId == null || assignmentId.isBlank()) {
+            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Unknown local assignment");
+        }
+        CommandSubmissionResult result = COMPANION_LIFECYCLE_MANAGER.despawnSelectedAssignment(sender.getUUID(), assignmentId.trim());
+        sendCharacterListResponse(sender);
+        sendStatusResponse(sender);
+        return result;
+    }
+
+    public static CommandSubmissionResult submitAssignmentIntentResult(ServerPlayer sender, String assignmentId,
+                                                                      IntentKind intentKind) {
+        if (sender == null || assignmentId == null || assignmentId.isBlank() || intentKind == null) {
+            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Unknown local assignment");
+        }
+        CommandSubmissionResult result = COMPANION_LIFECYCLE_MANAGER.submitSelectedCommand(
+                sender.getUUID(),
+                assignmentId.trim(),
+                new AiPlayerNpcCommand(UUID.randomUUID(), new CommandIntent(intentKind, IntentPriority.HIGH, intentKind.name()))
+        );
+        sendCharacterListResponse(sender);
+        sendStatusResponse(sender);
+        return result;
+    }
+
+    public static List<String> localAssignmentIds() {
+        LocalAssignmentRepositoryResult result = OpenPlayerLocalCharacters.assignmentRepository()
+                .loadAll(OpenPlayerLocalCharacters.repository().loadAll());
+        java.util.ArrayList<String> assignmentIds = new java.util.ArrayList<>();
+        for (LocalAssignmentDefinition assignment : result.assignments()) {
+            assignmentIds.add(assignment.id());
+        }
+        return List.copyOf(assignmentIds);
+    }
+
+    public static List<String> assignmentStatusLines(ServerPlayer sender) {
+        if (sender == null) {
+            return List.of();
+        }
+        LocalAssignmentRepositoryResult result = OpenPlayerLocalCharacters.assignmentRepository()
+                .loadAll(OpenPlayerLocalCharacters.repository().loadAll());
+        java.util.ArrayList<String> lines = new java.util.ArrayList<>();
+        for (LocalAssignmentDefinition assignment : result.assignments()) {
+            lines.add(assignment.id() + ": " + COMPANION_LIFECYCLE_MANAGER.lifecycleStatus(sender.getUUID(), assignment));
+        }
+        return List.copyOf(lines);
     }
 
     private static void handleProviderConfigSaveRequest(ServerPlayer sender, OpenPlayerIntentParserConfig.ProviderConfigSaveRequest request) {

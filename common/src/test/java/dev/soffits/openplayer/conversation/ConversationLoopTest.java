@@ -33,6 +33,8 @@ public final class ConversationLoopTest {
         boundedHistoryKeepsRecentTurns();
         invalidParserOutputRejectsWithoutSubmitting();
         validParserOutputSubmitsConstrainedIntent();
+        chatIntentReturnsReplyWithoutSubmittingAutomation();
+        unavailableIntentReturnsSafeReplyWithoutSubmittingAutomation();
     }
 
     private static void disabledParserReportsUnavailableWithoutParsing() {
@@ -55,6 +57,10 @@ public final class ConversationLoopTest {
         require(prompt.contains("Speak briefly"), "prompt must include per-character conversationPrompt text");
         require(prompt.contains("No secrets"), "prompt must include per-character conversationSettings text");
         require(prompt.contains("world, inventory, and combat actions are disabled"), "prompt must include selected character action policy");
+        require(prompt.contains("When kind is CHAT, instruction must be the selected character's concise conversational reply"),
+                "prompt must tell providers that CHAT instruction is the NPC reply");
+        require(prompt.contains("When kind is UNAVAILABLE, instruction may be blank or a short safe reason"),
+                "prompt must allow UNAVAILABLE to provide a short safe reason");
         require(prompt.contains("Player: follow me"), "prompt must include the current player message");
     }
 
@@ -93,6 +99,30 @@ public final class ConversationLoopTest {
         require(result.status() == CommandSubmissionStatus.ACCEPTED, "valid parser output must submit");
         require(submitted.size() == 1, "valid parser output must submit exactly one command");
         require(submitted.get(0).kind() == IntentKind.FOLLOW_OWNER, "submitted intent kind must come from parser");
+    }
+
+    private static void chatIntentReturnsReplyWithoutSubmittingAutomation() {
+        ConversationLoop loop = new ConversationLoop(
+                new CountingParser(new CommandIntent(IntentKind.CHAT, IntentPriority.NORMAL, "Hello there")),
+                () -> status(true)
+        );
+        CommandSubmissionResult result = loop.submit(CHARACTER, "hello", List.of(), command -> {
+            throw new AssertionError("CHAT conversation intent must not submit automation");
+        });
+        require(result.status() == CommandSubmissionStatus.ACCEPTED, "CHAT intent must return a visible reply");
+        require("Hello there".equals(result.message()), "CHAT reply must use the provider instruction");
+    }
+
+    private static void unavailableIntentReturnsSafeReplyWithoutSubmittingAutomation() {
+        ConversationLoop loop = new ConversationLoop(
+                new CountingParser(new CommandIntent(IntentKind.UNAVAILABLE, IntentPriority.NORMAL, "")),
+                () -> status(true)
+        );
+        CommandSubmissionResult result = loop.submit(CHARACTER, "break a block", List.of(), command -> {
+            throw new AssertionError("UNAVAILABLE conversation intent must not submit automation");
+        });
+        require(result.status() == CommandSubmissionStatus.ACCEPTED, "UNAVAILABLE intent must return a visible reply");
+        require(result.message().contains("safely"), "UNAVAILABLE blank instruction must use a safe fallback");
     }
 
     private static IntentParserRuntimeStatus status(boolean enabled) {
