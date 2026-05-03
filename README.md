@@ -12,7 +12,7 @@ The initial target is Minecraft 1.20.1 on Java 17 with an Architectury-style mul
 
 ## Milestone Status
 
-Current implementation includes runtime NPC sessions, duplicate prevention, local character definition parsing, server-authoritative local character selection from the OpenPlayer UI, basic command intents, item pickup with inventory persistence, owner lifecycle cleanup and restore, spawn/despawn networking, a minimal client control screen with safe runtime status, a player-shaped renderer with optional profile skin resource support, client-side local PNG skin loading, and vanilla feature layers for held items, armor, head-slot items, elytra, arrows, and bee stingers, a vanilla NPC-backed task backend, an optional reflective Baritone command bridge, and a disabled-by-default runtime intent parser that can use an opt-in JDK-only OpenAI-compatible provider. Automatone is not directly integrated yet.
+Current implementation includes runtime NPC sessions, duplicate prevention, a server-side companion lifecycle manager for selected local characters, local character definition parsing, server-authoritative local character selection from the OpenPlayer UI, basic command intents, item pickup with inventory persistence, owner lifecycle cleanup and restore, spawn/despawn networking, a minimal client control screen with safe runtime status, a player-shaped renderer with optional profile skin resource support, client-side local PNG skin loading, and vanilla feature layers for held items, armor, head-slot items, elytra, arrows, and bee stingers, a vanilla NPC-backed task backend, an optional reflective Baritone command bridge, and a disabled-by-default runtime intent parser that can use an opt-in JDK-only OpenAI-compatible provider. Automatone is not directly integrated yet.
 
 ## Local Character Config
 
@@ -34,6 +34,8 @@ conversationSettings=Reserved for later non-sensitive preferences.
 Supported fields are exactly `id`, `displayName`, `description`, `skinTexture`, `localSkinFile`, `defaultRoleId`, `conversationPrompt`, and `conversationSettings`. Unknown fields are validation errors.
 
 At runtime, selected local character sessions use a deterministic internal role id derived from `id` with the `openplayer-local-character-` prefix. `defaultRoleId` is reserved metadata for future behavior role selection and is not used as the selected character's session identity.
+
+Selected-character lifecycle actions are handled server-side by a small companion manager on top of `RuntimeAiPlayerNpcService` and `OpenPlayerApi`. The manager does not store transient session ids as character identity; it resolves the current session by owner UUID and the stable local character role id each time. Spawning the same selected character again calls the runtime service with the same stable identity, so the existing companion is reused or relocated instead of duplicating. Unknown or invalid selected character ids are rejected without targeting any runtime session.
 
 Validation rules:
 
@@ -62,7 +64,9 @@ Press the OpenPlayer controls key, `O` by default, to open the compact control s
 
 The left panel shows loading, empty, validation-error, and character-list states. Validation errors show only safe file names and messages, not absolute filesystem paths or stack traces.
 
-Selecting a character shows its display name, id, description, skin status, lifecycle status, and conversation status. Spawn, despawn, follow, stop, and command text then target that selected character. With no character selected, the Spawn button keeps the original default OpenPlayer NPC spawn behavior.
+Selecting a character shows its display name, id, description, skin status, lifecycle status, and conversation status. Lifecycle status is resolved by the server-side companion manager from the active runtime session and reports `despawned` when no matching owner plus stable character id session exists. Spawn, despawn, follow, stop, and command text then target that selected character. With no character selected, the Spawn button keeps the original default OpenPlayer NPC spawn behavior.
+
+Despawning a runtime NPC stops its active runtime commands before the entity is discarded. Owner disconnect and server stop continue to use the runtime cleanup hooks so companion tasks are stopped without persisting transient session ids as long-term identity.
 
 The bottom status lines remain safe and presence-only for automation backend, parser state, endpoint, model, and API key status.
 
