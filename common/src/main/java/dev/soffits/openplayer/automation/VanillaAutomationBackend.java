@@ -2,6 +2,7 @@ package dev.soffits.openplayer.automation;
 
 import dev.soffits.openplayer.OpenPlayerAutomationConfig;
 import dev.soffits.openplayer.api.NpcOwnerId;
+import dev.soffits.openplayer.automation.AutomationInstructionParser.Coordinate;
 import dev.soffits.openplayer.entity.OpenPlayerNpcEntity;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentKind;
@@ -13,7 +14,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.shapes.CollisionContext;
@@ -53,6 +56,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private static final double ATTACK_MAX_RADIUS = 24.0D;
         private static final double ATTACK_REACH_DISTANCE = 2.5D;
         private static final double ATTACK_SPEED = 1.1D;
+        private static final double GUARD_DEFAULT_RADIUS = 12.0D;
+        private static final double GUARD_MAX_RADIUS = 16.0D;
+        private static final double PATROL_MAX_DISTANCE = 32.0D;
 
         private final OpenPlayerNpcEntity entity;
         private final Queue<QueuedCommand> queuedCommands = new ArrayDeque<>();
@@ -84,8 +90,14 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 stopAll();
                 return accepted("STOP accepted");
             }
+            if (kind == IntentKind.REPORT_STATUS) {
+                if (!AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
+                    return rejected("REPORT_STATUS requires a blank instruction");
+                }
+                return accepted("REPORT_STATUS accepted: " + statusSummary());
+            }
             if (kind == IntentKind.MOVE) {
-                CommandCoordinate coordinate = parseCoordinateOrNull(intent.instruction());
+                Coordinate coordinate = AutomationInstructionParser.parseCoordinateOrNull(intent.instruction());
                 if (coordinate == null) {
                     return rejected("MOVE requires instruction: x y z");
                 }
@@ -93,7 +105,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return accepted("MOVE accepted");
             }
             if (kind == IntentKind.LOOK) {
-                CommandCoordinate coordinate = parseCoordinateOrNull(intent.instruction());
+                Coordinate coordinate = AutomationInstructionParser.parseCoordinateOrNull(intent.instruction());
                 if (coordinate == null) {
                     return rejected("LOOK requires instruction: x y z");
                 }
@@ -110,15 +122,49 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 queuedCommands.add(QueuedCommand.followOwner());
                 return accepted("FOLLOW_OWNER accepted");
             }
+            if (kind == IntentKind.PATROL) {
+                Coordinate coordinate = AutomationInstructionParser.parseBoundedCoordinateOrNull(
+                        intent.instruction(),
+                        entity.getX(),
+                        entity.getY(),
+                        entity.getZ(),
+                        PATROL_MAX_DISTANCE
+                );
+                if (coordinate == null) {
+                    return rejected("PATROL requires instruction x y z within " + (int) PATROL_MAX_DISTANCE + " blocks");
+                }
+                queuedCommands.add(QueuedCommand.patrol(coordinate));
+                return accepted("PATROL accepted");
+            }
             if (kind == IntentKind.COLLECT_ITEMS) {
                 queuedCommands.add(QueuedCommand.collectItems());
                 return accepted("COLLECT_ITEMS accepted");
             }
-            if (isWorldAction(kind) && !OpenPlayerAutomationConfig.allowWorldActions()) {
+            if (isLocalWorldOrInventoryAction(kind) && !OpenPlayerAutomationConfig.allowWorldActions()) {
                 return rejected("World actions are disabled by local OpenPlayer automation config");
             }
+            if (kind == IntentKind.EQUIP_BEST_ITEM) {
+                if (!AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
+                    return rejected("EQUIP_BEST_ITEM requires a blank instruction");
+                }
+                LivingEntity target = nearestAttackTarget(serverLevel(), ATTACK_DEFAULT_RADIUS, entity.position());
+                if (target != null && entity.selectBestAttackItem()) {
+                    return accepted("EQUIP_BEST_ITEM accepted");
+                }
+                return rejected("EQUIP_BEST_ITEM found no useful hotbar item for the nearby context");
+            }
+            if (kind == IntentKind.DROP_ITEM) {
+                if (!AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
+                    return rejected("DROP_ITEM requires a blank instruction");
+                }
+                if (!entity.dropSelectedHotbarStack()) {
+                    return rejected("DROP_ITEM requires a selected hotbar stack");
+                }
+                entity.swingMainHandAction();
+                return accepted("DROP_ITEM accepted");
+            }
             if (kind == IntentKind.BREAK_BLOCK) {
-                CommandCoordinate coordinate = parseCoordinateOrNull(intent.instruction());
+                Coordinate coordinate = AutomationInstructionParser.parseCoordinateOrNull(intent.instruction());
                 if (coordinate == null) {
                     return rejected("BREAK_BLOCK requires instruction: x y z");
                 }
@@ -126,7 +172,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return accepted("BREAK_BLOCK accepted");
             }
             if (kind == IntentKind.PLACE_BLOCK) {
-                CommandCoordinate coordinate = parseCoordinateOrNull(intent.instruction());
+                Coordinate coordinate = AutomationInstructionParser.parseCoordinateOrNull(intent.instruction());
                 if (coordinate == null) {
                     return rejected("PLACE_BLOCK requires instruction: x y z");
                 }
@@ -138,12 +184,30 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return accepted("PLACE_BLOCK accepted");
             }
             if (kind == IntentKind.ATTACK_NEAREST) {
-                double radius = parseOptionalRadiusOrNegative(intent.instruction(), ATTACK_DEFAULT_RADIUS, ATTACK_MAX_RADIUS);
+                double radius = AutomationInstructionParser.parseOptionalRadiusOrNegative(
+                        intent.instruction(), ATTACK_DEFAULT_RADIUS, ATTACK_MAX_RADIUS
+                );
                 if (radius < 0.0D) {
                     return rejected("ATTACK_NEAREST instruction must be blank or a positive radius number");
                 }
                 queuedCommands.add(QueuedCommand.attackNearest(radius));
                 return accepted("ATTACK_NEAREST accepted");
+            }
+            if (kind == IntentKind.GUARD_OWNER) {
+                if (ownerId == null) {
+                    return rejected("GUARD_OWNER requires an NPC owner");
+                }
+                if (owner() == null) {
+                    return rejected("NPC owner is unavailable in this dimension");
+                }
+                double radius = AutomationInstructionParser.parseOptionalRadiusOrNegative(
+                        intent.instruction(), GUARD_DEFAULT_RADIUS, GUARD_MAX_RADIUS
+                );
+                if (radius < 0.0D) {
+                    return rejected("GUARD_OWNER instruction must be blank or a positive radius number");
+                }
+                queuedCommands.add(QueuedCommand.guardOwner(radius));
+                return accepted("GUARD_OWNER accepted");
             }
             return rejected("Unsupported intent: " + kind.name());
         }
@@ -174,12 +238,12 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
         private void start(QueuedCommand command) {
             if (command.kind() == IntentKind.MOVE) {
-                CommandCoordinate coordinate = command.coordinate();
+                Coordinate coordinate = command.coordinate();
                 entity.getNavigation().moveTo(coordinate.x(), coordinate.y(), coordinate.z(), MOVE_SPEED);
                 return;
             }
             if (command.kind() == IntentKind.LOOK) {
-                CommandCoordinate coordinate = command.coordinate();
+                Coordinate coordinate = command.coordinate();
                 entity.getLookControl().setLookAt(coordinate.x(), coordinate.y(), coordinate.z());
                 activeCommand = null;
                 return;
@@ -187,8 +251,14 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (command.kind() == IntentKind.COLLECT_ITEMS
                     || command.kind() == IntentKind.BREAK_BLOCK
                     || command.kind() == IntentKind.PLACE_BLOCK
-                    || command.kind() == IntentKind.ATTACK_NEAREST) {
+                    || command.kind() == IntentKind.ATTACK_NEAREST
+                    || command.kind() == IntentKind.GUARD_OWNER
+                    || command.kind() == IntentKind.PATROL) {
                 command.setStartPosition(entity.blockPosition());
+            }
+            if (command.kind() == IntentKind.PATROL) {
+                Coordinate coordinate = command.coordinate();
+                entity.getNavigation().moveTo(coordinate.x(), coordinate.y(), coordinate.z(), MOVE_SPEED);
             }
         }
 
@@ -220,6 +290,14 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             if (activeCommand.kind() == IntentKind.ATTACK_NEAREST) {
                 attackNearest(activeCommand);
+                return;
+            }
+            if (activeCommand.kind() == IntentKind.GUARD_OWNER) {
+                guardOwner(activeCommand);
+                return;
+            }
+            if (activeCommand.kind() == IntentKind.PATROL) {
+                patrol(activeCommand);
             }
         }
 
@@ -345,38 +423,67 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 activeCommand = null;
                 return;
             }
-            LivingEntity target = nearestAttackTarget(serverLevel, command);
+            LivingEntity target = nearestAttackTarget(serverLevel, command.radius(), Vec3.atCenterOf(command.startPosition()));
             if (target == null) {
                 entity.getNavigation().stop();
                 activeCommand = null;
                 return;
             }
-            entity.getLookControl().setLookAt(target);
-            if (entity.distanceToSqr(target) > ATTACK_REACH_DISTANCE * ATTACK_REACH_DISTANCE) {
-                entity.getNavigation().moveTo(target, ATTACK_SPEED);
-                return;
+            if (attackTarget(target)) {
+                activeCommand = null;
             }
-            entity.getNavigation().stop();
-            entity.swingMainHandAction();
-            entity.doHurtTarget(target);
-            activeCommand = null;
         }
 
-        private LivingEntity nearestAttackTarget(ServerLevel serverLevel, QueuedCommand command) {
+        private LivingEntity nearestAttackTarget(ServerLevel serverLevel, double radius, Vec3 center) {
+            if (serverLevel == null || center == null) {
+                return null;
+            }
             ServerPlayer owner = owner();
             List<LivingEntity> targets = serverLevel.getEntitiesOfClass(
                     LivingEntity.class,
-                    entity.getBoundingBox().inflate(command.radius()),
+                    entity.getBoundingBox().inflate(radius),
                     target -> target.isAlive()
                             && target != entity
+                            && !(target instanceof Player)
                             && !(target instanceof OpenPlayerNpcEntity)
                             && (owner == null || !target.getUUID().equals(owner.getUUID()))
-                            && isWithinStartDistance(command, target.position(), command.radius())
+                            && center.distanceToSqr(target.position()) <= radius * radius
                             && entity.hasLineOfSight(target)
             );
             return targets.stream()
                     .min(Comparator.comparingDouble(target -> entity.distanceToSqr(target)))
                     .orElse(null);
+        }
+
+        private LivingEntity nearestGuardTarget(ServerLevel serverLevel, ServerPlayer owner, double radius) {
+            List<LivingEntity> targets = serverLevel.getEntitiesOfClass(
+                    LivingEntity.class,
+                    owner.getBoundingBox().inflate(radius),
+                    target -> target.isAlive()
+                            && target instanceof Enemy
+                            && target != entity
+                            && !(target instanceof Player)
+                            && !(target instanceof OpenPlayerNpcEntity)
+                            && !target.getUUID().equals(owner.getUUID())
+                            && owner.distanceToSqr(target) <= radius * radius
+                            && entity.hasLineOfSight(target)
+            );
+            return targets.stream()
+                    .min(Comparator.comparingDouble(target -> owner.distanceToSqr(target)))
+                    .orElse(null);
+        }
+
+        private boolean attackTarget(LivingEntity target) {
+            entity.getLookControl().setLookAt(target);
+            entity.selectBestAttackItem();
+            if (entity.distanceToSqr(target) > ATTACK_REACH_DISTANCE * ATTACK_REACH_DISTANCE) {
+                entity.getNavigation().moveTo(target, ATTACK_SPEED);
+                return false;
+            }
+            entity.getNavigation().stop();
+            entity.swingMainHandAction();
+            entity.doHurtTarget(target);
+            return true;
         }
 
         private boolean canUseBlockTarget(ServerLevel serverLevel, QueuedCommand command, BlockPos blockPos) {
@@ -417,6 +524,58 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             entity.getLookControl().setLookAt(owner);
         }
 
+        private void guardOwner(QueuedCommand command) {
+            ServerLevel serverLevel = serverLevel();
+            ServerPlayer owner = owner();
+            if (serverLevel == null || owner == null) {
+                stopAll();
+                return;
+            }
+            if (!isWithinStartDistance(command, owner.position(), command.radius() + FOLLOW_START_DISTANCE)) {
+                entity.getNavigation().stop();
+                activeCommand = null;
+                return;
+            }
+            LivingEntity target = nearestGuardTarget(serverLevel, owner, command.radius());
+            if (target != null) {
+                attackTarget(target);
+                return;
+            }
+            followOwner();
+        }
+
+        private void patrol(QueuedCommand command) {
+            if (!isWithinStartDistance(command, entity.position(), PATROL_MAX_DISTANCE + FOLLOW_START_DISTANCE)) {
+                entity.getNavigation().stop();
+                activeCommand = null;
+                return;
+            }
+            if (!entity.getNavigation().isDone()) {
+                return;
+            }
+            command.togglePatrolReturn();
+            if (command.returningToStart()) {
+                BlockPos startPosition = command.startPosition();
+                entity.getNavigation().moveTo(
+                        startPosition.getX() + 0.5D,
+                        startPosition.getY(),
+                        startPosition.getZ() + 0.5D,
+                        MOVE_SPEED
+                );
+            } else {
+                Coordinate coordinate = command.coordinate();
+                entity.getNavigation().moveTo(coordinate.x(), coordinate.y(), coordinate.z(), MOVE_SPEED);
+            }
+        }
+
+        private String statusSummary() {
+            String activeKind = activeCommand == null ? "idle" : activeCommand.kind().name();
+            return "health=" + Math.round(entity.getHealth())
+                    + ", selectedSlot=" + entity.selectedHotbarSlot()
+                    + ", active=" + activeKind
+                    + ", queued=" + queuedCommands.size();
+        }
+
         private ServerPlayer owner() {
             if (ownerId == null || !(entity.level() instanceof ServerLevel serverLevel)) {
                 return null;
@@ -435,49 +594,6 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             return null;
         }
 
-        private static CommandCoordinate parseCoordinate(String instruction) {
-            String trimmedInstruction = instruction.trim();
-            String[] parts = trimmedInstruction.split("\\s+");
-            if (parts.length != 3) {
-                throw new IllegalArgumentException("Instruction must contain three coordinates: x y z");
-            }
-            try {
-                double x = Double.parseDouble(parts[0]);
-                double y = Double.parseDouble(parts[1]);
-                double z = Double.parseDouble(parts[2]);
-                if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z)) {
-                    throw new IllegalArgumentException("Coordinates must be finite numbers");
-                }
-                return new CommandCoordinate(x, y, z);
-            } catch (NumberFormatException exception) {
-                throw new IllegalArgumentException("Coordinates must be numbers", exception);
-            }
-        }
-
-        private static CommandCoordinate parseCoordinateOrNull(String instruction) {
-            try {
-                return parseCoordinate(instruction);
-            } catch (IllegalArgumentException exception) {
-                return null;
-            }
-        }
-
-        private static double parseOptionalRadiusOrNegative(String instruction, double defaultRadius, double maxRadius) {
-            String trimmedInstruction = instruction.trim();
-            if (trimmedInstruction.isEmpty()) {
-                return defaultRadius;
-            }
-            try {
-                double radius = Double.parseDouble(trimmedInstruction);
-                if (!Double.isFinite(radius) || radius <= 0.0D) {
-                    return -1.0D;
-                }
-                return Math.min(radius, maxRadius);
-            } catch (NumberFormatException exception) {
-                return -1.0D;
-            }
-        }
-
         private static AutomationCommandResult accepted(String message) {
             return new AutomationCommandResult(AutomationCommandStatus.ACCEPTED, message);
         }
@@ -486,33 +602,34 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             return new AutomationCommandResult(AutomationCommandStatus.REJECTED, message);
         }
 
-        private static boolean isWorldAction(IntentKind kind) {
+        private static boolean isLocalWorldOrInventoryAction(IntentKind kind) {
             return kind == IntentKind.BREAK_BLOCK
                     || kind == IntentKind.PLACE_BLOCK
-                    || kind == IntentKind.ATTACK_NEAREST;
-        }
-
-        private record CommandCoordinate(double x, double y, double z) {
+                    || kind == IntentKind.ATTACK_NEAREST
+                    || kind == IntentKind.GUARD_OWNER
+                    || kind == IntentKind.EQUIP_BEST_ITEM
+                    || kind == IntentKind.DROP_ITEM;
         }
 
         private static final class QueuedCommand {
             private final IntentKind kind;
-            private final CommandCoordinate coordinate;
+            private final Coordinate coordinate;
             private final double radius;
             private BlockPos startPosition;
             private int reachTicks;
+            private boolean patrolReturn;
 
-            private QueuedCommand(IntentKind kind, CommandCoordinate coordinate, double radius) {
+            private QueuedCommand(IntentKind kind, Coordinate coordinate, double radius) {
                 this.kind = kind;
                 this.coordinate = coordinate;
                 this.radius = radius;
             }
 
-            private static QueuedCommand move(CommandCoordinate coordinate) {
+            private static QueuedCommand move(Coordinate coordinate) {
                 return new QueuedCommand(IntentKind.MOVE, coordinate, 0.0D);
             }
 
-            private static QueuedCommand look(CommandCoordinate coordinate) {
+            private static QueuedCommand look(Coordinate coordinate) {
                 return new QueuedCommand(IntentKind.LOOK, coordinate, 0.0D);
             }
 
@@ -524,11 +641,11 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return new QueuedCommand(IntentKind.COLLECT_ITEMS, null, 0.0D);
             }
 
-            private static QueuedCommand breakBlock(CommandCoordinate coordinate) {
+            private static QueuedCommand breakBlock(Coordinate coordinate) {
                 return new QueuedCommand(IntentKind.BREAK_BLOCK, coordinate, 0.0D);
             }
 
-            private static QueuedCommand placeBlock(CommandCoordinate coordinate) {
+            private static QueuedCommand placeBlock(Coordinate coordinate) {
                 return new QueuedCommand(IntentKind.PLACE_BLOCK, coordinate, 0.0D);
             }
 
@@ -536,11 +653,19 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return new QueuedCommand(IntentKind.ATTACK_NEAREST, null, radius);
             }
 
+            private static QueuedCommand guardOwner(double radius) {
+                return new QueuedCommand(IntentKind.GUARD_OWNER, null, radius);
+            }
+
+            private static QueuedCommand patrol(Coordinate coordinate) {
+                return new QueuedCommand(IntentKind.PATROL, coordinate, 0.0D);
+            }
+
             private IntentKind kind() {
                 return kind;
             }
 
-            private CommandCoordinate coordinate() {
+            private Coordinate coordinate() {
                 return coordinate;
             }
 
@@ -566,6 +691,14 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
             private void setStartPosition(BlockPos startPosition) {
                 this.startPosition = startPosition;
+            }
+
+            private boolean returningToStart() {
+                return patrolReturn;
+            }
+
+            private void togglePatrolReturn() {
+                patrolReturn = !patrolReturn;
             }
 
             private BlockPos blockPos() {

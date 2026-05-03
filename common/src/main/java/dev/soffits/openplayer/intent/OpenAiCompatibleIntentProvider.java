@@ -78,11 +78,11 @@ public final class OpenAiCompatibleIntentProvider implements IntentProvider {
     private static String systemPrompt() {
         boolean allowWorldActions = OpenPlayerAutomationConfig.allowWorldActions();
         String kinds = allowWorldActions
-            ? "UNAVAILABLE, OBSERVE, STOP, MOVE, LOOK, FOLLOW_OWNER, COLLECT_ITEMS, BREAK_BLOCK, PLACE_BLOCK, ATTACK_NEAREST, INTERACT, CHAT"
-            : "UNAVAILABLE, OBSERVE, STOP, MOVE, LOOK, FOLLOW_OWNER, COLLECT_ITEMS, INTERACT, CHAT";
+            ? "UNAVAILABLE, OBSERVE, STOP, MOVE, LOOK, FOLLOW_OWNER, GUARD_OWNER, PATROL, COLLECT_ITEMS, EQUIP_BEST_ITEM, DROP_ITEM, BREAK_BLOCK, PLACE_BLOCK, ATTACK_NEAREST, INTERACT, REPORT_STATUS, CHAT"
+            : "UNAVAILABLE, OBSERVE, STOP, MOVE, LOOK, FOLLOW_OWNER, PATROL, COLLECT_ITEMS, INTERACT, REPORT_STATUS, CHAT";
         String worldActionInstruction = allowWorldActions
-            ? "Use x y z for MOVE, LOOK, BREAK_BLOCK, and PLACE_BLOCK; blank instruction for COLLECT_ITEMS; blank or radius number for ATTACK_NEAREST."
-            : "BREAK_BLOCK, PLACE_BLOCK, and ATTACK_NEAREST require local world action config and must not be selected. Use x y z for MOVE and LOOK; blank instruction for COLLECT_ITEMS.";
+            ? "Use x y z for MOVE, LOOK, PATROL, BREAK_BLOCK, and PLACE_BLOCK; blank instruction for COLLECT_ITEMS, DROP_ITEM, EQUIP_BEST_ITEM, and REPORT_STATUS; blank or radius number for ATTACK_NEAREST and GUARD_OWNER."
+            : "BREAK_BLOCK, PLACE_BLOCK, ATTACK_NEAREST, GUARD_OWNER, DROP_ITEM, and EQUIP_BEST_ITEM require local world action config and must not be selected. Use x y z for MOVE, LOOK, and PATROL; blank instruction for COLLECT_ITEMS and REPORT_STATUS.";
         return "Parse the user command for an OpenPlayer NPC. Return only compact JSON with string fields kind, priority, and instruction. "
             + "kind must be one of " + kinds + ". "
             + "priority must be one of LOW, NORMAL, HIGH. Keep instruction short and actionable. "

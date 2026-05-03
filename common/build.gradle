@@ -72,6 +72,12 @@ tasks.register('runConversationStatusRepositoryTest', JavaExec) {
     mainClass = 'dev.soffits.openplayer.conversation.ConversationStatusRepositoryTest'
 }
 
+tasks.register('runAutomationInstructionParserTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.automation.AutomationInstructionParserTest'
+}
+
 tasks.named('check') {
     dependsOn tasks.named('runLocalCharacterDefinitionTest')
     dependsOn tasks.named('runLocalAssignmentRepositoryTest')
@@ -84,4 +90,5 @@ tasks.named('check') {
     dependsOn tasks.named('runNpcHotbarSelectionTest')
     dependsOn tasks.named('runConversationLoopTest')
     dependsOn tasks.named('runConversationStatusRepositoryTest')
+    dependsOn tasks.named('runAutomationInstructionParserTest')
 }
