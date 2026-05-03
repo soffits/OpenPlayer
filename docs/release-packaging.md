@@ -2,6 +2,15 @@
 
 OpenPlayer releases are local/offline clean-room Minecraft mod artifacts for Minecraft `1.20.1` and Java `17`. Do not describe them as commercial online 1:1 Player2NPC parity. The current scope is a near-parity local/offline Player2NPC-style companion experience.
 
+## Release Channels
+
+OpenPlayer currently publishes release artifacts only through GitHub Releases. Modrinth publishing is a future distribution step after the release process and metadata are stable; do not add Modrinth tokens, secrets, or publishing jobs yet.
+
+- Alpha, beta, release-candidate, pre, and canary tags are prereleases and use version tags such as `v0.1.0-alpha.1`, `v0.1.0-beta.1`, `v0.1.0-rc.1`, `v0.1.0-pre.1`, or `v0.1.0-canary.1`.
+- Stable releases use tags without prerelease channel text, such as `v0.1.0`.
+- The project version in `gradle.properties` must match the tag without the leading `v` before a release tag is created.
+- Use Conventional Commits in merged history so generated GitHub release notes are useful.
+
 ## Build Command
 
 Run the release build from the repository root with Java `17`:
@@ -24,19 +33,21 @@ git diff --check
 
 ## Artifact Locations
 
-The Gradle archive base name is `openplayer-<module>` and the version comes from `mod_version` in `gradle.properties`.
+The Gradle archive base name is `openplayer-{module}` and the version comes from `mod_version` in `gradle.properties`.
 
-- Fabric runtime jar: `fabric/build/libs/openplayer-fabric-<version>.jar`.
-- Forge runtime jar: `forge/build/libs/openplayer-forge-<version>.jar`.
-- Fabric sources jar: `fabric/build/libs/openplayer-fabric-<version>-sources.jar`.
-- Forge sources jar: `forge/build/libs/openplayer-forge-<version>-sources.jar`.
+- Fabric runtime jar: `fabric/build/libs/openplayer-fabric-{version}.jar`.
+- Forge runtime jar: `forge/build/libs/openplayer-forge-{version}.jar`.
+- Fabric sources jar: `fabric/build/libs/openplayer-fabric-{version}-sources.jar`.
+- Forge sources jar: `forge/build/libs/openplayer-forge-{version}-sources.jar`.
 - Common module jars under `common/build/libs` are intermediate development artifacts and are not standalone user uploads.
 - `*-dev-shadow.jar` outputs are development/shadow intermediates and are not release uploads.
 
 ## Upload
 
-- Upload the Fabric runtime jar to Fabric-compatible release channels.
-- Upload the Forge runtime jar to Forge-compatible release channels.
+- GitHub Releases are created by `.github/workflows/release.yml` for `v*` tags or manual `workflow_dispatch` runs with a version tag input.
+- The release workflow builds with Java `17`, uses `gh release create --generate-notes` with `GITHUB_TOKEN`, and marks tags containing `-alpha`, `-beta`, `-rc`, `pre`, or `canary` as prereleases.
+- Upload the Fabric runtime jar from `fabric/build/libs` to the GitHub Release.
+- Upload the Forge runtime jar from `forge/build/libs` to the GitHub Release.
 - Upload or link matching source code for the exact release revision to satisfy `AGPL-3.0-only` obligations.
 - Include the license, Minecraft version, Java version, loader requirements, Architectury API requirement, and clean-room local/offline scope in release notes.
 - Include a link to `docs/manual-qa-checklist.md` or summarize the Fabric and Forge manual QA pass results.
