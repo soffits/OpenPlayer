@@ -496,7 +496,24 @@ public final class OpenPlayerNetworking {
                     INTERACT,
                     CHAT,
                     UNAVAILABLE,
-                    OBSERVE -> intentKind.name();
+                    OBSERVE,
+                    GOTO,
+                    INVENTORY_QUERY,
+                    EQUIP_ITEM,
+                    GIVE_ITEM,
+                    DEPOSIT_ITEM,
+                    STASH_ITEM,
+                    GET_ITEM,
+                    COLLECT_FOOD,
+                    FARM_NEARBY,
+                    FISH,
+                    ATTACK_TARGET,
+                    DEFEND_OWNER,
+                    PAUSE,
+                    UNPAUSE,
+                    RESET_MEMORY,
+                    BODY_LANGUAGE,
+                    BUILD_STRUCTURE -> intentKind.name();
         };
     }
 

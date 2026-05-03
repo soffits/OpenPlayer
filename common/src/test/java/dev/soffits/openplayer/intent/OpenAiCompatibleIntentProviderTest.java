@@ -12,6 +12,8 @@ public final class OpenAiCompatibleIntentProviderTest {
         preservesOtherExplicitEndpoints();
         preservesQueryWhenResolvingV1BaseEndpoint();
         systemPromptConstrainConversationReplies();
+        systemPromptContainsEveryIntentKind();
+        systemPromptIncludesPlannedUnsupportedInstruction();
     }
 
     private static void resolvesV1BaseEndpoint() throws Exception {
@@ -54,6 +56,21 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must allow a short safe UNAVAILABLE reason");
         require(prompt.contains("Return JSON only"), "system prompt must constrain output to JSON only");
         require(prompt.contains("no secrets"), "system prompt must prohibit secrets");
+    }
+
+    private static void systemPromptContainsEveryIntentKind() {
+        String prompt = OpenAiCompatibleIntentProvider.systemPrompt();
+        for (IntentKind kind : IntentKind.values()) {
+            require(prompt.contains(kind.name()), "system prompt must list " + kind.name());
+        }
+    }
+
+    private static void systemPromptIncludesPlannedUnsupportedInstruction() {
+        String prompt = OpenAiCompatibleIntentProvider.systemPrompt();
+        require(prompt.contains("Planned PlayerEngine-style intents may be recognized but are unsupported until implemented"),
+                "system prompt must include deterministic planned unsupported instruction");
+        require(prompt.contains("use UNAVAILABLE when the vanilla runtime cannot perform the requested action"),
+                "system prompt must tell providers not to overclaim unsupported planned actions");
     }
 
     private static String normalize(String value) throws Exception {

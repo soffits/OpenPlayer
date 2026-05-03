@@ -9,6 +9,7 @@ import dev.soffits.openplayer.intent.IntentKind;
 import dev.soffits.openplayer.intent.IntentParseException;
 import dev.soffits.openplayer.intent.IntentParser;
 import dev.soffits.openplayer.intent.IntentPriority;
+import dev.soffits.openplayer.runtime.validation.RuntimeIntentPolicies;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -58,6 +59,9 @@ public final class ConversationLoopTest {
         require(prompt.contains("Speak briefly"), "prompt must include per-character conversationPrompt text");
         require(prompt.contains("No secrets"), "prompt must include per-character conversationSettings text");
         require(prompt.contains("world, inventory, and combat actions are disabled"), "prompt must include selected character action policy");
+        for (IntentKind kind : RuntimeIntentPolicies.localWorldOrInventoryActions()) {
+            require(prompt.contains(kind.name()), "disabled-world-actions prompt must mention " + kind.name());
+        }
         require(prompt.contains("When kind is CHAT, instruction must be the selected character's concise conversational reply"),
                 "prompt must tell providers that CHAT instruction is the NPC reply");
         require(prompt.contains("When kind is UNAVAILABLE, instruction may be blank or a short safe reason"),
@@ -67,6 +71,10 @@ public final class ConversationLoopTest {
                 "prompt must include bounded nearby block context");
         require(prompt.contains("choose an actionable intent using available targets"),
                 "prompt must guide nearby world actions from context");
+        require(prompt.contains("Planned PlayerEngine-style task categories may be unavailable until implemented"),
+                "prompt must warn that planned task categories may be unavailable");
+        require(prompt.contains("provider and runtime must not pretend success"),
+                "prompt must forbid fake success for planned task categories");
         require(prompt.contains("Player: follow me"), "prompt must include the current player message");
     }
 

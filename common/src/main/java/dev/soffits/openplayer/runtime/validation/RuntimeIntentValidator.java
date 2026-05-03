@@ -37,7 +37,28 @@ public final class RuntimeIntentValidator {
             case CHAT -> RuntimeIntentValidationResult.rejected("CHAT cannot be submitted to automation");
             case UNAVAILABLE -> RuntimeIntentValidationResult.rejected("UNAVAILABLE cannot be submitted to automation");
             case OBSERVE -> RuntimeIntentValidationResult.rejected("OBSERVE cannot be submitted to automation");
+            case GOTO,
+                    INVENTORY_QUERY,
+                    EQUIP_ITEM,
+                    GIVE_ITEM,
+                    DEPOSIT_ITEM,
+                    STASH_ITEM,
+                    GET_ITEM,
+                    COLLECT_FOOD,
+                    FARM_NEARBY,
+                    FISH,
+                    ATTACK_TARGET,
+                    DEFEND_OWNER,
+                    PAUSE,
+                    UNPAUSE,
+                    RESET_MEMORY,
+                    BODY_LANGUAGE,
+                    BUILD_STRUCTURE -> rejectUnimplemented(kind);
         };
+    }
+
+    private static RuntimeIntentValidationResult rejectUnimplemented(IntentKind kind) {
+        return RuntimeIntentValidationResult.rejected(kind.name() + " is not implemented by the vanilla runtime");
     }
 
     private static RuntimeIntentValidationResult requireBlankInstruction(CommandIntent intent, String kindName) {

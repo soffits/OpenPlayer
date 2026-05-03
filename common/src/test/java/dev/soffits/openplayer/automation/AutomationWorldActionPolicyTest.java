@@ -17,7 +17,18 @@ public final class AutomationWorldActionPolicyTest {
                 IntentKind.BREAK_BLOCK,
                 IntentKind.PLACE_BLOCK,
                 IntentKind.ATTACK_NEAREST,
-                IntentKind.GUARD_OWNER
+                IntentKind.GUARD_OWNER,
+                IntentKind.EQUIP_ITEM,
+                IntentKind.GIVE_ITEM,
+                IntentKind.DEPOSIT_ITEM,
+                IntentKind.STASH_ITEM,
+                IntentKind.GET_ITEM,
+                IntentKind.COLLECT_FOOD,
+                IntentKind.FARM_NEARBY,
+                IntentKind.FISH,
+                IntentKind.ATTACK_TARGET,
+                IntentKind.DEFEND_OWNER,
+                IntentKind.BUILD_STRUCTURE
         );
 
         for (IntentKind kind : IntentKind.values()) {
@@ -45,6 +56,18 @@ public final class AutomationWorldActionPolicyTest {
                 "PATROL must remain available when allowWorldActions is false");
         require(!RuntimeIntentPolicies.isLocalWorldOrInventoryAction(IntentKind.REPORT_STATUS),
                 "REPORT_STATUS must remain available when allowWorldActions is false");
+        require(!RuntimeIntentPolicies.isLocalWorldOrInventoryAction(IntentKind.GOTO),
+                "GOTO planned intent must not use the world-action gate yet");
+        require(!RuntimeIntentPolicies.isLocalWorldOrInventoryAction(IntentKind.INVENTORY_QUERY),
+                "INVENTORY_QUERY planned intent must not use the world-action gate yet");
+        require(!RuntimeIntentPolicies.isLocalWorldOrInventoryAction(IntentKind.PAUSE),
+                "PAUSE planned intent must not use the world-action gate yet");
+        require(!RuntimeIntentPolicies.isLocalWorldOrInventoryAction(IntentKind.UNPAUSE),
+                "UNPAUSE planned intent must not use the world-action gate yet");
+        require(!RuntimeIntentPolicies.isLocalWorldOrInventoryAction(IntentKind.RESET_MEMORY),
+                "RESET_MEMORY planned intent must not use the world-action gate yet");
+        require(!RuntimeIntentPolicies.isLocalWorldOrInventoryAction(IntentKind.BODY_LANGUAGE),
+                "BODY_LANGUAGE planned intent must not use the world-action gate yet");
         require(VanillaAutomationBackend.PLAYER_LIKE_NAVIGATION_SPEED >= 1.2D,
                 "NPC navigation speed must be faster than the prior slow default");
         require(VanillaAutomationBackend.PLAYER_LIKE_NAVIGATION_SPEED <= 1.5D,

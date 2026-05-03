@@ -1,6 +1,7 @@
 package dev.soffits.openplayer.conversation;
 
 import dev.soffits.openplayer.character.LocalCharacterDefinition;
+import dev.soffits.openplayer.runtime.validation.RuntimeIntentPolicies;
 import java.util.List;
 
 public final class ConversationPromptAssembler {
@@ -40,7 +41,9 @@ public final class ConversationPromptAssembler {
         if (character.allowWorldActions()) {
             builder.append("Action policy: world, inventory, and combat actions are allowed for this selected character.\n");
         } else {
-            builder.append("Action policy: world, inventory, and combat actions are disabled for this selected character. Do not choose BREAK_BLOCK, PLACE_BLOCK, ATTACK_NEAREST, GUARD_OWNER, DROP_ITEM, EQUIP_BEST_ITEM, EQUIP_ARMOR, USE_SELECTED_ITEM, or SWAP_TO_OFFHAND.\n");
+            builder.append("Action policy: world, inventory, and combat actions are disabled for this selected character. Do not choose ")
+                    .append(RuntimeIntentPolicies.localWorldOrInventoryActionNames())
+                    .append(".\n");
         }
         character.optionalDescription().ifPresent(value -> builder.append("Description: ").append(value).append("\n"));
         character.optionalConversationPrompt().ifPresent(value -> builder.append("Conversation prompt: ").append(value).append("\n"));
@@ -49,6 +52,7 @@ public final class ConversationPromptAssembler {
         builder.append("Do not include provider credentials, secrets, markdown, or free-form command text.\n");
         builder.append("When kind is CHAT, instruction must be the selected character's concise conversational reply to the player, following the conversation prompt and settings. ");
         builder.append("When kind is UNAVAILABLE, instruction may be blank or a short safe reason the selected character cannot help.\n");
+        builder.append("Planned PlayerEngine-style task categories may be unavailable until implemented; provider and runtime must not pretend success.\n");
         builder.append("Use the bounded server context below for nearby visible facts. If the player asks for a nearby action, choose an actionable intent using available targets instead of asking for details already present in context; execution validators still enforce safety and allowWorldActions.\n");
         if (!contextSnapshot.isEmpty()) {
             builder.append("Server context:\n");

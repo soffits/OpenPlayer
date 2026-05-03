@@ -17,6 +17,9 @@ public final class RuntimeIntentValidatorTest {
         validatesCoordinateInstructions();
         validatesRadiusInstructions();
         rejectsNonAutomationConversationKinds();
+        rejectsPlannedIntentKinds();
+        gatesPlannedWorldActionKindsBeforeUnimplementedRejection();
+        rejectsPlannedNonGatedKindsAsUnimplemented();
         policyClassifiesEveryIntentKind();
     }
 
@@ -31,7 +34,7 @@ public final class RuntimeIntentValidatorTest {
             if (RuntimeIntentPolicies.isLocalWorldOrInventoryAction(kind)) {
                 requireRejected(result, "World actions are disabled for this OpenPlayer character");
             } else if (kind == IntentKind.INTERACT || kind == IntentKind.CHAT
-                    || kind == IntentKind.UNAVAILABLE || kind == IntentKind.OBSERVE) {
+                    || kind == IntentKind.UNAVAILABLE || kind == IntentKind.OBSERVE || plannedKinds().contains(kind)) {
                 require(!result.isAccepted(), kind + " must not be accepted by automation");
             } else {
                 require(result.isAccepted(), kind + " should pass validation when world actions are disabled");
@@ -110,6 +113,29 @@ public final class RuntimeIntentValidatorTest {
                 "INTERACT is not implemented by the vanilla runtime");
     }
 
+    private static void rejectsPlannedIntentKinds() {
+        for (IntentKind kind : plannedKinds()) {
+            requireRejected(RuntimeIntentValidator.validate(validIntent(kind), true),
+                    kind.name() + " is not implemented by the vanilla runtime");
+        }
+    }
+
+    private static void gatesPlannedWorldActionKindsBeforeUnimplementedRejection() {
+        for (IntentKind kind : plannedGatedKinds()) {
+            requireRejected(RuntimeIntentValidator.validate(validIntent(kind), false),
+                    "World actions are disabled for this OpenPlayer character");
+        }
+    }
+
+    private static void rejectsPlannedNonGatedKindsAsUnimplemented() {
+        for (IntentKind kind : plannedNonGatedKinds()) {
+            require(!RuntimeIntentPolicies.isLocalWorldOrInventoryAction(kind),
+                    kind + " must not use the world-action gate");
+            requireRejected(RuntimeIntentValidator.validate(validIntent(kind), false),
+                    kind.name() + " is not implemented by the vanilla runtime");
+        }
+    }
+
     private static void policyClassifiesEveryIntentKind() {
         Set<IntentKind> classifiedKinds = EnumSet.noneOf(IntentKind.class);
         for (IntentKind kind : IntentKind.values()) {
@@ -125,6 +151,23 @@ public final class RuntimeIntentValidatorTest {
             case MOVE, LOOK, PATROL, BREAK_BLOCK, PLACE_BLOCK -> "1 64 1";
             case ATTACK_NEAREST, GUARD_OWNER -> "12";
             case INTERACT, CHAT, UNAVAILABLE -> "details";
+            case GOTO -> "home";
+            case INVENTORY_QUERY,
+                    EQUIP_ITEM,
+                    GIVE_ITEM,
+                    DEPOSIT_ITEM,
+                    STASH_ITEM,
+                    GET_ITEM,
+                    COLLECT_FOOD,
+                    FARM_NEARBY,
+                    FISH,
+                    ATTACK_TARGET,
+                    DEFEND_OWNER,
+                    PAUSE,
+                    UNPAUSE,
+                    RESET_MEMORY,
+                    BODY_LANGUAGE,
+                    BUILD_STRUCTURE -> "";
             case OBSERVE,
                     STOP,
                     FOLLOW_OWNER,
@@ -137,6 +180,39 @@ public final class RuntimeIntentValidatorTest {
                     REPORT_STATUS -> "";
         };
         return intent(kind, instruction);
+    }
+
+    private static EnumSet<IntentKind> plannedKinds() {
+        EnumSet<IntentKind> kinds = plannedGatedKinds();
+        kinds.addAll(plannedNonGatedKinds());
+        return kinds;
+    }
+
+    private static EnumSet<IntentKind> plannedGatedKinds() {
+        return EnumSet.of(
+                IntentKind.EQUIP_ITEM,
+                IntentKind.GIVE_ITEM,
+                IntentKind.DEPOSIT_ITEM,
+                IntentKind.STASH_ITEM,
+                IntentKind.GET_ITEM,
+                IntentKind.COLLECT_FOOD,
+                IntentKind.FARM_NEARBY,
+                IntentKind.FISH,
+                IntentKind.ATTACK_TARGET,
+                IntentKind.DEFEND_OWNER,
+                IntentKind.BUILD_STRUCTURE
+        );
+    }
+
+    private static EnumSet<IntentKind> plannedNonGatedKinds() {
+        return EnumSet.of(
+                IntentKind.GOTO,
+                IntentKind.INVENTORY_QUERY,
+                IntentKind.PAUSE,
+                IntentKind.UNPAUSE,
+                IntentKind.RESET_MEMORY,
+                IntentKind.BODY_LANGUAGE
+        );
     }
 
     private static CommandIntent intent(IntentKind kind, String instruction) {
