@@ -24,7 +24,7 @@ public final class OpenPlayerControlScreen extends Screen {
     private static final int MAX_COMMAND_TEXT_LENGTH = 512;
     private static final int MAX_VISIBLE_CHARACTERS = 6;
     private EditBox commandInput;
-    private String selectedCharacterId;
+    private String selectedAssignmentId;
     private String renderedCharacterKey = "";
 
     public OpenPlayerControlScreen() {
@@ -62,7 +62,7 @@ public final class OpenPlayerControlScreen extends Screen {
         for (int index = 0; index < Math.min(MAX_VISIBLE_CHARACTERS, characters.size()); index++) {
             LocalCharacterListEntry character = characters.get(index);
             int y = 58 + index * (BUTTON_HEIGHT + 3);
-            this.addRenderableWidget(Button.builder(Component.literal(character.displayName()), button -> selectedCharacterId = character.id())
+            this.addRenderableWidget(Button.builder(Component.literal(character.displayName()), button -> selectedAssignmentId = character.assignmentId())
                     .bounds(margin, y, listWidth, BUTTON_HEIGHT)
                     .build());
         }
@@ -134,11 +134,12 @@ public final class OpenPlayerControlScreen extends Screen {
             return;
         }
         graphics.drawString(this.font, "Selected: " + fit(selected.displayName(), width - 58), left, top, 0xFFFFFF);
-        graphics.drawString(this.font, "ID: " + selected.id(), left, top + 14, 0xC0C0C0);
-        graphics.drawString(this.font, "Description: " + fit(selected.description().isEmpty() ? "none" : selected.description(), width - 70), left, top + 28, 0xC0C0C0);
-        graphics.drawString(this.font, "Skin: " + selected.skinStatus(), left, top + 42, 0xC0C0C0);
-        graphics.drawString(this.font, "Lifecycle: " + selected.lifecycleStatus(), left, top + 56, 0xC0C0C0);
-        graphics.drawString(this.font, "Conversation: " + selected.conversationStatus(), left, top + 70, 0xC0C0C0);
+        graphics.drawString(this.font, "Assignment: " + selected.assignmentId(), left, top + 14, 0xC0C0C0);
+        graphics.drawString(this.font, "Character: " + selected.characterId(), left, top + 28, 0xC0C0C0);
+        graphics.drawString(this.font, "Description: " + fit(selected.description().isEmpty() ? "none" : selected.description(), width - 70), left, top + 42, 0xC0C0C0);
+        graphics.drawString(this.font, "Skin: " + selected.skinStatus(), left, top + 56, 0xC0C0C0);
+        graphics.drawString(this.font, "Lifecycle: " + selected.lifecycleStatus(), left, top + 70, 0xC0C0C0);
+        graphics.drawString(this.font, "Conversation: " + selected.conversationStatus(), left, top + 84, 0xC0C0C0);
     }
 
     private void sendSpawn() {
@@ -146,7 +147,7 @@ public final class OpenPlayerControlScreen extends Screen {
         if (selected == null) {
             OpenPlayerRequestSender.sendSpawnRequest();
         } else {
-            OpenPlayerRequestSender.sendSpawnRequest(selected.id());
+            OpenPlayerRequestSender.sendSpawnRequest(selected.assignmentId());
         }
     }
 
@@ -155,7 +156,7 @@ public final class OpenPlayerControlScreen extends Screen {
         if (selected == null) {
             OpenPlayerRequestSender.sendDespawnRequest();
         } else {
-            OpenPlayerRequestSender.sendDespawnRequest(selected.id());
+            OpenPlayerRequestSender.sendDespawnRequest(selected.assignmentId());
         }
     }
 
@@ -164,7 +165,7 @@ public final class OpenPlayerControlScreen extends Screen {
         if (selected == null) {
             OpenPlayerRequestSender.sendFollowOwnerRequest();
         } else {
-            OpenPlayerRequestSender.sendFollowOwnerRequest(selected.id());
+            OpenPlayerRequestSender.sendFollowOwnerRequest(selected.assignmentId());
         }
     }
 
@@ -173,7 +174,7 @@ public final class OpenPlayerControlScreen extends Screen {
         if (selected == null) {
             OpenPlayerRequestSender.sendStopRequest();
         } else {
-            OpenPlayerRequestSender.sendStopRequest(selected.id());
+            OpenPlayerRequestSender.sendStopRequest(selected.assignmentId());
         }
     }
 
@@ -184,29 +185,29 @@ public final class OpenPlayerControlScreen extends Screen {
             if (selected == null) {
                 OpenPlayerRequestSender.sendCommandTextRequest(value);
             } else {
-                OpenPlayerRequestSender.sendCommandTextRequest(selected.id(), value);
+                OpenPlayerRequestSender.sendCommandTextRequest(selected.assignmentId(), value);
             }
             commandInput.setValue("");
         }
     }
 
     private LocalCharacterListEntry selectedCharacter() {
-        if (selectedCharacterId == null) {
+        if (selectedAssignmentId == null) {
             return null;
         }
         for (LocalCharacterListEntry character : OpenPlayerClientStatus.characters()) {
-            if (character.id().equals(selectedCharacterId)) {
+            if (character.assignmentId().equals(selectedAssignmentId)) {
                 return character;
             }
         }
-        selectedCharacterId = null;
+        selectedAssignmentId = null;
         return null;
     }
 
     private String characterKey() {
         List<String> parts = new ArrayList<>();
         for (LocalCharacterListEntry character : OpenPlayerClientStatus.characters()) {
-            parts.add(character.id() + ":" + character.lifecycleStatus());
+            parts.add(character.assignmentId() + ":" + character.lifecycleStatus());
         }
         parts.addAll(OpenPlayerClientStatus.characterErrors());
         return String.join("|", parts);

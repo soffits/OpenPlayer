@@ -29,6 +29,48 @@ public record LocalCharacterListView(List<LocalCharacterListEntry> characters, L
         return new LocalCharacterListView(entries, safeErrors);
     }
 
+    public static LocalCharacterListView fromAssignmentRepositoryResult(LocalAssignmentRepositoryResult result,
+                                                                        AssignmentLifecycleResolver lifecycleResolver,
+                                                                        LocalSkinPathResolver localSkinPathResolver,
+                                                                        LocalCharacterListEntry.ConversationStatusResolver conversationStatusResolver) {
+        if (result == null) {
+            throw new IllegalArgumentException("result cannot be null");
+        }
+        if (lifecycleResolver == null) {
+            throw new IllegalArgumentException("lifecycleResolver cannot be null");
+        }
+        if (conversationStatusResolver == null) {
+            throw new IllegalArgumentException("conversationStatusResolver cannot be null");
+        }
+        List<LocalCharacterListEntry> entries = new ArrayList<>();
+        for (LocalAssignmentDefinition assignment : result.assignments()) {
+            LocalCharacterDefinition character = findCharacter(result.characters(), assignment.characterId());
+            if (character != null) {
+                entries.add(LocalCharacterListEntry.from(
+                        assignment,
+                        character,
+                        lifecycleResolver.lifecycleStatus(assignment, character),
+                        localSkinPathResolver,
+                        conversationStatusResolver
+                ));
+            }
+        }
+        List<String> safeErrors = new ArrayList<>();
+        for (LocalCharacterValidationError error : result.errors()) {
+            safeErrors.add(safeError(error));
+        }
+        return new LocalCharacterListView(entries, safeErrors);
+    }
+
+    private static LocalCharacterDefinition findCharacter(List<LocalCharacterDefinition> characters, String characterId) {
+        for (LocalCharacterDefinition character : characters) {
+            if (character.id().equals(characterId)) {
+                return character;
+            }
+        }
+        return null;
+    }
+
     public static LocalCharacterListView fromRepositoryResult(LocalCharacterRepositoryResult result,
                                                                CharacterLifecycleResolver lifecycleResolver,
                                                                LocalSkinPathResolver localSkinPathResolver) {
@@ -86,5 +128,10 @@ public record LocalCharacterListView(List<LocalCharacterListEntry> characters, L
     @FunctionalInterface
     public interface CharacterLifecycleResolver {
         String lifecycleStatus(LocalCharacterDefinition character);
+    }
+
+    @FunctionalInterface
+    public interface AssignmentLifecycleResolver {
+        String lifecycleStatus(LocalAssignmentDefinition assignment, LocalCharacterDefinition character);
     }
 }

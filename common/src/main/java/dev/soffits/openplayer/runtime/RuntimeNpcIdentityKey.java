@@ -22,7 +22,12 @@ record RuntimeNpcIdentityKey(UUID ownerId, String roleId, String profileName) {
     }
 
     static RuntimeNpcIdentityKey from(UUID ownerId, String roleId, String profileName) {
-        String identityProfileName = roleId.startsWith(OpenPlayerConstants.LOCAL_CHARACTER_SESSION_ROLE_PREFIX) ? "" : profileName;
+        String identityProfileName = isLocalStableRole(roleId) ? "" : profileName;
         return new RuntimeNpcIdentityKey(ownerId, roleId, identityProfileName);
+    }
+
+    private static boolean isLocalStableRole(String roleId) {
+        return roleId.startsWith(OpenPlayerConstants.LOCAL_CHARACTER_SESSION_ROLE_PREFIX)
+                || roleId.startsWith(OpenPlayerConstants.LOCAL_ASSIGNMENT_SESSION_ROLE_PREFIX);
     }
 }

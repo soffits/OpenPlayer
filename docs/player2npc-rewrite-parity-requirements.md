@@ -8,7 +8,7 @@ OpenPlayer remains an `AGPL-3.0-only` Minecraft 1.20.1 Java 17 mod using an Arch
 - `fabric`: Fabric entrypoints and loader-specific wiring.
 - `forge`: Forge entrypoints, client event wiring, and loader-specific wiring.
 
-Current implementation already includes runtime NPC sessions, duplicate prevention, owner lifecycle cleanup and restore, spawn/despawn networking, basic command intents, item pickup with inventory persistence, a minimal client control screen, a player-shaped renderer with optional local resource id skin support, client-side local PNG skin loading, and vanilla feature layers for held items, armor, head-slot items, elytra, arrows, and bee stingers, a vanilla NPC-backed automation layer, an optional reflective Baritone command bridge, and a disabled-by-default provider-backed intent parser seam.
+Current implementation already includes runtime NPC sessions, duplicate prevention, owner lifecycle cleanup and restore, spawn/despawn networking, basic command intents, item pickup with inventory persistence, local assignment support for multiple companions per owner, a minimal client control screen, a player-shaped renderer with optional local resource id skin support, client-side local PNG skin loading, and vanilla feature layers for held items, armor, head-slot items, elytra, arrows, and bee stingers, a vanilla NPC-backed automation layer, an optional reflective Baritone command bridge, and a disabled-by-default provider-backed intent parser seam.
 
 ## Non-Goals And Legal Constraints
 
@@ -338,6 +338,14 @@ Allow one owner to run multiple selected local companions with explicit local as
 - No account login, cloud roster, online character service, or external assignment sync.
 - No automatic party behavior, squad tactics, or shared long-term memory.
 - No remote character import or Player2NPC file compatibility unless a later task explicitly approves it.
+
+### Current Implementation Notes
+
+OpenPlayer now loads optional local assignment files from `<Minecraft config>/openplayer/assignments/*.properties`. Supported assignment fields are exactly `id`, `characterId`, and optional `displayName`; unknown fields, unsafe ids, secret-like labels, absolute-path-like display names, duplicate explicit ids, deleted character references, and attempts to hijack another character's default assignment id are validation errors. Missing assignment directories are valid and produce no errors.
+
+For backward compatibility, every loaded local character also has a deterministic default assignment with assignment id equal to the character id unless an explicit same-id assignment targets that same character. Client list rows remain character-oriented for display but include both assignment id and character id; selected actions send only the stable assignment id to the server. The legacy default NPC path still runs when no id is selected.
+
+`CompanionLifecycleManager` now resolves selected ids as assignments, derives selected runtime role ids from assignment ids with the `openplayer-local-assignment-` prefix, and keys conversation history by owner plus assignment id. Existing character-id methods delegate through the default assignment behavior. Each owner can have up to four active local assignments; spawning a fifth distinct assignment rejects safely, while spawning an already-active assignment still reuses or relocates the existing runtime identity through `RuntimeAiPlayerNpcService`.
 
 ## Phase I: Character Gallery And Detail UI Polish
 

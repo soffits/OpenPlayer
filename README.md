@@ -12,7 +12,7 @@ The initial target is Minecraft 1.20.1 on Java 17 with an Architectury-style mul
 
 ## Milestone Status
 
-Current implementation includes runtime NPC sessions, duplicate prevention, a server-side companion lifecycle manager for selected local characters, local character definition parsing, server-authoritative local character selection from the OpenPlayer UI, basic command intents, item pickup with inventory persistence, explicit NPC hotbar and held-equipment helpers, owner lifecycle cleanup and restore, spawn/despawn networking, a minimal client control screen with safe runtime status, a player-shaped renderer with optional profile skin resource support, client-side local PNG skin loading, and vanilla feature layers for held items, armor, head-slot items, elytra, arrows, and bee stingers, a vanilla NPC-backed task backend, an optional reflective Baritone command bridge, a disabled-by-default runtime intent parser that can use an opt-in JDK-only OpenAI-compatible provider, and an optional per-character conversation loop on top of that parser. Automatone is not directly integrated yet.
+Current implementation includes runtime NPC sessions, duplicate prevention, a server-side companion lifecycle manager for selected local assignments, local character and assignment definition parsing, server-authoritative local companion selection from the OpenPlayer UI, basic command intents, item pickup with inventory persistence, explicit NPC hotbar and held-equipment helpers, owner lifecycle cleanup and restore, spawn/despawn networking, a minimal client control screen with safe runtime status, a player-shaped renderer with optional profile skin resource support, client-side local PNG skin loading, and vanilla feature layers for held items, armor, head-slot items, elytra, arrows, and bee stingers, a vanilla NPC-backed task backend, an optional reflective Baritone command bridge, a disabled-by-default runtime intent parser that can use an opt-in JDK-only OpenAI-compatible provider, and an optional per-character conversation loop on top of that parser. Automatone is not directly integrated yet.
 
 ## Local Character Config
 
@@ -33,9 +33,11 @@ conversationSettings=Optional non-sensitive local conversation preferences.
 
 Supported fields are exactly `id`, `displayName`, `description`, `skinTexture`, `localSkinFile`, `defaultRoleId`, `conversationPrompt`, and `conversationSettings`. Unknown fields are validation errors.
 
-At runtime, selected local character sessions use a deterministic internal role id derived from `id` with the `openplayer-local-character-` prefix. `defaultRoleId` is reserved metadata for future behavior role selection and is not used as the selected character's session identity.
+At runtime, selected local assignment sessions use a deterministic internal role id derived from the assignment id with the `openplayer-local-assignment-` prefix. `defaultRoleId` is reserved metadata for future behavior role selection and is not used as the selected companion's session identity.
 
-Selected-character lifecycle actions are handled server-side by a small companion manager on top of `RuntimeAiPlayerNpcService` and `OpenPlayerApi`. The manager does not store transient session ids as character identity; it resolves the current session by owner UUID and the stable local character role id each time. Spawning the same selected character again calls the runtime service with the same stable identity, so the existing companion is reused or relocated instead of duplicating. Unknown or invalid selected character ids are rejected without targeting any runtime session.
+Local assignment definitions are optional dependency-free Java `.properties` files under `<Minecraft config>/openplayer/assignments`. Supported fields are exactly `id`, `characterId`, and optional `displayName`. Assignment ids and character ids use the same safe id shape as character ids. OpenPlayer also exposes a deterministic default assignment for every loaded local character, with assignment id equal to the character id; this preserves old selected-character requests when no explicit assignment file exists.
+
+Selected-assignment lifecycle actions are handled server-side by a small companion manager on top of `RuntimeAiPlayerNpcService` and `OpenPlayerApi`. The manager does not store transient session ids as assignment identity; it resolves the current session by owner UUID and the stable local assignment role id each time. Spawning the same selected assignment again calls the runtime service with the same stable identity, so the existing companion is reused or relocated instead of duplicating. Two assignments can point at the same character and run independently. Unknown or invalid selected assignment ids are rejected without targeting any runtime session, and each owner is limited to four active local assignments.
 
 Validation rules:
 
@@ -60,11 +62,11 @@ OpenPlayer NPCs use the vanilla player model with the existing local skin fallba
 
 ## OpenPlayer Controls UI
 
-Press the OpenPlayer controls key, `O` by default, to open the compact control screen. The screen requests the local character list from the server, so clients only send stable character ids and never send full mutable character data.
+Press the OpenPlayer controls key, `O` by default, to open the compact control screen. The screen requests the local companion list from the server, so clients only send stable assignment ids and never send full mutable character or assignment data.
 
 The left panel shows loading, empty, validation-error, and character-list states. Validation errors show only safe file names and messages, not absolute filesystem paths or stack traces.
 
-Selecting a character shows its display name, id, description, skin status, lifecycle status, and conversation status. Lifecycle status is resolved by the server-side companion manager from the active runtime session and reports `despawned` when no matching owner plus stable character id session exists. Spawn, despawn, follow, stop, and command text then target that selected character. With no character selected, the Spawn button keeps the original default OpenPlayer NPC spawn behavior.
+Selecting a row shows its display name, assignment id, character id, description, skin status, lifecycle status, and conversation status. Lifecycle status is resolved by the server-side companion manager from the active runtime session and reports `despawned` when no matching owner plus stable assignment id session exists. Spawn, despawn, follow, stop, and command text then target that selected assignment. With no character selected, the Spawn button keeps the original default OpenPlayer NPC spawn behavior.
 
 Despawning a runtime NPC stops its active runtime commands before the entity is discarded. Owner disconnect and server stop continue to use the runtime cleanup hooks so companion tasks are stopped without persisting transient session ids as long-term identity.
 
@@ -121,7 +123,7 @@ The Baritone backend is intentionally honest about scope: stock Baritone control
 - Establish loader-neutral NPC domain contracts.
 - Add entity, persistence, and networking slices.
 - Evaluate provider-backed command parsing behavior in runtime playtesting.
-- Continue near-1:1 local parity extension phases for multi-companion assignments, gallery/detail UI polish, local character editing/import/export, spoken response UX, expanded safe intents, NPC-backed navigation, interaction management, and cross-loader packaging QA.
+- Continue near-1:1 local parity extension phases for gallery/detail UI polish, local character editing/import/export, spoken response UX, expanded safe intents, NPC-backed navigation, interaction management, and cross-loader packaging QA.
 - Expand NPC-backed automation beyond the current vanilla task layer only through a clean pathfinding and action adapter boundary.
 - Evaluate Automatone integration for movement automation once public coordinates, loader/version compatibility, license posture, and adapter boundaries are clear.
 - Keep future parity work clean-room and local/offline by default: no account login, online character service, remote skin downloads, opaque jars, or secrets in character files.

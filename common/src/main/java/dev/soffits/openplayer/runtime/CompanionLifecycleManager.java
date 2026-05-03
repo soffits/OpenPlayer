@@ -1,5 +1,6 @@
 package dev.soffits.openplayer.runtime;
 
+import dev.soffits.openplayer.OpenPlayerConstants;
 import dev.soffits.openplayer.api.AiPlayerNpcCommand;
 import dev.soffits.openplayer.api.AiPlayerNpcService;
 import dev.soffits.openplayer.api.AiPlayerNpcSession;
@@ -8,6 +9,8 @@ import dev.soffits.openplayer.api.CommandSubmissionStatus;
 import dev.soffits.openplayer.api.NpcOwnerId;
 import dev.soffits.openplayer.api.NpcSessionStatus;
 import dev.soffits.openplayer.api.NpcSpawnLocation;
+import dev.soffits.openplayer.character.LocalAssignmentDefinition;
+import dev.soffits.openplayer.character.LocalAssignmentRepositoryResult;
 import dev.soffits.openplayer.character.LocalCharacterDefinition;
 import dev.soffits.openplayer.character.LocalCharacterRepositoryResult;
 import dev.soffits.openplayer.conversation.ConversationHistoryTrimmer;
@@ -24,8 +27,9 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 public final class CompanionLifecycleManager {
+    private static final int MAX_ACTIVE_ASSIGNMENTS_PER_OWNER = 4;
     private final Supplier<AiPlayerNpcService> npcServiceSupplier;
-    private final Supplier<LocalCharacterRepositoryResult> characterRepositoryResultSupplier;
+    private final Supplier<LocalAssignmentRepositoryResult> assignmentRepositoryResultSupplier;
     private final ConversationLoop conversationLoop;
     private final Map<ConversationHistoryKey, List<ConversationTurn>> conversationHistory = new LinkedHashMap<>();
 
@@ -50,7 +54,28 @@ public final class CompanionLifecycleManager {
             throw new IllegalArgumentException("characterRepositoryResultSupplier cannot be null");
         }
         this.npcServiceSupplier = npcServiceSupplier;
-        this.characterRepositoryResultSupplier = characterRepositoryResultSupplier;
+        this.assignmentRepositoryResultSupplier = () -> defaultAssignmentResult(characterRepositoryResultSupplier.get());
+        this.conversationLoop = new ConversationLoop(intentParserSupplier, OpenPlayerIntentParserConfig::status);
+    }
+
+    public static CompanionLifecycleManager withAssignments(Supplier<AiPlayerNpcService> npcServiceSupplier,
+                                                            Supplier<LocalAssignmentRepositoryResult> assignmentRepositoryResultSupplier,
+                                                            Supplier<IntentParser> intentParserSupplier) {
+        return new CompanionLifecycleManager(npcServiceSupplier, assignmentRepositoryResultSupplier, intentParserSupplier, true);
+    }
+
+    private CompanionLifecycleManager(Supplier<AiPlayerNpcService> npcServiceSupplier,
+                                      Supplier<LocalAssignmentRepositoryResult> assignmentRepositoryResultSupplier,
+                                      Supplier<IntentParser> intentParserSupplier,
+                                      boolean ignored) {
+        if (npcServiceSupplier == null) {
+            throw new IllegalArgumentException("npcServiceSupplier cannot be null");
+        }
+        if (assignmentRepositoryResultSupplier == null) {
+            throw new IllegalArgumentException("assignmentRepositoryResultSupplier cannot be null");
+        }
+        this.npcServiceSupplier = npcServiceSupplier;
+        this.assignmentRepositoryResultSupplier = assignmentRepositoryResultSupplier;
         this.conversationLoop = new ConversationLoop(intentParserSupplier, OpenPlayerIntentParserConfig::status);
     }
 
@@ -62,23 +87,47 @@ public final class CompanionLifecycleManager {
         if (spawnLocation == null) {
             throw new IllegalArgumentException("spawnLocation cannot be null");
         }
-        Optional<LocalCharacterDefinition> character = findCharacter(characterId);
-        if (character.isEmpty()) {
-            return rejectedUnknownCharacter();
+        return spawnSelectedAssignment(ownerId, spawnLocation, characterId);
+    }
+
+    public CommandSubmissionResult spawnSelectedAssignment(NpcOwnerId ownerId, NpcSpawnLocation spawnLocation,
+                                                           String assignmentId) {
+        if (ownerId == null) {
+            throw new IllegalArgumentException("ownerId cannot be null");
         }
-        npcService().spawn(character.get().toNpcSpec(ownerId, spawnLocation));
+        if (spawnLocation == null) {
+            throw new IllegalArgumentException("spawnLocation cannot be null");
+        }
+        Optional<ResolvedAssignment> resolvedAssignment = findAssignment(assignmentId);
+        if (resolvedAssignment.isEmpty()) {
+            return rejectedUnknownAssignment();
+        }
+        if (findActiveSession(ownerId.value(), resolvedAssignment.get()).isEmpty()
+                && activeAssignmentCount(ownerId.value()) >= MAX_ACTIVE_ASSIGNMENTS_PER_OWNER) {
+            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED,
+                    "Active companion assignment limit reached");
+        }
+        npcService().spawn(resolvedAssignment.get().assignment().toNpcSpec(
+                resolvedAssignment.get().character(),
+                ownerId,
+                spawnLocation
+        ));
         return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED, "Companion spawned");
     }
 
     public CommandSubmissionResult despawnSelected(UUID ownerId, String characterId) {
-        Optional<LocalCharacterDefinition> character = findCharacter(characterId);
-        if (character.isEmpty()) {
-            return rejectedUnknownCharacter();
+        return despawnSelectedAssignment(ownerId, characterId);
+    }
+
+    public CommandSubmissionResult despawnSelectedAssignment(UUID ownerId, String assignmentId) {
+        Optional<ResolvedAssignment> resolvedAssignment = findAssignment(assignmentId);
+        if (resolvedAssignment.isEmpty()) {
+            return rejectedUnknownAssignment();
         }
         AiPlayerNpcService service = npcService();
         boolean despawned = false;
         for (AiPlayerNpcSession session : service.listSessions()) {
-            if (matchesLocalCharacterSession(ownerId, session, character.get())) {
+            if (matchesLocalAssignmentSession(ownerId, session, resolvedAssignment.get().assignment())) {
                 despawned |= service.despawn(session.sessionId());
             }
         }
@@ -94,7 +143,7 @@ public final class CompanionLifecycleManager {
         }
         Optional<AiPlayerNpcSession> session = findActiveSession(ownerId, characterId);
         if (session.isEmpty()) {
-            return unknownOrMissingSession(characterId);
+            return unknownOrMissingAssignment(characterId);
         }
         return npcService().submitCommand(session.get().sessionId(), command);
     }
@@ -103,25 +152,27 @@ public final class CompanionLifecycleManager {
         if (commandText == null) {
             throw new IllegalArgumentException("commandText cannot be null");
         }
-        Optional<LocalCharacterDefinition> character = findCharacter(characterId);
-        if (character.isEmpty()) {
-            return rejectedUnknownCharacter();
+        Optional<ResolvedAssignment> resolvedAssignment = findAssignment(characterId);
+        if (resolvedAssignment.isEmpty()) {
+            return rejectedUnknownAssignment();
         }
-        Optional<AiPlayerNpcSession> session = findActiveSession(ownerId, character.get());
+        LocalAssignmentDefinition assignment = resolvedAssignment.get().assignment();
+        LocalCharacterDefinition character = resolvedAssignment.get().character();
+        Optional<AiPlayerNpcSession> session = findActiveSession(ownerId, resolvedAssignment.get());
         if (session.isEmpty()) {
             return new CommandSubmissionResult(CommandSubmissionStatus.UNKNOWN_SESSION, "Companion is not spawned");
         }
-        if (hasConversationConfig(character.get())) {
-            ConversationHistoryKey historyKey = new ConversationHistoryKey(ownerId, character.get().id());
+        if (hasConversationConfig(character)) {
+            ConversationHistoryKey historyKey = new ConversationHistoryKey(ownerId, assignment.id());
             List<ConversationTurn> history = conversationHistory.getOrDefault(historyKey, List.of());
             AiPlayerNpcCommand[] submittedCommand = new AiPlayerNpcCommand[1];
             CommandSubmissionResult result = conversationLoop.submit(
-                    character.get(),
+                    character,
                     commandText,
                     history,
                     command -> {
                         submittedCommand[0] = command;
-                        return submitSelectedCommand(ownerId, character.get().id(), command);
+                        return submitSelectedCommand(ownerId, assignment.id(), command);
                     }
             );
             if (result.status() == CommandSubmissionStatus.ACCEPTED && submittedCommand[0] != null) {
@@ -154,29 +205,82 @@ public final class CompanionLifecycleManager {
     }
 
     static boolean matchesLocalCharacterSession(UUID ownerId, AiPlayerNpcSession session,
-                                                LocalCharacterDefinition character) {
+                                                 LocalCharacterDefinition character) {
         if (ownerId == null || session == null || character == null) {
             return false;
         }
         return session.spec().ownerId().value().equals(ownerId)
-                && session.spec().roleId().value().equals(character.toSessionRoleId().value());
+                && (session.spec().roleId().value().equals(character.toSessionRoleId().value())
+                || session.spec().roleId().value().equals(LocalAssignmentDefinition.defaultFor(character).toSessionRoleId().value()));
+    }
+
+    public String lifecycleStatus(UUID ownerId, LocalAssignmentDefinition assignment) {
+        if (ownerId == null) {
+            throw new IllegalArgumentException("ownerId cannot be null");
+        }
+        if (assignment == null) {
+            throw new IllegalArgumentException("assignment cannot be null");
+        }
+        AiPlayerNpcService service = npcService();
+        for (AiPlayerNpcSession session : service.listSessions()) {
+            if (matchesLocalAssignmentSession(ownerId, session, assignment)) {
+                NpcSessionStatus status = service.status(session.sessionId());
+                return status.name().toLowerCase(Locale.ROOT);
+            }
+        }
+        return "despawned";
+    }
+
+    static boolean matchesLocalAssignmentSession(UUID ownerId, AiPlayerNpcSession session,
+                                                 LocalAssignmentDefinition assignment) {
+        if (ownerId == null || session == null || assignment == null) {
+            return false;
+        }
+        return session.spec().ownerId().value().equals(ownerId)
+                && session.spec().roleId().value().equals(assignment.toSessionRoleId().value());
     }
 
     private Optional<AiPlayerNpcSession> findActiveSession(UUID ownerId, String characterId) {
-        Optional<LocalCharacterDefinition> character = findCharacter(characterId);
-        if (character.isEmpty()) {
+        Optional<ResolvedAssignment> resolvedAssignment = findAssignment(characterId);
+        if (resolvedAssignment.isEmpty()) {
             return Optional.empty();
         }
-        return findActiveSession(ownerId, character.get());
+        return findActiveSession(ownerId, resolvedAssignment.get());
     }
 
     private Optional<AiPlayerNpcSession> findActiveSession(UUID ownerId, LocalCharacterDefinition character) {
-        for (AiPlayerNpcSession session : npcService().listSessions()) {
-            if (matchesLocalCharacterSession(ownerId, session, character)) {
+        AiPlayerNpcService service = npcService();
+        for (AiPlayerNpcSession session : service.listSessions()) {
+            if (matchesLocalCharacterSession(ownerId, session, character)
+                    && service.status(session.sessionId()) != NpcSessionStatus.DESPAWNED) {
                 return Optional.of(session);
             }
         }
         return Optional.empty();
+    }
+
+    private Optional<AiPlayerNpcSession> findActiveSession(UUID ownerId, ResolvedAssignment resolvedAssignment) {
+        AiPlayerNpcService service = npcService();
+        for (AiPlayerNpcSession session : service.listSessions()) {
+            if (matchesLocalAssignmentSession(ownerId, session, resolvedAssignment.assignment())
+                    && service.status(session.sessionId()) != NpcSessionStatus.DESPAWNED) {
+                return Optional.of(session);
+            }
+        }
+        return Optional.empty();
+    }
+
+    private int activeAssignmentCount(UUID ownerId) {
+        AiPlayerNpcService service = npcService();
+        int count = 0;
+        for (AiPlayerNpcSession session : service.listSessions()) {
+            if (session.spec().ownerId().value().equals(ownerId)
+                    && session.spec().roleId().value().startsWith(OpenPlayerConstants.LOCAL_ASSIGNMENT_SESSION_ROLE_PREFIX)
+                    && service.status(session.sessionId()) != NpcSessionStatus.DESPAWNED) {
+                count++;
+            }
+        }
+        return count;
     }
 
     private static boolean hasConversationConfig(LocalCharacterDefinition character) {
@@ -199,10 +303,28 @@ public final class CompanionLifecycleManager {
             return Optional.empty();
         }
         String normalizedCharacterId = characterId.trim();
-        LocalCharacterRepositoryResult result = characterRepositoryResultSupplier.get();
+        LocalAssignmentRepositoryResult result = assignmentRepositoryResultSupplier.get();
         for (LocalCharacterDefinition character : result.characters()) {
             if (character.id().equals(normalizedCharacterId)) {
                 return Optional.of(character);
+            }
+        }
+        return Optional.empty();
+    }
+
+    private Optional<ResolvedAssignment> findAssignment(String assignmentId) {
+        if (assignmentId == null || assignmentId.isBlank()) {
+            return Optional.empty();
+        }
+        String normalizedAssignmentId = assignmentId.trim();
+        LocalAssignmentRepositoryResult result = assignmentRepositoryResultSupplier.get();
+        for (LocalAssignmentDefinition assignment : result.assignments()) {
+            if (assignment.id().equals(normalizedAssignmentId)) {
+                for (LocalCharacterDefinition character : result.characters()) {
+                    if (character.id().equals(assignment.characterId())) {
+                        return Optional.of(new ResolvedAssignment(assignment, character));
+                    }
+                }
             }
         }
         return Optional.empty();
@@ -214,15 +336,37 @@ public final class CompanionLifecycleManager {
 
     private CommandSubmissionResult unknownOrMissingSession(String characterId) {
         if (findCharacter(characterId).isEmpty()) {
-            return rejectedUnknownCharacter();
+            return rejectedUnknownAssignment();
+        }
+        return new CommandSubmissionResult(CommandSubmissionStatus.UNKNOWN_SESSION, "Companion is not spawned");
+    }
+
+    private CommandSubmissionResult unknownOrMissingAssignment(String assignmentId) {
+        if (findAssignment(assignmentId).isEmpty()) {
+            return rejectedUnknownAssignment();
         }
         return new CommandSubmissionResult(CommandSubmissionStatus.UNKNOWN_SESSION, "Companion is not spawned");
     }
 
     private CommandSubmissionResult rejectedUnknownCharacter() {
-        return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Unknown local character");
+        return rejectedUnknownAssignment();
     }
 
-    private record ConversationHistoryKey(UUID ownerId, String characterId) {
+    private CommandSubmissionResult rejectedUnknownAssignment() {
+        return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Unknown local assignment");
+    }
+
+    private static LocalAssignmentRepositoryResult defaultAssignmentResult(LocalCharacterRepositoryResult characterResult) {
+        List<LocalAssignmentDefinition> assignments = new java.util.ArrayList<>();
+        for (LocalCharacterDefinition character : characterResult.characters()) {
+            assignments.add(LocalAssignmentDefinition.defaultFor(character));
+        }
+        return new LocalAssignmentRepositoryResult(assignments, characterResult.characters(), characterResult.errors());
+    }
+
+    private record ResolvedAssignment(LocalAssignmentDefinition assignment, LocalCharacterDefinition character) {
+    }
+
+    private record ConversationHistoryKey(UUID ownerId, String assignmentId) {
     }
 }

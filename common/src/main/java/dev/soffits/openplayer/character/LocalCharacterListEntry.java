@@ -1,14 +1,22 @@
 package dev.soffits.openplayer.character;
 
-public record LocalCharacterListEntry(String id, String displayName, String description, String skinStatus,
-                                      String lifecycleStatus, String conversationStatus) {
+public record LocalCharacterListEntry(String id, String assignmentId, String characterId, String displayName,
+                                      String description, String skinStatus, String lifecycleStatus,
+                                      String conversationStatus) {
     public LocalCharacterListEntry {
         id = requireText(id, "id");
+        assignmentId = requireText(assignmentId, "assignmentId");
+        characterId = requireText(characterId, "characterId");
         displayName = requireText(displayName, "displayName");
         description = normalize(description);
         skinStatus = requireText(skinStatus, "skinStatus");
         lifecycleStatus = requireText(lifecycleStatus, "lifecycleStatus");
         conversationStatus = requireText(conversationStatus, "conversationStatus");
+    }
+
+    public LocalCharacterListEntry(String id, String displayName, String description, String skinStatus,
+                                   String lifecycleStatus, String conversationStatus) {
+        this(id, id, id, displayName, description, skinStatus, lifecycleStatus, conversationStatus);
     }
 
     public static LocalCharacterListEntry from(LocalCharacterDefinition character, String lifecycleStatus) {
@@ -35,7 +43,39 @@ public record LocalCharacterListEntry(String id, String displayName, String desc
                 : conversationStatusResolver.conversationStatus(character);
         return new LocalCharacterListEntry(
                 character.id(),
+                character.id(),
+                character.id(),
                 character.displayName(),
+                character.description(),
+                skinStatus,
+                lifecycleStatus,
+                conversationStatus
+        );
+    }
+
+    public static LocalCharacterListEntry from(LocalAssignmentDefinition assignment,
+                                               LocalCharacterDefinition character,
+                                               String lifecycleStatus,
+                                               LocalSkinPathResolver localSkinPathResolver,
+                                               ConversationStatusResolver conversationStatusResolver) {
+        if (assignment == null) {
+            throw new IllegalArgumentException("assignment cannot be null");
+        }
+        if (character == null) {
+            throw new IllegalArgumentException("character cannot be null");
+        }
+        if (conversationStatusResolver == null) {
+            throw new IllegalArgumentException("conversationStatusResolver cannot be null");
+        }
+        String skinStatus = skinStatus(character, localSkinPathResolver);
+        String conversationStatus = character.conversationPrompt() == null && character.conversationSettings() == null
+                ? "not configured"
+                : conversationStatusResolver.conversationStatus(character);
+        return new LocalCharacterListEntry(
+                character.id(),
+                assignment.id(),
+                assignment.characterId(),
+                assignment.resolvedDisplayName(character),
                 character.description(),
                 skinStatus,
                 lifecycleStatus,

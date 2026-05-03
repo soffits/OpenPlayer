@@ -16,6 +16,7 @@ public final class RuntimeNpcIdentityKeyTest {
 
     public static void main(String[] args) {
         localCharacterIdentityIgnoresDisplayName();
+        localAssignmentIdentityIgnoresProfileName();
         legacyIdentityIncludesProfileName();
     }
 
@@ -29,6 +30,18 @@ public final class RuntimeNpcIdentityKeyTest {
                 "Renamed Alex"
         ));
         require(first.equals(renamed), "local character runtime identity must be stable across displayName changes");
+    }
+
+    private static void localAssignmentIdentityIgnoresProfileName() {
+        RuntimeNpcIdentityKey first = RuntimeNpcIdentityKey.from(spec(
+                OpenPlayerConstants.LOCAL_ASSIGNMENT_SESSION_ROLE_PREFIX + "left_guard",
+                "Alex"
+        ));
+        RuntimeNpcIdentityKey renamed = RuntimeNpcIdentityKey.from(spec(
+                OpenPlayerConstants.LOCAL_ASSIGNMENT_SESSION_ROLE_PREFIX + "left_guard",
+                "Renamed Alex"
+        ));
+        require(first.equals(renamed), "local assignment runtime identity must be stable across profileName changes");
     }
 
     private static void legacyIdentityIncludesProfileName() {
