@@ -21,20 +21,22 @@ public final class OpenPlayerControlScreen extends Screen {
     private static final Component PROVIDER_MODEL_INPUT = Component.literal("Provider model");
     private static final Component PROVIDER_API_KEY_INPUT = Component.literal("API key; blank preserves existing key");
     private static final int BUTTON_WIDTH = 142;
-    private static final int BUTTON_HEIGHT = 20;
-    private static final int BUTTON_SPACING = 6;
     private static final int COMMAND_INPUT_WIDTH = 220;
     private static final int MAX_COMMAND_TEXT_LENGTH = 512;
-    private static final int MIN_VISIBLE_ASSIGNMENTS = 3;
-    private static final int MAX_VISIBLE_ASSIGNMENTS = 6;
+    private static final int TAB_TOP = 42;
     private EditBox commandInput;
     private EditBox providerEndpointInput;
     private EditBox providerModelInput;
     private EditBox providerApiKeyInput;
+    private String commandDraft = "";
+    private String providerEndpointDraft = "";
+    private String providerModelDraft = "";
+    private String providerApiKeyDraft = "";
     private boolean clearApiKeyOnSave;
     private String selectedAssignmentId;
     private String renderedCharacterKey = "";
     private int pageIndex;
+    private ControlPage controlPage = ControlPage.MAIN;
 
     public OpenPlayerControlScreen() {
         super(TITLE);
@@ -56,27 +58,37 @@ public final class OpenPlayerControlScreen extends Screen {
     }
 
     private void rebuildControlWidgetsPreservingCommandText(boolean keepSelectedVisible) {
-        String commandText = commandInput == null ? "" : commandInput.getValue();
-        String endpointText = providerEndpointInput == null ? "" : providerEndpointInput.getValue();
-        String modelText = providerModelInput == null ? "" : providerModelInput.getValue();
-        String apiKeyText = providerApiKeyInput == null ? "" : providerApiKeyInput.getValue();
+        commandDraft = commandInput == null ? commandDraft : commandInput.getValue();
+        providerEndpointDraft = providerEndpointInput == null ? providerEndpointDraft : providerEndpointInput.getValue();
+        providerModelDraft = providerModelInput == null ? providerModelDraft : providerModelInput.getValue();
+        providerApiKeyDraft = providerApiKeyInput == null ? providerApiKeyDraft : providerApiKeyInput.getValue();
         rebuildControlWidgets(keepSelectedVisible);
-        commandInput.setValue(commandText);
-        providerEndpointInput.setValue(endpointText);
-        providerModelInput.setValue(modelText);
-        providerApiKeyInput.setValue(apiKeyText);
+        if (commandInput != null) {
+            commandInput.setValue(commandDraft);
+        }
+        if (providerEndpointInput != null) {
+            providerEndpointInput.setValue(providerEndpointDraft);
+        }
+        if (providerModelInput != null) {
+            providerModelInput.setValue(providerModelDraft);
+        }
+        if (providerApiKeyInput != null) {
+            providerApiKeyInput.setValue(providerApiKeyDraft);
+        }
     }
 
     private void rebuildControlWidgets(boolean keepSelectedVisible) {
         this.clearWidgets();
+        commandInput = null;
+        providerEndpointInput = null;
+        providerModelInput = null;
+        providerApiKeyInput = null;
         renderedCharacterKey = characterKey();
-        int margin = 12;
-        int listWidth = Math.min(210, Math.max(124, this.width / 3));
-        int rightLeft = margin + listWidth + 12;
-        int rightWidth = Math.max(120, this.width - rightLeft - margin);
-        int controlWidth = Math.min(BUTTON_WIDTH, rightWidth);
-        int controlsLeft = rightLeft + Math.max(0, (rightWidth - controlWidth) / 2);
-        int top = Math.max(90, Math.min(this.height - 84, 124));
+        OpenPlayerControlLayout.Columns columns = OpenPlayerControlLayout.columns(this.width);
+        int margin = OpenPlayerControlLayout.MARGIN;
+        int listWidth = columns.listWidth();
+        int rightLeft = columns.rightLeft();
+        int rightWidth = columns.rightWidth();
 
         List<LocalCharacterListEntry> characters = OpenPlayerClientStatus.characters();
         int visibleAssignments = visibleAssignmentCount();
@@ -86,24 +98,24 @@ public final class OpenPlayerControlScreen extends Screen {
         for (int index = page.firstIndex(); index < page.lastExclusiveIndex(); index++) {
             LocalCharacterListEntry character = characters.get(index);
             int row = index - page.firstIndex();
-            int y = 58 + row * (BUTTON_HEIGHT + 4);
+            int y = 58 + row * (OpenPlayerControlLayout.BUTTON_HEIGHT + 4);
             int characterIndex = index;
             this.addRenderableWidget(Button.builder(Component.literal(fit(galleryButtonLabel(character), listWidth - 12)), button -> {
                         selectedAssignmentId = character.assignmentId();
                         pageIndex = OpenPlayerGalleryPage.pageForItemIndex(characterIndex, visibleAssignments);
                         rebuildControlWidgetsPreservingCommandText(true);
                     })
-                    .bounds(margin, y, listWidth, BUTTON_HEIGHT)
+                    .bounds(margin, y, listWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
                     .build());
         }
-        int pagerTop = 58 + visibleAssignments * (BUTTON_HEIGHT + 4) + 2;
+        int pagerTop = 58 + visibleAssignments * (OpenPlayerControlLayout.BUTTON_HEIGHT + 4) + 2;
         if (page.pageCount() > 1) {
             int pagerButtonWidth = Math.max(45, (listWidth - 62) / 2);
             Button previous = Button.builder(Component.literal("Prev"), button -> {
                         pageIndex = Math.max(0, pageIndex - 1);
                         rebuildControlWidgetsPreservingCommandText(false);
                     })
-                    .bounds(margin, pagerTop, pagerButtonWidth, BUTTON_HEIGHT)
+                    .bounds(margin, pagerTop, pagerButtonWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
                     .build();
             previous.active = page.hasPrevious();
             this.addRenderableWidget(previous);
@@ -111,61 +123,103 @@ public final class OpenPlayerControlScreen extends Screen {
                         pageIndex = pageIndex + 1;
                         rebuildControlWidgetsPreservingCommandText(false);
                     })
-                    .bounds(margin + listWidth - pagerButtonWidth, pagerTop, pagerButtonWidth, BUTTON_HEIGHT)
+                    .bounds(margin + listWidth - pagerButtonWidth, pagerTop, pagerButtonWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
                     .build();
             next.active = page.hasNext();
             this.addRenderableWidget(next);
         }
 
+        addPageTabs(rightLeft, rightWidth);
+        if (controlPage == ControlPage.PROVIDER) {
+            addProviderWidgets(rightLeft, rightWidth);
+        } else if (controlPage == ControlPage.MAIN) {
+            addMainWidgets(rightLeft, rightWidth);
+        }
+    }
+
+    private void addPageTabs(int rightLeft, int rightWidth) {
+        int tabSpacing = 4;
+        int tabWidth = Math.max(52, Math.min(82, (rightWidth - tabSpacing * 2) / 3));
+        int tabsLeft = OpenPlayerControlLayout.centeredLeft(rightLeft, rightWidth, tabWidth * 3 + tabSpacing * 2);
+        ControlPage[] pages = ControlPage.values();
+        for (int index = 0; index < pages.length; index++) {
+            ControlPage page = pages[index];
+            Button tab = Button.builder(Component.literal(page.label()), button -> {
+                        controlPage = page;
+                        rebuildControlWidgetsPreservingCommandText(true);
+                    })
+                    .bounds(tabsLeft + index * (tabWidth + tabSpacing), TAB_TOP, tabWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
+                    .build();
+            tab.active = controlPage != page;
+            this.addRenderableWidget(tab);
+        }
+    }
+
+    private void addMainWidgets(int rightLeft, int rightWidth) {
+        int buttonWidth = Math.min(BUTTON_WIDTH, Math.max(58, (rightWidth - OpenPlayerControlLayout.BUTTON_SPACING) / 2));
+        int buttonsWidth = buttonWidth * 2 + OpenPlayerControlLayout.BUTTON_SPACING;
+        int buttonsLeft = OpenPlayerControlLayout.centeredLeft(rightLeft, rightWidth, buttonsWidth);
+        int leftColumn = buttonsLeft;
+        int rightColumn = buttonsLeft + buttonWidth + OpenPlayerControlLayout.BUTTON_SPACING;
+        int rowTop = OpenPlayerControlLayout.mainActionRowTop();
+        int rowStep = OpenPlayerControlLayout.BUTTON_HEIGHT + OpenPlayerControlLayout.BUTTON_SPACING;
+
         this.addRenderableWidget(Button.builder(Component.literal(selectedCharacter() == null ? "Spawn Default NPC" : "Spawn Selected"), button -> sendSpawn())
-                .bounds(controlsLeft, top + (BUTTON_HEIGHT + BUTTON_SPACING) * 2, controlWidth, BUTTON_HEIGHT)
+                .bounds(leftColumn, rowTop, buttonWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
                 .build());
         this.addRenderableWidget(Button.builder(Component.literal(selectedCharacter() == null ? "Despawn Default" : "Despawn Selected"), button -> sendDespawn())
-                .bounds(controlsLeft, top + (BUTTON_HEIGHT + BUTTON_SPACING) * 3, controlWidth, BUTTON_HEIGHT)
+                .bounds(rightColumn, rowTop, buttonWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
                 .build());
         this.addRenderableWidget(Button.builder(Component.literal(selectedCharacter() == null ? "Default Follow" : "Selected Follow"), button -> sendFollow())
-                .bounds(controlsLeft, top + (BUTTON_HEIGHT + BUTTON_SPACING) * 4, controlWidth, BUTTON_HEIGHT)
+                .bounds(leftColumn, rowTop + rowStep, buttonWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
                 .build());
         this.addRenderableWidget(Button.builder(Component.literal(selectedCharacter() == null ? "Stop Default" : "Stop Selected"), button -> sendStop())
-                .bounds(controlsLeft, top + (BUTTON_HEIGHT + BUTTON_SPACING) * 5, controlWidth, BUTTON_HEIGHT)
+                .bounds(rightColumn, rowTop + rowStep, buttonWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
                 .build());
         this.addRenderableWidget(Button.builder(Component.literal("Reload Local List"), button -> OpenPlayerRequestSender.sendCharacterListRequest())
-                .bounds(controlsLeft, top, controlWidth, BUTTON_HEIGHT)
+                .bounds(leftColumn, rowTop + rowStep * 2, buttonWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
                 .build());
         Button exportButton = Button.builder(Component.literal("Export Selected"), button -> sendExportSelected())
-                .bounds(controlsLeft, top + BUTTON_HEIGHT + BUTTON_SPACING, controlWidth, BUTTON_HEIGHT)
+                .bounds(rightColumn, rowTop + rowStep * 2, buttonWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
                 .build();
         exportButton.active = selectedCharacter() != null;
         this.addRenderableWidget(exportButton);
+        int inputWidth = OpenPlayerControlLayout.clampedControlWidth(rightWidth, COMMAND_INPUT_WIDTH);
         commandInput = new EditBox(
                 this.font,
-                rightLeft + Math.max(0, (rightWidth - COMMAND_INPUT_WIDTH) / 2),
-                top + (BUTTON_HEIGHT + BUTTON_SPACING) * 6,
-                Math.min(COMMAND_INPUT_WIDTH, rightWidth),
-                BUTTON_HEIGHT,
+                OpenPlayerControlLayout.centeredLeft(rightLeft, rightWidth, inputWidth),
+                rowTop + rowStep * 3,
+                inputWidth,
+                OpenPlayerControlLayout.BUTTON_HEIGHT,
                 COMMAND_INPUT
         );
         commandInput.setMaxLength(MAX_COMMAND_TEXT_LENGTH);
         commandInput.setHint(COMMAND_INPUT);
         this.addRenderableWidget(commandInput);
         this.addRenderableWidget(Button.builder(Component.literal(selectedCharacter() == null ? "Send to Default" : "Send to Selected"), button -> sendCommandText())
-                .bounds(controlsLeft, top + (BUTTON_HEIGHT + BUTTON_SPACING) * 7, controlWidth, BUTTON_HEIGHT)
+                .bounds(leftColumn, rowTop + rowStep * 4, buttonWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
                 .build());
         this.addRenderableWidget(Button.builder(Component.literal("Import File Name"), button -> sendImportFileName())
-                .bounds(controlsLeft, top + (BUTTON_HEIGHT + BUTTON_SPACING) * 8, controlWidth, BUTTON_HEIGHT)
+                .bounds(rightColumn, rowTop + rowStep * 4, buttonWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
                 .build());
-        int providerTop = top + (BUTTON_HEIGHT + BUTTON_SPACING) * 9 + 8;
-        int inputLeft = rightLeft + Math.max(0, (rightWidth - COMMAND_INPUT_WIDTH) / 2);
-        int inputWidth = Math.min(COMMAND_INPUT_WIDTH, rightWidth);
-        providerEndpointInput = new EditBox(this.font, inputLeft, providerTop, inputWidth, BUTTON_HEIGHT, PROVIDER_ENDPOINT_INPUT);
+    }
+
+    private void addProviderWidgets(int rightLeft, int rightWidth) {
+        int inputWidth = OpenPlayerControlLayout.clampedControlWidth(rightWidth, COMMAND_INPUT_WIDTH);
+        int inputLeft = OpenPlayerControlLayout.centeredLeft(rightLeft, rightWidth, inputWidth);
+        int buttonWidth = Math.min(BUTTON_WIDTH, rightWidth);
+        int controlsLeft = OpenPlayerControlLayout.centeredLeft(rightLeft, rightWidth, buttonWidth);
+        int providerTop = OpenPlayerControlLayout.PAGE_TOP + 16;
+        int rowStep = OpenPlayerControlLayout.BUTTON_HEIGHT + OpenPlayerControlLayout.BUTTON_SPACING;
+        providerEndpointInput = new EditBox(this.font, inputLeft, providerTop, inputWidth, OpenPlayerControlLayout.BUTTON_HEIGHT, PROVIDER_ENDPOINT_INPUT);
         providerEndpointInput.setMaxLength(512);
         providerEndpointInput.setHint(PROVIDER_ENDPOINT_INPUT);
         this.addRenderableWidget(providerEndpointInput);
-        providerModelInput = new EditBox(this.font, inputLeft, providerTop + (BUTTON_HEIGHT + 4), inputWidth, BUTTON_HEIGHT, PROVIDER_MODEL_INPUT);
+        providerModelInput = new EditBox(this.font, inputLeft, providerTop + rowStep, inputWidth, OpenPlayerControlLayout.BUTTON_HEIGHT, PROVIDER_MODEL_INPUT);
         providerModelInput.setMaxLength(128);
         providerModelInput.setHint(PROVIDER_MODEL_INPUT);
         this.addRenderableWidget(providerModelInput);
-        providerApiKeyInput = new EditBox(this.font, inputLeft, providerTop + (BUTTON_HEIGHT + 4) * 2, inputWidth, BUTTON_HEIGHT, PROVIDER_API_KEY_INPUT);
+        providerApiKeyInput = new EditBox(this.font, inputLeft, providerTop + rowStep * 2, inputWidth, OpenPlayerControlLayout.BUTTON_HEIGHT, PROVIDER_API_KEY_INPUT);
         providerApiKeyInput.setMaxLength(512);
         providerApiKeyInput.setHint(PROVIDER_API_KEY_INPUT);
         this.addRenderableWidget(providerApiKeyInput);
@@ -173,10 +227,10 @@ public final class OpenPlayerControlScreen extends Screen {
                     clearApiKeyOnSave = !clearApiKeyOnSave;
                     rebuildControlWidgetsPreservingCommandText(true);
                 })
-                .bounds(controlsLeft, providerTop + (BUTTON_HEIGHT + 4) * 3, controlWidth, BUTTON_HEIGHT)
+                .bounds(controlsLeft, providerTop + rowStep * 3, buttonWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
                 .build());
         this.addRenderableWidget(Button.builder(Component.literal("Save Provider Config"), button -> sendProviderConfig())
-                .bounds(controlsLeft, providerTop + (BUTTON_HEIGHT + 4) * 4, controlWidth, BUTTON_HEIGHT)
+                .bounds(controlsLeft, providerTop + rowStep * 4, buttonWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
                 .build());
     }
 
@@ -184,25 +238,53 @@ public final class OpenPlayerControlScreen extends Screen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(graphics);
         graphics.drawCenteredString(this.font, this.title, this.width / 2, 20, 0xFFFFFF);
-        int margin = 12;
-        int listWidth = Math.min(210, Math.max(124, this.width / 3));
-        int rightLeft = margin + listWidth + 12;
-        int rightWidth = Math.max(120, this.width - rightLeft - margin);
+        OpenPlayerControlLayout.Columns columns = OpenPlayerControlLayout.columns(this.width);
+        int margin = OpenPlayerControlLayout.MARGIN;
+        int listWidth = columns.listWidth();
+        int rightLeft = columns.rightLeft();
+        int rightWidth = columns.rightWidth();
         OpenPlayerGalleryPage page = OpenPlayerGalleryPage.of(OpenPlayerClientStatus.characters().size(), visibleAssignmentCount(), pageIndex);
         graphics.drawString(this.font, "Local assignments: " + OpenPlayerClientStatus.characterListStatus(), margin, 42, 0xFFFFFF);
         graphics.drawString(this.font, page.label() + "  Total " + page.totalItems(), margin, 58 + visibleAssignmentCount() * 24 + 6, 0xA0A0A0);
         renderCharacterMessages(graphics, margin, 58 + visibleAssignmentCount() * 24 + 32, listWidth);
-        renderSelectedDetails(graphics, rightLeft, 42, rightWidth);
-        int statusLeft = rightLeft;
-        int statusTop = Math.max(42, this.height - 66);
-        graphics.drawString(this.font, "Automation: " + OpenPlayerClientStatus.automationStatus(), statusLeft, statusTop, 0xC0C0C0);
-        graphics.drawString(this.font, "Parser: " + OpenPlayerClientStatus.parserStatus(), statusLeft, statusTop + 12, 0xC0C0C0);
-        graphics.drawString(this.font, "Endpoint: " + OpenPlayerClientStatus.endpointStatus(), statusLeft, statusTop + 24, 0xC0C0C0);
-        graphics.drawString(this.font, "Model: " + OpenPlayerClientStatus.modelStatus(), statusLeft, statusTop + 36, 0xC0C0C0);
-        graphics.drawString(this.font, "API key: " + OpenPlayerClientStatus.apiKeyStatus(), statusLeft, statusTop + 48, 0xC0C0C0);
-        graphics.drawString(this.font, "Character files: " + fit(OpenPlayerClientStatus.characterFileOperationStatus(), rightWidth - 88), statusLeft, statusTop + 60, 0xC0C0C0);
-        graphics.drawString(this.font, "Provider config: blank API key preserves existing key unless clear is selected.", statusLeft, statusTop + 72, 0xA0A0A0);
+        if (controlPage == ControlPage.STATUS) {
+            renderStatusPage(graphics, rightLeft, OpenPlayerControlLayout.PAGE_TOP, rightWidth);
+        } else if (controlPage == ControlPage.PROVIDER) {
+            renderProviderPage(graphics, rightLeft, OpenPlayerControlLayout.PAGE_TOP, rightWidth);
+        } else {
+            renderSelectedDetails(graphics, rightLeft, OpenPlayerControlLayout.PAGE_TOP, rightWidth);
+        }
         super.render(graphics, mouseX, mouseY, partialTick);
+    }
+
+    private void renderProviderPage(GuiGraphics graphics, int left, int top, int width) {
+        drawFitted(graphics, "Provider Config", left, top, width, 0xFFFFFF);
+        drawFitted(graphics, "Blank API key preserves existing key unless clear is selected.", left, top + 150, width, 0xA0A0A0);
+        drawFitted(graphics, "API key values are never displayed by this screen.", left, top + 164, width, 0xA0A0A0);
+    }
+
+    private void renderStatusPage(GuiGraphics graphics, int left, int top, int width) {
+        drawFitted(graphics, "Automation: " + OpenPlayerClientStatus.automationStatus(), left, top, width, 0xC0C0C0);
+        drawFitted(graphics, "Parser: " + OpenPlayerClientStatus.parserStatus(), left, top + 14, width, 0xC0C0C0);
+        drawFitted(graphics, "Endpoint: " + OpenPlayerClientStatus.endpointStatus(), left, top + 28, width, 0xC0C0C0);
+        drawFitted(graphics, "Model: " + OpenPlayerClientStatus.modelStatus(), left, top + 42, width, 0xC0C0C0);
+        drawFitted(graphics, "API key: " + OpenPlayerClientStatus.apiKeyStatus(), left, top + 56, width, 0xC0C0C0);
+        drawFitted(graphics, "Character files: " + OpenPlayerClientStatus.characterFileOperationStatus(), left, top + 70, width, 0xC0C0C0);
+        drawFitted(graphics, "Provider config: blank API key preserves existing key unless clear is selected.", left, top + 92, width, 0xA0A0A0);
+        LocalCharacterListEntry selected = selectedCharacter();
+        if (selected == null) {
+            drawFitted(graphics, "Selected: default spawn path", left, top + 114, width, 0xFFFFFF);
+            return;
+        }
+        drawFitted(graphics, "Selected: " + selected.displayName(), left, top + 114, width, lifecycleColor(selected.lifecycleStatus()));
+        drawFitted(graphics, "Description: " + (selected.description().isEmpty() ? "none" : selected.description()), left, top + 128, width, 0xC0C0C0);
+        drawFitted(graphics, "Skin: " + selected.skinStatus(), left, top + 142, width, 0xC0C0C0);
+        int eventTop = top + 156;
+        if (selected.conversationEvents().isEmpty()) {
+            drawFitted(graphics, "Spoken status: no local lines yet.", left, eventTop, width, 0xA0A0A0);
+            return;
+        }
+        drawFitted(graphics, "Spoken status: " + selected.conversationEvents().get(selected.conversationEvents().size() - 1), left, eventTop, width, 0xD0D0D0);
     }
 
     private void renderCharacterMessages(GuiGraphics graphics, int left, int top, int width) {
@@ -223,32 +305,22 @@ public final class OpenPlayerControlScreen extends Screen {
     private void renderSelectedDetails(GuiGraphics graphics, int left, int top, int width) {
         LocalCharacterListEntry selected = selectedCharacter();
         if (selected == null) {
-            graphics.drawString(this.font, "Selected: default spawn path", left, top, 0xFFFFFF);
-            graphics.drawString(this.font, "Choose a character to target actions.", left, top + 14, 0xA0A0A0);
-            graphics.drawString(this.font, "Actions: Spawn uses the original default NPC.", left, top + 28, 0xC0C0C0);
+            drawFitted(graphics, "Selected: default spawn path", left, top, width, 0xFFFFFF);
+            drawFitted(graphics, "Choose a character to target actions.", left, top + 14, width, 0xA0A0A0);
+            drawFitted(graphics, "Actions: Spawn uses the original default NPC.", left, top + 28, width, 0xC0C0C0);
+            drawFitted(graphics, "Use Provider and Status pages for setup details.", left, top + 42, width, 0xA0A0A0);
             return;
         }
-        graphics.drawString(this.font, "Selected: " + fit(selected.displayName(), width - 58), left, top, lifecycleColor(selected.lifecycleStatus()));
-        graphics.drawString(this.font, "Assignment: " + selected.assignmentId(), left, top + 14, 0xC0C0C0);
-        graphics.drawString(this.font, "Character: " + selected.characterId(), left, top + 28, 0xC0C0C0);
-        graphics.drawString(this.font, "Description: " + fit(selected.description().isEmpty() ? "none" : selected.description(), width - 70), left, top + 42, 0xC0C0C0);
-        graphics.drawString(this.font, "Skin: " + selected.skinStatus(), left, top + 56, 0xC0C0C0);
-        graphics.drawString(this.font, "Lifecycle: " + selected.lifecycleStatus(), left, top + 70, lifecycleColor(selected.lifecycleStatus()));
-        graphics.drawString(this.font, "Conversation: " + selected.conversationStatus(), left, top + 84, 0xC0C0C0);
-        int lineTop = top + 98;
-        if (selected.conversationEvents().isEmpty()) {
-            graphics.drawString(this.font, "Spoken status: no local lines yet.", left, lineTop, 0xA0A0A0);
-            lineTop += 14;
-        } else {
-            graphics.drawString(this.font, "Spoken status:", left, lineTop, 0xA0A0A0);
-            lineTop += 14;
-            for (String event : selected.conversationEvents()) {
-                graphics.drawString(this.font, fit(event, width), left, lineTop, 0xD0D0D0);
-                lineTop += 12;
-            }
-        }
-        graphics.drawString(this.font, "Actions: spawn, despawn, follow, stop, command.", left, lineTop, 0xA0A0A0);
-        graphics.drawString(this.font, "Files: export selected or type import file name.", left, lineTop + 14, 0xA0A0A0);
+        drawFitted(graphics, "Selected: " + selected.displayName(), left, top, width, lifecycleColor(selected.lifecycleStatus()));
+        drawFitted(graphics, "Assignment: " + selected.assignmentId(), left, top + 14, width, 0xC0C0C0);
+        drawFitted(graphics, "Character: " + selected.characterId(), left, top + 28, width, 0xC0C0C0);
+        drawFitted(graphics, "Lifecycle: " + selected.lifecycleStatus(), left, top + 42, width, lifecycleColor(selected.lifecycleStatus()));
+        drawFitted(graphics, "Conversation: " + selected.conversationStatus(), left, top + 56, width, 0xC0C0C0);
+        drawFitted(graphics, "Details and recent spoken status are on Status.", left, top + 70, width, 0xA0A0A0);
+    }
+
+    private void drawFitted(GuiGraphics graphics, String value, int left, int top, int width, int color) {
+        graphics.drawString(this.font, fit(value, width), left, top, color);
     }
 
     private void sendExportSelected() {
@@ -263,6 +335,7 @@ public final class OpenPlayerControlScreen extends Screen {
         if (!value.isEmpty()) {
             OpenPlayerRequestSender.sendCharacterImportRequest(value);
             commandInput.setValue("");
+            commandDraft = "";
         }
     }
 
@@ -312,17 +385,22 @@ public final class OpenPlayerControlScreen extends Screen {
                 OpenPlayerRequestSender.sendCommandTextRequest(selected.assignmentId(), value);
             }
             commandInput.setValue("");
+            commandDraft = "";
         }
     }
 
     private void sendProviderConfig() {
+        providerEndpointDraft = providerEndpointInput.getValue();
+        providerModelDraft = providerModelInput.getValue();
+        providerApiKeyDraft = providerApiKeyInput.getValue();
         OpenPlayerRequestSender.sendProviderConfigSaveRequest(
-                providerEndpointInput.getValue(),
-                providerModelInput.getValue(),
-                providerApiKeyInput.getValue(),
+                providerEndpointDraft,
+                providerModelDraft,
+                providerApiKeyDraft,
                 clearApiKeyOnSave
         );
         providerApiKeyInput.setValue("");
+        providerApiKeyDraft = "";
         clearApiKeyOnSave = false;
     }
 
@@ -371,9 +449,7 @@ public final class OpenPlayerControlScreen extends Screen {
     }
 
     private int visibleAssignmentCount() {
-        int availableHeight = this.height - 150;
-        int byHeight = availableHeight <= 0 ? MIN_VISIBLE_ASSIGNMENTS : availableHeight / (BUTTON_HEIGHT + 4);
-        return Math.max(MIN_VISIBLE_ASSIGNMENTS, Math.min(MAX_VISIBLE_ASSIGNMENTS, byHeight));
+        return OpenPlayerControlLayout.visibleAssignmentCount(this.height);
     }
 
     private String galleryButtonLabel(LocalCharacterListEntry character) {
@@ -404,6 +480,9 @@ public final class OpenPlayerControlScreen extends Screen {
     }
 
     private String fit(String value, int width) {
+        if (width <= 0) {
+            return "";
+        }
         if (this.font.width(value) <= width) {
             return value;
         }
@@ -413,5 +492,21 @@ public final class OpenPlayerControlScreen extends Screen {
             shortened = shortened.substring(0, shortened.length() - 1);
         }
         return shortened + suffix;
+    }
+
+    private enum ControlPage {
+        MAIN("Main"),
+        PROVIDER("Provider"),
+        STATUS("Status");
+
+        private final String label;
+
+        ControlPage(String label) {
+            this.label = label;
+        }
+
+        private String label() {
+            return label;
+        }
     }
 }

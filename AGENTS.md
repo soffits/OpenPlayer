@@ -44,6 +44,11 @@ Run the strongest available check before reporting completion:
 - `gradle build` when a suitable system Gradle and JDK 17 are available.
 - Report clearly when Java or Gradle is unavailable.
 
+## Release Notes
+
+- GitHub release notes and changelogs must include meaningful human-readable content, not only a Full Changelog link.
+- When using generated notes, seed or augment the release body from commit summaries, a curated `RELEASE_NOTES.md`, or another tag-adjacent source.
+
 ## OpenCode Delegation
 
 - Build context before editing.

@@ -10,6 +10,7 @@ OpenPlayer currently publishes release artifacts only through GitHub Releases. M
 - Stable releases use tags without prerelease channel text, such as `v0.1.0`.
 - The project version in `gradle.properties` must match the tag without the leading `v` before a release tag is created.
 - Use Conventional Commits in merged history so generated GitHub release notes are useful.
+- Prerelease notes must summarize user-facing changes and list the Fabric and Forge runtime artifact names expected for that version.
 
 ## Build Command
 
@@ -45,11 +46,12 @@ The Gradle archive base name is `openplayer-{module}` and the version comes from
 ## Upload
 
 - GitHub Releases are created by `.github/workflows/release.yml` for `v*` tags or manual `workflow_dispatch` runs with a version tag input.
-- The release workflow builds with Java `17`, uses `gh release create --generate-notes` with `GITHUB_TOKEN`, and marks tags containing `-alpha`, `-beta`, `-rc`, `pre`, or `canary` as prereleases.
+- The release workflow builds with Java `17`, creates a short curated release-note seed from `RELEASE_NOTES.md` when present, augments it with generated GitHub notes, and marks tags containing `-alpha`, `-beta`, `-rc`, `pre`, or `canary` as prereleases.
 - Upload the Fabric runtime jar from `fabric/build/libs` to the GitHub Release.
 - Upload the Forge runtime jar from `forge/build/libs` to the GitHub Release.
 - Upload or link matching source code for the exact release revision to satisfy `AGPL-3.0-only` obligations.
 - Include the license, Minecraft version, Java version, loader requirements, Architectury API requirement, and clean-room local/offline scope in release notes.
+- Include meaningful user-facing changes for prereleases; do not publish notes that only contain a Full Changelog link.
 - Include a link to `docs/manual-qa-checklist.md` or summarize the Fabric and Forge manual QA pass results.
 
 ## Do Not Upload
