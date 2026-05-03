@@ -73,6 +73,8 @@ public final class OpenPlayerClient {
         for (int index = 0; index < characterCount; index++) {
             characters.add(new LocalCharacterListEntry(
                     buffer.readUtf(64),
+                    buffer.readUtf(64),
+                    buffer.readUtf(64),
                     buffer.readUtf(32),
                     buffer.readUtf(1024),
                     buffer.readUtf(64),

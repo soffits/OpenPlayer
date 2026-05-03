@@ -2,6 +2,8 @@ package dev.soffits.openplayer.client;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import dev.soffits.openplayer.OpenPlayerConstants;
+import dev.soffits.openplayer.character.LocalAssignmentDefinition;
+import dev.soffits.openplayer.character.LocalAssignmentRepositoryResult;
 import dev.soffits.openplayer.character.LocalCharacterDefinition;
 import dev.soffits.openplayer.character.LocalCharacterRepositoryResult;
 import dev.soffits.openplayer.character.LocalSkinPathResolution;
@@ -25,14 +27,9 @@ public final class LocalCharacterSkinTextures {
     }
 
     public static Optional<ResourceLocation> textureForRoleId(String roleId) {
-        if (roleId == null || !roleId.startsWith(OpenPlayerConstants.LOCAL_CHARACTER_SESSION_ROLE_PREFIX)) {
-            return Optional.empty();
-        }
-        String characterId = roleId.substring(OpenPlayerConstants.LOCAL_CHARACTER_SESSION_ROLE_PREFIX.length());
-        if (characterId.isBlank()) {
-            return Optional.empty();
-        }
-        LocalCharacterDefinition character = findCharacter(characterId).orElse(null);
+        LocalCharacterRepositoryResult characterResult = OpenPlayerLocalCharacters.repository().loadAll();
+        LocalAssignmentRepositoryResult assignmentResult = OpenPlayerLocalCharacters.assignmentRepository().loadAll(characterResult);
+        LocalCharacterDefinition character = characterForRoleId(roleId, assignmentResult).orElse(null);
         if (character == null || character.localSkinFile() == null) {
             return Optional.empty();
         }
@@ -44,8 +41,43 @@ public final class LocalCharacterSkinTextures {
         return register(character.id(), resolution.path());
     }
 
-    private static Optional<LocalCharacterDefinition> findCharacter(String characterId) {
-        LocalCharacterRepositoryResult result = OpenPlayerLocalCharacters.repository().loadAll();
+    static Optional<String> localSkinFileForRoleId(String roleId, LocalAssignmentRepositoryResult result) {
+        return characterForRoleId(roleId, result).flatMap(LocalCharacterDefinition::optionalLocalSkinFile);
+    }
+
+    static Optional<LocalCharacterDefinition> characterForRoleId(String roleId, LocalAssignmentRepositoryResult result) {
+        if (roleId == null || result == null) {
+            return Optional.empty();
+        }
+        if (roleId.startsWith(OpenPlayerConstants.LOCAL_CHARACTER_SESSION_ROLE_PREFIX)) {
+            String characterId = roleId.substring(OpenPlayerConstants.LOCAL_CHARACTER_SESSION_ROLE_PREFIX.length());
+            return findCharacter(characterId, result);
+        }
+        if (roleId.startsWith(OpenPlayerConstants.LOCAL_ASSIGNMENT_SESSION_ROLE_PREFIX)) {
+            String assignmentId = roleId.substring(OpenPlayerConstants.LOCAL_ASSIGNMENT_SESSION_ROLE_PREFIX.length());
+            return findAssignmentCharacter(assignmentId, result);
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<LocalCharacterDefinition> findAssignmentCharacter(String assignmentId,
+                                                                              LocalAssignmentRepositoryResult result) {
+        if (assignmentId.isBlank()) {
+            return Optional.empty();
+        }
+        for (LocalAssignmentDefinition assignment : result.assignments()) {
+            if (assignment.id().equals(assignmentId)) {
+                return findCharacter(assignment.characterId(), result);
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<LocalCharacterDefinition> findCharacter(String characterId,
+                                                                    LocalAssignmentRepositoryResult result) {
+        if (characterId.isBlank()) {
+            return Optional.empty();
+        }
         for (LocalCharacterDefinition character : result.characters()) {
             if (character.id().equals(characterId)) {
                 return Optional.of(character);

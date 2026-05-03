@@ -29,9 +29,9 @@ import net.minecraft.server.level.ServerPlayer;
 
 public final class OpenPlayerNetworking {
     private static final int MAX_COMMAND_TEXT_LENGTH = 512;
-    private static final CompanionLifecycleManager COMPANION_LIFECYCLE_MANAGER = new CompanionLifecycleManager(
+    private static final CompanionLifecycleManager COMPANION_LIFECYCLE_MANAGER = CompanionLifecycleManager.withAssignments(
             OpenPlayerApi::npcService,
-            () -> OpenPlayerLocalCharacters.repository().loadAll(),
+            () -> OpenPlayerLocalCharacters.assignmentRepository().loadAll(OpenPlayerLocalCharacters.repository().loadAll()),
             OpenPlayerRuntime::intentParser
     );
 
@@ -237,10 +237,10 @@ public final class OpenPlayerNetworking {
     }
 
     private static void sendCharacterListResponse(ServerPlayer player) {
-        LocalCharacterRepositoryResult result = OpenPlayerLocalCharacters.repository().loadAll();
-        LocalCharacterListView view = LocalCharacterListView.fromRepositoryResult(
-                result,
-                character -> COMPANION_LIFECYCLE_MANAGER.lifecycleStatus(player.getUUID(), character),
+        LocalCharacterRepositoryResult characterResult = OpenPlayerLocalCharacters.repository().loadAll();
+        LocalCharacterListView view = LocalCharacterListView.fromAssignmentRepositoryResult(
+                OpenPlayerLocalCharacters.assignmentRepository().loadAll(characterResult),
+                (assignment, character) -> COMPANION_LIFECYCLE_MANAGER.lifecycleStatus(player.getUUID(), assignment),
                 new LocalSkinPathResolver(OpenPlayerLocalCharacters.openPlayerDirectory()),
                 character -> OpenPlayerRuntime.status().intentParser().enabled()
                         ? "available"
@@ -250,6 +250,8 @@ public final class OpenPlayerNetworking {
         buffer.writeVarInt(view.characters().size());
         for (LocalCharacterListEntry character : view.characters()) {
             buffer.writeUtf(character.id(), 64);
+            buffer.writeUtf(character.assignmentId(), 64);
+            buffer.writeUtf(character.characterId(), 64);
             buffer.writeUtf(character.displayName(), 32);
             buffer.writeUtf(character.description(), 1024);
             buffer.writeUtf(character.skinStatus(), 64);

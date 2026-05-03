@@ -13,10 +13,13 @@ import dev.soffits.openplayer.api.NpcRoleId;
 import dev.soffits.openplayer.api.NpcSessionId;
 import dev.soffits.openplayer.api.NpcSessionStatus;
 import dev.soffits.openplayer.api.NpcSpawnLocation;
+import dev.soffits.openplayer.character.LocalAssignmentDefinition;
+import dev.soffits.openplayer.character.LocalAssignmentRepositoryResult;
 import dev.soffits.openplayer.character.LocalCharacterDefinition;
-import dev.soffits.openplayer.character.LocalCharacterRepositoryResult;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public final class CompanionLifecycleManagerTest {
@@ -32,6 +35,7 @@ public final class CompanionLifecycleManagerTest {
             null,
             null
     );
+    private static final LocalAssignmentDefinition DEFAULT_ASSIGNMENT = LocalAssignmentDefinition.defaultFor(CHARACTER);
 
     private CompanionLifecycleManagerTest() {
     }
@@ -41,26 +45,31 @@ public final class CompanionLifecycleManagerTest {
         lifecycleStatusUsesMatchedSessionStatus();
         lifecycleStatusIsDespawnedWhenOwnerDoesNotMatch();
         selectedActionsRejectUnknownCharacterWithoutSessionLookupIdentity();
+        twoAssignmentsForOneCharacterSpawnIndependently();
+        sameAssignmentSpawnReusesRuntimeIdentity();
+        rejectsOverActiveAssignmentLimit();
+        despawnedAssignmentsDoNotConsumeActiveAssignmentLimit();
+        matchingDespawnedAssignmentDoesNotBypassActiveAssignmentLimit();
     }
 
     private static void matchesByOwnerAndStableCharacterRole() {
         require(CompanionLifecycleManager.matchesLocalCharacterSession(
                 OWNER_ID,
-                session(OWNER_ID, OpenPlayerConstants.LOCAL_CHARACTER_SESSION_ROLE_PREFIX + "alex_01", "Original Alex"),
+                session(OWNER_ID, OpenPlayerConstants.LOCAL_ASSIGNMENT_SESSION_ROLE_PREFIX + "alex_01", "Original Alex"),
                 CHARACTER
-        ), "selected companion identity must use owner and stable local character id role");
+        ), "default assignment identity must use owner and stable assignment id role");
         require(!CompanionLifecycleManager.matchesLocalCharacterSession(
                 OWNER_ID,
-                session(OWNER_ID, OpenPlayerConstants.LOCAL_CHARACTER_SESSION_ROLE_PREFIX + "other", "Renamed Alex"),
+                session(OWNER_ID, OpenPlayerConstants.LOCAL_ASSIGNMENT_SESSION_ROLE_PREFIX + "other", "Renamed Alex"),
                 CHARACTER
-        ), "selected companion identity must reject other stable character ids");
+        ), "selected companion identity must reject other stable assignment ids");
     }
 
     private static void lifecycleStatusUsesMatchedSessionStatus() {
         TestNpcService service = new TestNpcService();
         service.sessions.add(new TestSession(
                 new NpcSessionId(UUID.fromString("00000000-0000-0000-0000-000000000010")),
-                spec(OWNER_ID, OpenPlayerConstants.LOCAL_CHARACTER_SESSION_ROLE_PREFIX + "alex_01", "Original Alex"),
+                spec(OWNER_ID, OpenPlayerConstants.LOCAL_ASSIGNMENT_SESSION_ROLE_PREFIX + "alex_01", "Original Alex"),
                 NpcSessionStatus.ACTIVE
         ));
         CompanionLifecycleManager manager = manager(service, CHARACTER);
@@ -72,7 +81,7 @@ public final class CompanionLifecycleManagerTest {
         TestNpcService service = new TestNpcService();
         service.sessions.add(new TestSession(
                 new NpcSessionId(UUID.fromString("00000000-0000-0000-0000-000000000011")),
-                spec(OTHER_OWNER_ID, OpenPlayerConstants.LOCAL_CHARACTER_SESSION_ROLE_PREFIX + "alex_01", "Renamed Alex"),
+                spec(OTHER_OWNER_ID, OpenPlayerConstants.LOCAL_ASSIGNMENT_SESSION_ROLE_PREFIX + "alex_01", "Renamed Alex"),
                 NpcSessionStatus.ACTIVE
         ));
         CompanionLifecycleManager manager = manager(service, CHARACTER);
@@ -84,7 +93,7 @@ public final class CompanionLifecycleManagerTest {
         TestNpcService service = new TestNpcService();
         service.sessions.add(new TestSession(
                 new NpcSessionId(UUID.fromString("00000000-0000-0000-0000-000000000012")),
-                spec(OWNER_ID, OpenPlayerConstants.LOCAL_CHARACTER_SESSION_ROLE_PREFIX + "missing", "Missing"),
+                spec(OWNER_ID, OpenPlayerConstants.LOCAL_ASSIGNMENT_SESSION_ROLE_PREFIX + "missing", "Missing"),
                 NpcSessionStatus.ACTIVE
         ));
         CompanionLifecycleManager manager = manager(service, CHARACTER);
@@ -95,10 +104,125 @@ public final class CompanionLifecycleManagerTest {
                 "unknown selected character ids must not submit to any runtime session");
     }
 
+    private static void twoAssignmentsForOneCharacterSpawnIndependently() {
+        TestNpcService service = new TestNpcService();
+        LocalAssignmentDefinition first = new LocalAssignmentDefinition("alex_left", "alex_01", "Alex Left");
+        LocalAssignmentDefinition second = new LocalAssignmentDefinition("alex_right", "alex_01", "Alex Right");
+        CompanionLifecycleManager manager = manager(service, List.of(first, second), CHARACTER);
+        NpcSpawnLocation location = new NpcSpawnLocation("minecraft:overworld", 1.0D, 64.0D, 1.0D);
+
+        manager.spawnSelectedAssignment(new NpcOwnerId(OWNER_ID), location, first.id());
+        manager.spawnSelectedAssignment(new NpcOwnerId(OWNER_ID), location, second.id());
+
+        require(service.sessions.size() == 2, "two assignments for one character must spawn independently");
+        require(service.containsRole(OpenPlayerConstants.LOCAL_ASSIGNMENT_SESSION_ROLE_PREFIX + first.id()),
+                "first assignment role must be active");
+        require(service.containsRole(OpenPlayerConstants.LOCAL_ASSIGNMENT_SESSION_ROLE_PREFIX + second.id()),
+                "second assignment role must be active");
+    }
+
+    private static void sameAssignmentSpawnReusesRuntimeIdentity() {
+        TestNpcService service = new TestNpcService();
+        CompanionLifecycleManager manager = manager(service, List.of(DEFAULT_ASSIGNMENT), CHARACTER);
+        manager.spawnSelectedAssignment(new NpcOwnerId(OWNER_ID),
+                new NpcSpawnLocation("minecraft:overworld", 1.0D, 64.0D, 1.0D), DEFAULT_ASSIGNMENT.id());
+        manager.spawnSelectedAssignment(new NpcOwnerId(OWNER_ID),
+                new NpcSpawnLocation("minecraft:overworld", 2.0D, 64.0D, 2.0D), DEFAULT_ASSIGNMENT.id());
+
+        require(service.sessions.size() == 1, "same assignment spawn must reuse the runtime identity");
+        require(service.spawnCount == 2, "same assignment should still submit a relocate/update spawn request");
+    }
+
+    private static void rejectsOverActiveAssignmentLimit() {
+        TestNpcService service = new TestNpcService();
+        List<LocalAssignmentDefinition> assignments = new ArrayList<>();
+        for (int index = 0; index < 5; index++) {
+            assignments.add(new LocalAssignmentDefinition("alex_0" + index, "alex_01", "Alex " + index));
+        }
+        CompanionLifecycleManager manager = manager(service, assignments, CHARACTER);
+        NpcSpawnLocation location = new NpcSpawnLocation("minecraft:overworld", 1.0D, 64.0D, 1.0D);
+        for (int index = 0; index < 4; index++) {
+            CommandSubmissionResult result = manager.spawnSelectedAssignment(new NpcOwnerId(OWNER_ID), location, assignments.get(index).id());
+            require(result.status() == CommandSubmissionStatus.ACCEPTED, "first four active assignments must be accepted");
+        }
+        CommandSubmissionResult result = manager.spawnSelectedAssignment(new NpcOwnerId(OWNER_ID), location, assignments.get(4).id());
+        require(result.status() == CommandSubmissionStatus.REJECTED, "fifth active assignment must be rejected");
+        require(result.message().contains("limit"), "over-limit rejection must be safe and actionable");
+    }
+
+    private static void despawnedAssignmentsDoNotConsumeActiveAssignmentLimit() {
+        TestNpcService service = new TestNpcService();
+        List<LocalAssignmentDefinition> assignments = new ArrayList<>();
+        for (int index = 0; index < 5; index++) {
+            assignments.add(new LocalAssignmentDefinition("alex_1" + index, "alex_01", "Alex " + index));
+        }
+        for (int index = 0; index < 4; index++) {
+            service.sessions.add(new TestSession(
+                    new NpcSessionId(UUID.randomUUID()),
+                    spec(OWNER_ID, OpenPlayerConstants.LOCAL_ASSIGNMENT_SESSION_ROLE_PREFIX + assignments.get(index).id(), "Alex"),
+                    NpcSessionStatus.DESPAWNED
+            ));
+        }
+        CompanionLifecycleManager manager = manager(service, assignments, CHARACTER);
+        CommandSubmissionResult result = manager.spawnSelectedAssignment(
+                new NpcOwnerId(OWNER_ID),
+                new NpcSpawnLocation("minecraft:overworld", 1.0D, 64.0D, 1.0D),
+                assignments.get(4).id()
+        );
+
+        require(result.status() == CommandSubmissionStatus.ACCEPTED,
+                "despawned assignment sessions must not consume the active assignment limit");
+    }
+
+    private static void matchingDespawnedAssignmentDoesNotBypassActiveAssignmentLimit() {
+        TestNpcService service = new TestNpcService();
+        List<LocalAssignmentDefinition> assignments = new ArrayList<>();
+        for (int index = 0; index < 5; index++) {
+            assignments.add(new LocalAssignmentDefinition("alex_2" + index, "alex_01", "Alex " + index));
+        }
+        for (int index = 0; index < 4; index++) {
+            service.sessions.add(new TestSession(
+                    new NpcSessionId(UUID.randomUUID()),
+                    spec(OWNER_ID, OpenPlayerConstants.LOCAL_ASSIGNMENT_SESSION_ROLE_PREFIX + assignments.get(index).id(), "Alex"),
+                    NpcSessionStatus.ACTIVE
+            ));
+        }
+        service.sessions.add(new TestSession(
+                new NpcSessionId(UUID.randomUUID()),
+                spec(OWNER_ID, OpenPlayerConstants.LOCAL_ASSIGNMENT_SESSION_ROLE_PREFIX + assignments.get(4).id(), "Alex"),
+                NpcSessionStatus.DESPAWNED
+        ));
+        CompanionLifecycleManager manager = manager(service, assignments, CHARACTER);
+        CommandSubmissionResult result = manager.spawnSelectedAssignment(
+                new NpcOwnerId(OWNER_ID),
+                new NpcSpawnLocation("minecraft:overworld", 1.0D, 64.0D, 1.0D),
+                assignments.get(4).id()
+        );
+
+        require(result.status() == CommandSubmissionStatus.REJECTED,
+                "matching despawned assignment session must not bypass the active assignment limit");
+        require(service.spawnCount == 0,
+                "over-limit spawn with only a matching despawned session must not reach the runtime service");
+    }
+
     private static CompanionLifecycleManager manager(TestNpcService service, LocalCharacterDefinition character) {
+        return manager(service, List.of(LocalAssignmentDefinition.defaultFor(character)), character);
+    }
+
+    private static CompanionLifecycleManager manager(TestNpcService service, List<LocalAssignmentDefinition> assignments,
+                                                     LocalCharacterDefinition character) {
+        LocalAssignmentRepositoryResult result = new LocalAssignmentRepositoryResult(assignments, List.of(character), List.of());
+        return CompanionLifecycleManager.withAssignments(
+                () -> service,
+                () -> result,
+                dev.soffits.openplayer.intent.DisabledIntentParser::new
+        );
+    }
+
+    private static CompanionLifecycleManager oldCharacterManager(TestNpcService service, LocalCharacterDefinition character) {
         return new CompanionLifecycleManager(
                 () -> service,
-                () -> new LocalCharacterRepositoryResult(List.of(character), List.of())
+                () -> new dev.soffits.openplayer.character.LocalCharacterRepositoryResult(List.of(character), List.of())
         );
     }
 
@@ -127,18 +251,30 @@ public final class CompanionLifecycleManagerTest {
 
     private static final class TestNpcService implements AiPlayerNpcService {
         private final List<AiPlayerNpcSession> sessions = new ArrayList<>();
+        private final Map<String, TestSession> sessionsByIdentity = new LinkedHashMap<>();
         private int submittedCommandTextCount;
+        private int spawnCount;
 
         @Override
         public AiPlayerNpcSession spawn(AiPlayerNpcSpec spec) {
+            spawnCount++;
+            String identity = spec.ownerId().value() + ":" + spec.roleId().value();
+            TestSession existing = sessionsByIdentity.get(identity);
+            if (existing != null) {
+                existing.spec = spec;
+                return existing;
+            }
             TestSession session = new TestSession(new NpcSessionId(UUID.randomUUID()), spec, NpcSessionStatus.ACTIVE);
             sessions.add(session);
+            sessionsByIdentity.put(identity, session);
             return session;
         }
 
         @Override
         public boolean despawn(NpcSessionId sessionId) {
-            return sessions.removeIf(session -> session.sessionId().equals(sessionId));
+            boolean removed = sessions.removeIf(session -> session.sessionId().equals(sessionId));
+            sessionsByIdentity.values().removeIf(session -> session.sessionId().equals(sessionId));
+            return removed;
         }
 
         @Override
@@ -166,10 +302,43 @@ public final class CompanionLifecycleManagerTest {
             }
             return NpcSessionStatus.DESPAWNED;
         }
+
+        private boolean containsRole(String roleId) {
+            for (AiPlayerNpcSession session : sessions) {
+                if (session.spec().roleId().value().equals(roleId)) {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 
-    private record TestSession(NpcSessionId sessionId, AiPlayerNpcSpec spec,
-                               NpcSessionStatus status) implements AiPlayerNpcSession {
+    private static final class TestSession implements AiPlayerNpcSession {
+        private final NpcSessionId sessionId;
+        private AiPlayerNpcSpec spec;
+        private final NpcSessionStatus status;
+
+        private TestSession(NpcSessionId sessionId, AiPlayerNpcSpec spec, NpcSessionStatus status) {
+            this.sessionId = sessionId;
+            this.spec = spec;
+            this.status = status;
+        }
+
+        @Override
+        public NpcSessionId sessionId() {
+            return sessionId;
+        }
+
+        @Override
+        public AiPlayerNpcSpec spec() {
+            return spec;
+        }
+
+        @Override
+        public NpcSessionStatus status() {
+            return status;
+        }
+
         @Override
         public CommandSubmissionResult submitCommand(AiPlayerNpcCommand command) {
             return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED, "accepted");
