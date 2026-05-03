@@ -10,5 +10,7 @@ public interface AutomationController {
 
     void tick();
 
+    AutomationControllerSnapshot snapshot();
+
     void stopAll();
 }

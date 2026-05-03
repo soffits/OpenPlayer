@@ -1,0 +1,311 @@
+# PlayerEngine-Style Parity Roadmap
+
+> **For Hermes:** Use `subagent-driven-development` and OpenCode for implementation. Keep each phase small, reviewed, and verified before moving to the next phase.
+
+**Goal:** Build a legally clean, local/offline, open-source PlayerEngine-style Minecraft agent runtime for OpenPlayer, excluding Player2 commercial/online service features while pursuing broad runtime behavior parity.
+
+**Architecture:** OpenPlayer remains an AGPL-3.0-only Minecraft 1.20.1 Java 17 multiloader mod. PlayerEngine and Player2NPC may be inspected for behavior categories, command/task surface, and runtime expectations, but their code, opaque jars, online APIs, auth flows, token storage, heartbeat services, and remote character/skin/TTS services must not be copied, vendored, or required. The runtime should evolve through bounded clean-room phases: observe, validate, plan, act, monitor, and report.
+
+**Tech Stack:** Java 17, Minecraft 1.20.1, Architectury-style Fabric/Forge multiloader, vanilla server-side NPC runtime first, optional public dependencies only after explicit license/provenance review.
+
+---
+
+## Non-Goals
+
+- Do not vendor PlayerEngine, Player2NPC, AltoClef, Baritone, Automatone, or any opaque jar.
+- Do not copy decompiled code line-for-line or translate implementation details line-for-line.
+- Do not implement Player2 commercial/online flows: login, token storage, cloud character service, heartbeat service, remote TTS/audio, remote skin downloads, or account/profile marketplaces.
+- Do not let provider output directly mutate the world. Provider output remains untrusted and must pass deterministic validation and backend execution gates.
+- Do not bypass per-character `allowWorldActions`; it remains the final world/inventory/combat action gate.
+
+---
+
+## Current Baseline
+
+OpenPlayer already has:
+
+- Local character and assignment configuration.
+- Local skin loading and player-like NPC rendering/equipment layers.
+- Server-authoritative companion lifecycle with persisted NPC reattach.
+- Provider-backed conversation with bounded history and strict JSON intent parsing.
+- Local provider configuration with secret-safe precedence and diagnostics.
+- Safe debug events and local-only raw traces.
+- Canonical `/openplayer` command tree plus `/ai` and `/aichat` aliases.
+- Vanilla server-side NPC actions for movement, follow, patrol, item pickup, block break/place, nearest attack, guard owner, equipment selection, item use, offhand swap, drop item, report status, and chat replies.
+- Alpha.8 context snapshots containing bounded world/agent context for conversation prompts.
+
+---
+
+## Parity Phases
+
+### Phase 1: Runtime Task Diagnostics Foundation
+
+**Objective:** Add deterministic automation controller snapshots that expose active task, monitor state, queue state, cooldowns, and stable summaries.
+
+**Why first:** Full PlayerEngine-style behavior needs visible task state before larger resource, crafting, container, survival, and building systems are reliable or debuggable.
+
+**Files:**
+
+- Create: `common/src/main/java/dev/soffits/openplayer/automation/AutomationControllerSnapshot.java`
+- Create: `common/src/test/java/dev/soffits/openplayer/automation/AutomationControllerSnapshotTest.java`
+- Modify: `common/src/main/java/dev/soffits/openplayer/automation/AutomationController.java`
+- Modify: `common/src/main/java/dev/soffits/openplayer/automation/VanillaAutomationBackend.java`
+- Modify: `common/build.gradle`
+
+**Acceptance Criteria:**
+
+- `AutomationController.snapshot()` is side-effect free.
+- Snapshot records active kind, monitor status/reason, elapsed/max ticks, queued command count/kinds, and interaction cooldown ticks.
+- `REPORT_STATUS` uses the same deterministic snapshot summary.
+- Queue kind order is FIFO and defensively copied.
+- Tests cover idle, active, queued, defensive copy, null/negative rejection, and bounded reason normalization.
+- `./gradlew build` passes with Java 17.
+
+---
+
+### Phase 2: Structured Runtime Context
+
+**Objective:** Replace raw prompt-only context strings with structured runtime snapshots while preserving current conversation prompt output.
+
+**Files:**
+
+- Create: `common/src/main/java/dev/soffits/openplayer/runtime/context/RuntimeWorldSnapshot.java`
+- Create: `common/src/main/java/dev/soffits/openplayer/runtime/context/RuntimeAgentSnapshot.java`
+- Create: `common/src/main/java/dev/soffits/openplayer/runtime/context/RuntimeNearbySnapshot.java`
+- Create: `common/src/main/java/dev/soffits/openplayer/runtime/context/RuntimeContextFormatter.java`
+- Modify: `common/src/main/java/dev/soffits/openplayer/runtime/RuntimeAiPlayerNpcService.java`
+- Modify: `common/src/main/java/dev/soffits/openplayer/conversation/ConversationPromptAssembler.java`
+
+**Acceptance Criteria:**
+
+- Context remains bounded and deterministic.
+- No secrets, raw provider data, or unbounded world scans enter context.
+- Prompt output remains compatible with existing provider flow.
+- Tests cover formatting, bounds, and absence of sensitive data.
+
+---
+
+### Phase 3: Runtime Intent Validation Layer
+
+**Objective:** Add a runtime validator between provider/command parsing and automation execution.
+
+**Files:**
+
+- Create: `common/src/main/java/dev/soffits/openplayer/runtime/validation/RuntimeIntentValidator.java`
+- Create: `common/src/main/java/dev/soffits/openplayer/runtime/validation/RuntimeIntentValidationResult.java`
+- Create: `common/src/test/java/dev/soffits/openplayer/runtime/RuntimeIntentValidatorTest.java`
+- Modify: `common/src/main/java/dev/soffits/openplayer/runtime/CompanionLifecycleManager.java`
+- Modify: `common/src/main/java/dev/soffits/openplayer/entity/RuntimeCommandExecutor.java`
+
+**Acceptance Criteria:**
+
+- Provider output remains untrusted after parse.
+- Coordinate/radius/blank-instruction policies are centralized where practical.
+- `allowWorldActions` is enforced before execution and still enforced by the backend.
+- Rejected intents produce deterministic visible status and safe debug events.
+
+---
+
+### Phase 4: Command Vocabulary Parity
+
+**Objective:** Normalize PlayerEngine-style command and intent categories without implementing every complex task immediately.
+
+**New Intent Families:**
+
+- Navigation: `GOTO`, richer target syntax.
+- Inventory: `INVENTORY_QUERY`, `EQUIP_ITEM`, `GIVE_ITEM`, `DEPOSIT_ITEM`, `STASH_ITEM`.
+- Resources: `GET_ITEM`, `COLLECT_FOOD`, `FARM_NEARBY`, `FISH`.
+- Combat: `ATTACK_TARGET`, `DEFEND_OWNER` refinements.
+- Control: `PAUSE`, `UNPAUSE`, `RESET_MEMORY`.
+- Expression: `BODY_LANGUAGE`.
+- Building: `BUILD_STRUCTURE` as a validated plan intent, not arbitrary code execution.
+
+**Acceptance Criteria:**
+
+- Unsupported complex actions return explicit `UNAVAILABLE`/rejected results.
+- Prompt schema documents every supported and planned kind.
+- `/openplayer` exposes testable command paths where useful.
+- No unimplemented action pretends success.
+
+---
+
+### Phase 5: Inventory, Equipment, and Item Transfer
+
+**Objective:** Implement player-like inventory interaction parity before larger crafting/resource tasks.
+
+**Capabilities:**
+
+- Inventory count/list status.
+- Select hotbar slot by item.
+- Equip named weapon/tool/armor.
+- Give or drop item/count to owner or nearby player.
+- Pick up named nearby dropped item/count.
+- Bounded stack transfer helpers.
+
+**Acceptance Criteria:**
+
+- Mutating item operations require `allowWorldActions` where appropriate.
+- Item ids and counts are validated.
+- Inventory summaries are visible through status snapshots and raw trace diagnostics.
+
+---
+
+### Phase 6: Resource and Crafting Planner MVP
+
+**Objective:** Implement clean-room `get <item> <count>` for simple local/offline tasks.
+
+**Capabilities:**
+
+- Vanilla recipe index.
+- Inventory crafting.
+- Crafting table crafting.
+- Material dependency planner.
+- Simple visible/reachable gathering for logs, planks, sticks, stone/cobblestone, dirt/sand, and visible common ores.
+- Tool selection and progress status.
+
+**Acceptance Criteria:**
+
+- The planner is bounded and cancellable.
+- It does not mine hidden ores or search unloaded world areas in the MVP.
+- It reports missing materials instead of looping indefinitely.
+
+---
+
+### Phase 7: Container, Stash, and Smelting
+
+**Objective:** Add chest/barrel/furnace/smoker/crafting-table interactions.
+
+**Capabilities:**
+
+- Find nearby safe containers.
+- Deposit all or item/count.
+- Withdraw item/count.
+- Remember local stash locations per assignment.
+- Smelt in furnace/smoker with fuel checks.
+- Use crafting table for recipe planner.
+
+**Acceptance Criteria:**
+
+- Container writes are bounded, permission-gated, and server-thread safe.
+- Stash memory is local, size-bounded, and resettable.
+
+---
+
+### Phase 8: Navigation Backend Upgrade
+
+**Objective:** Move beyond vanilla navigation while keeping a clean adapter boundary.
+
+**Capabilities:**
+
+- Robust goto/follow/get-to-block/get-to-entity.
+- Search/explore loaded chunks.
+- Avoidance and stuck recovery.
+- Pathing telemetry in snapshots.
+
+**Dependency Policy:**
+
+- Start with first-party pathing improvements where practical.
+- Only add optional public pathfinding dependencies after license/provenance review.
+- Do not vendor opaque jars.
+
+---
+
+### Phase 9: Survival Automation Chains
+
+**Objective:** Add background PlayerEngine-style survival priorities.
+
+**Capabilities:**
+
+- Hunger/food monitor.
+- Eat safe food.
+- Hostile detection and defense chain.
+- Creeper/projectile/lava/water avoidance.
+- Pre-equip armor/tool/weapon.
+- Optional sleep-through-night behavior.
+- Fire/self-preservation tasks.
+
+**Acceptance Criteria:**
+
+- Background actions obey character policy.
+- Survival actions are observable, cancellable, and bounded.
+
+---
+
+### Phase 10: Farming, Fishing, and Repeatable Work Loops
+
+**Objective:** Implement common repeatable work commands.
+
+**Capabilities:**
+
+- Harvest mature crops.
+- Replant if seeds are available.
+- Fish with rod and stop/cancel support.
+- Pickup/deposit loops with progress status.
+
+---
+
+### Phase 11: Building System
+
+**Objective:** Implement safe structure building without arbitrary provider-generated code execution.
+
+**Capabilities:**
+
+- Local blueprint format.
+- Simple primitives: line, wall, floor, box, stairs.
+- Material estimate.
+- Build at coordinate.
+- Cancel/resume.
+- Collision and permission checks.
+- Optional provider-suggested blueprint JSON after strict schema validation.
+
+**Non-Goal:** Execute arbitrary code generated by the provider.
+
+---
+
+### Phase 12: Advanced World Tasks
+
+**Objective:** Expand toward advanced AltoClef-style task families after the runtime is mature.
+
+**Candidates:**
+
+- Locate structure.
+- Explore/search chunks.
+- Biome search.
+- Portal construction/use.
+- Nether travel.
+- Stronghold location.
+- End/dragon/speedrun tasks.
+
+**Acceptance Criteria:**
+
+- Each task must be added as a separate reviewed phase with explicit safety and cancellation semantics.
+
+---
+
+## Verification Gates
+
+Every phase must satisfy:
+
+```bash
+git diff --check
+JAVA_HOME=/opt/data/tools/jdk-17.0.19+10 PATH=/opt/data/tools/jdk-17.0.19+10/bin:$PATH ./gradlew build
+```
+
+For UI/networking phases:
+
+- Language key parity across `en_us.json`, `ja_jp.json`, and `fr_fr.json`.
+- Append-only or backward-compatible packet evolution where possible.
+- No hard-coded user-facing English UI strings outside language JSON.
+
+For action/runtime phases:
+
+- Provider output remains untrusted.
+- `allowWorldActions` remains final authority for world/inventory/combat mutations.
+- Debug events are secret-safe.
+- Raw traces remain local-only and redacted for credentials.
+
+---
+
+## Immediate Next Step
+
+Implement Phase 1: `AutomationControllerSnapshot` and deterministic task/queue diagnostics.

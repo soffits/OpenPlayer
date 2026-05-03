@@ -8,6 +8,7 @@ import dev.soffits.openplayer.entity.OpenPlayerNpcEntity;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentKind;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Queue;
@@ -317,6 +318,30 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             continueActiveCommand();
             watchdogActiveCommand();
+        }
+
+        @Override
+        public AutomationControllerSnapshot snapshot() {
+            List<IntentKind> queuedKinds = queuedKinds();
+            AutomationControllerMonitorStatus monitorStatus = activeMonitor == null
+                    ? AutomationControllerMonitorStatus.IDLE
+                    : activeMonitor.status();
+            String monitorReason = activeMonitor == null ? "idle" : activeMonitor.boundedReason();
+            int elapsedTicks = activeMonitor == null ? 0 : activeMonitor.elapsedTicks();
+            int maxTicks = activeMonitor == null ? 0 : activeMonitor.maxTicks();
+            return new AutomationControllerSnapshot(
+                    Math.round(entity.getHealth()),
+                    entity.selectedHotbarSlot(),
+                    activeCommand != null,
+                    activeCommand == null ? null : activeCommand.kind(),
+                    monitorStatus,
+                    monitorReason,
+                    elapsedTicks,
+                    maxTicks,
+                    queuedKinds.size(),
+                    queuedKinds,
+                    interactionCooldown.remainingTicks()
+            );
         }
 
         @Override
@@ -671,16 +696,15 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         }
 
         private String statusSummary() {
-            String activeKind = activeCommand == null ? "idle" : activeCommand.kind().name();
-            String controllerStatus = activeMonitor == null ? "idle" : activeMonitor.status().name().toLowerCase();
-            String controllerReason = activeMonitor == null ? "idle" : activeMonitor.boundedReason();
-            return "hp=" + Math.round(entity.getHealth())
-                    + ", slot=" + entity.selectedHotbarSlot()
-                    + ", active=" + activeKind
-                    + ", queued=" + queuedCommands.size()
-                    + ", interactCd=" + interactionCooldown.remainingTicks()
-                    + ", ctrl=" + controllerStatus
-                    + ", reason=" + controllerReason;
+            return snapshot().summary();
+        }
+
+        private List<IntentKind> queuedKinds() {
+            List<IntentKind> queuedKinds = new ArrayList<>(queuedCommands.size());
+            for (QueuedCommand queuedCommand : queuedCommands) {
+                queuedKinds.add(queuedCommand.kind());
+            }
+            return queuedKinds;
         }
 
         private void watchdogActiveCommand() {
