@@ -26,8 +26,10 @@ import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.UseAnim;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -244,6 +246,53 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
         return true;
     }
 
+    public boolean swapSelectedHotbarStackToOffhand() {
+        ItemStack selectedStack = getMainHandItem();
+        if (selectedStack.isEmpty()) {
+            return false;
+        }
+        ItemStack offhandStack = getItemBySlot(EquipmentSlot.OFFHAND);
+        internalInventory.set(selectedMainHandSlot, offhandStack.copy());
+        internalInventory.set(OFFHAND_SLOT, selectedStack.copy());
+        return true;
+    }
+
+    public boolean equipBestAvailableArmor() {
+        boolean equippedAny = false;
+        for (EquipmentSlot equipmentSlot : List.of(
+                EquipmentSlot.FEET,
+                EquipmentSlot.LEGS,
+                EquipmentSlot.CHEST,
+                EquipmentSlot.HEAD
+        )) {
+            equippedAny = equipBestAvailableArmor(equipmentSlot) || equippedAny;
+        }
+        return equippedAny;
+    }
+
+    public boolean useSelectedMainHandItemLocally() {
+        ItemStack selectedStack = getMainHandItem();
+        if (!canUseSelectedMainHandItemLocally(selectedStack)) {
+            return false;
+        }
+        ItemStack remainingStack = selectedStack.finishUsingItem(level(), this);
+        internalInventory.set(selectedMainHandSlot, remainingStack.copy());
+        swingMainHandAction();
+        return true;
+    }
+
+    static boolean canUseSelectedMainHandItemLocally(ItemStack selectedStack) {
+        if (selectedStack == null || selectedStack.isEmpty() || selectedStack.getUseDuration() <= 0) {
+            return false;
+        }
+        if (selectedStack.getUseAnimation() != UseAnim.EAT) {
+            return false;
+        }
+        return selectedStack.isEdible()
+                && selectedStack.getMaxStackSize() > 1
+                && !selectedStack.getItem().hasCraftingRemainingItem();
+    }
+
     public void swingMainHandAction() {
         swing(InteractionHand.MAIN_HAND);
     }
@@ -381,6 +430,38 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
             items.add(internalInventory.get(slot));
         }
         return items;
+    }
+
+    private boolean equipBestAvailableArmor(EquipmentSlot equipmentSlot) {
+        ItemStack currentStack = getItemBySlot(equipmentSlot);
+        double currentScore = armorScore(currentStack, equipmentSlot);
+        int bestSlot = -1;
+        double bestScore = currentScore;
+        for (int slot = FIRST_NORMAL_INVENTORY_SLOT; slot < FIRST_EQUIPMENT_INVENTORY_SLOT; slot++) {
+            ItemStack candidateStack = internalInventory.get(slot);
+            double candidateScore = armorScore(candidateStack, equipmentSlot);
+            if (NpcEquipmentSelection.shouldReplaceArmor(candidateScore, bestScore)) {
+                bestScore = candidateScore;
+                bestSlot = slot;
+            }
+        }
+        if (bestSlot < 0) {
+            return false;
+        }
+        ItemStack selectedArmor = internalInventory.get(bestSlot).copy();
+        internalInventory.set(bestSlot, currentStack.copy());
+        setItemSlot(equipmentSlot, selectedArmor);
+        return true;
+    }
+
+    private static double armorScore(ItemStack itemStack, EquipmentSlot equipmentSlot) {
+        if (itemStack.isEmpty() || !(itemStack.getItem() instanceof ArmorItem armorItem)) {
+            return 0.0D;
+        }
+        if (armorItem.getEquipmentSlot() != equipmentSlot) {
+            return 0.0D;
+        }
+        return armorItem.getDefense() * 100.0D + armorItem.getToughness();
     }
 
     private static double toolScore(ItemStack itemStack, BlockState blockState) {
