@@ -240,7 +240,8 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
                 new NpcRoleId(roleId),
                 new NpcOwnerId(ownerId),
                 new NpcProfileSpec(profileName, entity.persistedProfileSkinTexture().orElse(null)),
-                location
+                location,
+                entity.allowWorldActions()
         );
         entity.setRuntimeOwnerId(spec.ownerId());
         NpcSessionId sessionId = new NpcSessionId(UUID.randomUUID());
@@ -291,7 +292,8 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
                 spec.ownerId(),
                 spec.roleId().value(),
                 spec.profile().name(),
-                spec.profile().skinTexture()
+                spec.profile().skinTexture(),
+                spec.allowWorldActions()
         );
         entity.setCustomName(net.minecraft.network.chat.Component.literal(spec.profile().name()));
         entity.setCustomNameVisible(true);

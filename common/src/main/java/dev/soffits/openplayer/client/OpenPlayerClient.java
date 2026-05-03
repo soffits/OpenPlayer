@@ -56,7 +56,7 @@ public final class OpenPlayerClient {
     }
 
     private static void receiveStatusResponse(net.minecraft.network.FriendlyByteBuf buffer, NetworkManager.PacketContext context) {
-        boolean parserEnabled = buffer.readBoolean();
+        boolean parserAvailable = buffer.readBoolean();
         String endpoint = buffer.readUtf(128);
         String endpointSource = buffer.readUtf(32);
         boolean modelConfigured = buffer.readBoolean();
@@ -66,7 +66,7 @@ public final class OpenPlayerClient {
         String automationName = buffer.readUtf(64);
         String automationState = buffer.readUtf(64);
         context.queue(() -> OpenPlayerClientStatus.update(
-                parserEnabled,
+                parserAvailable,
                 endpoint,
                 endpointSource,
                 modelConfigured,

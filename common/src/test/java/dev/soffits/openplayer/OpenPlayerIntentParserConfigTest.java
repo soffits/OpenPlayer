@@ -14,18 +14,16 @@ public final class OpenPlayerIntentParserConfigTest {
     public static void main(String[] args) throws Exception {
         resolvesJvmBeforeEnvironmentBeforeUiConfig();
         rejectsInvalidEndpointAndOversizedValues();
-        rejectsEnabledIncompleteProviderConfig();
+        acceptsIncompleteProviderConfigAsDisabled();
         preservesBlankApiKeyUnlessClearIsExplicit();
-        rejectsEnabledClearWithoutHigherPriorityApiKey();
-        rejectsClearedUiKeyWhenHigherPriorityEnabledRemainsTrue();
-        acceptsEnabledConfigCompletedByHigherPriorityValues();
+        acceptsClearingApiKeyAndDisablesWhenNoHigherPriorityKeyExists();
+        acceptsConfigCompletedByHigherPriorityValues();
         statusAndParserCreationDoNotRequireLoaderContext();
     }
 
     private static void resolvesJvmBeforeEnvironmentBeforeUiConfig() throws Exception {
         Path configPath = Files.createTempDirectory("openplayer-provider-test").resolve("provider.properties");
         saveProviderConfig(configPath, new OpenPlayerIntentParserConfig.ProviderConfigSaveRequest(
-                true,
                 "https://ui.example.invalid/v1/chat/completions",
                 "ui-model",
                 "ui-key",
@@ -68,12 +66,12 @@ public final class OpenPlayerIntentParserConfigTest {
         Path configPath = Files.createTempDirectory("openplayer-provider-test").resolve("provider.properties");
         OpenPlayerIntentParserConfig.ProviderConfigSaveResult invalidEndpoint = saveProviderConfig(
                 configPath,
-                new OpenPlayerIntentParserConfig.ProviderConfigSaveRequest(true, "not-absolute", "model", "key", false)
+                new OpenPlayerIntentParserConfig.ProviderConfigSaveRequest("not-absolute", "model", "key", false)
         );
         require(!invalidEndpoint.accepted(), "Invalid endpoint must be rejected");
         OpenPlayerIntentParserConfig.ProviderConfigSaveResult oversizedModel = saveProviderConfig(
                 configPath,
-                new OpenPlayerIntentParserConfig.ProviderConfigSaveRequest(true, "https://example.invalid", "m".repeat(129), "key", false)
+                new OpenPlayerIntentParserConfig.ProviderConfigSaveRequest("https://example.invalid", "m".repeat(129), "key", false)
         );
         require(!oversizedModel.accepted(), "Oversized model must be rejected");
     }
@@ -81,14 +79,12 @@ public final class OpenPlayerIntentParserConfigTest {
     private static void preservesBlankApiKeyUnlessClearIsExplicit() throws Exception {
         Path configPath = Files.createTempDirectory("openplayer-provider-test").resolve("provider.properties");
         saveProviderConfig(configPath, new OpenPlayerIntentParserConfig.ProviderConfigSaveRequest(
-                true,
                 "https://example.invalid/v1/chat/completions",
                 "model-a",
                 "secret-a",
                 false
         ));
         OpenPlayerIntentParserConfig.ProviderConfigSaveResult preserved = saveProviderConfig(configPath, new OpenPlayerIntentParserConfig.ProviderConfigSaveRequest(
-                true,
                 "https://example.invalid/v1/chat/completions",
                 "model-b",
                 "",
@@ -97,7 +93,6 @@ public final class OpenPlayerIntentParserConfigTest {
         require(preserved.accepted(), "Enabled provider config must accept a blank API key when preserving an existing key");
         require("secret-a".equals(load(configPath).getProperty(OpenPlayerIntentParserConfig.PROVIDER_API_KEY_PROPERTY)), "Blank API key must preserve existing key");
         saveProviderConfig(configPath, new OpenPlayerIntentParserConfig.ProviderConfigSaveRequest(
-                false,
                 "https://example.invalid/v1/chat/completions",
                 "model-b",
                 "",
@@ -106,72 +101,46 @@ public final class OpenPlayerIntentParserConfigTest {
         require(load(configPath).getProperty(OpenPlayerIntentParserConfig.PROVIDER_API_KEY_PROPERTY) == null, "Explicit clear must remove API key");
     }
 
-    private static void rejectsEnabledIncompleteProviderConfig() throws Exception {
+    private static void acceptsIncompleteProviderConfigAsDisabled() throws Exception {
         Path configPath = Files.createTempDirectory("openplayer-provider-test").resolve("provider.properties");
         OpenPlayerIntentParserConfig.ProviderConfigSaveResult result = saveProviderConfig(
                 configPath,
-                new OpenPlayerIntentParserConfig.ProviderConfigSaveRequest(true, "", "model", "key", false)
+                new OpenPlayerIntentParserConfig.ProviderConfigSaveRequest("", "model", "key", false)
         );
-        require(!result.accepted(), "Enabled provider config must reject a missing endpoint");
+        require(result.accepted(), "Incomplete provider config must be saved as disabled fallback");
 
         result = saveProviderConfig(
                 configPath,
-                new OpenPlayerIntentParserConfig.ProviderConfigSaveRequest(true, "https://example.invalid/v1/chat/completions", "", "key", false)
+                new OpenPlayerIntentParserConfig.ProviderConfigSaveRequest("https://example.invalid/v1/chat/completions", "", "key", false)
         );
-        require(!result.accepted(), "Enabled provider config must reject a missing model");
+        require(result.accepted(), "Provider config may be missing model until all values resolve");
 
         result = saveProviderConfig(
                 configPath,
-                new OpenPlayerIntentParserConfig.ProviderConfigSaveRequest(true, "https://example.invalid/v1/chat/completions", "model", "", false)
+                new OpenPlayerIntentParserConfig.ProviderConfigSaveRequest("https://example.invalid/v1/chat/completions", "model", "", false)
         );
-        require(!result.accepted(), "Enabled provider config must reject a missing API key");
+        require(result.accepted(), "Provider config may be missing API key until all values resolve");
     }
 
-    private static void rejectsEnabledClearWithoutHigherPriorityApiKey() throws Exception {
+    private static void acceptsClearingApiKeyAndDisablesWhenNoHigherPriorityKeyExists() throws Exception {
         Path configPath = Files.createTempDirectory("openplayer-provider-test").resolve("provider.properties");
         saveProviderConfig(configPath, new OpenPlayerIntentParserConfig.ProviderConfigSaveRequest(
-                true,
                 "https://example.invalid/v1/chat/completions",
                 "model-a",
                 "secret-a",
                 false
         ));
         OpenPlayerIntentParserConfig.ProviderConfigSaveResult result = saveProviderConfig(configPath, new OpenPlayerIntentParserConfig.ProviderConfigSaveRequest(
-                true,
                 "https://example.invalid/v1/chat/completions",
                 "model-a",
                 "",
                 true
         ));
-        require(!result.accepted(), "Enabled provider config must reject clearing the API key without a higher-priority key");
-        require("secret-a".equals(load(configPath).getProperty(OpenPlayerIntentParserConfig.PROVIDER_API_KEY_PROPERTY)), "Rejected clear must preserve the existing key");
+        require(result.accepted(), "Clearing the UI API key must be accepted");
+        require(load(configPath).getProperty(OpenPlayerIntentParserConfig.PROVIDER_API_KEY_PROPERTY) == null, "Clear must remove the UI API key");
     }
 
-    private static void rejectsClearedUiKeyWhenHigherPriorityEnabledRemainsTrue() throws Exception {
-        Path configPath = Files.createTempDirectory("openplayer-provider-test").resolve("provider.properties");
-        saveProviderConfig(configPath, new OpenPlayerIntentParserConfig.ProviderConfigSaveRequest(
-                false,
-                "https://ui.example.invalid/v1/chat/completions",
-                "ui-model",
-                "secret-a",
-                false
-        ));
-        Map<String, String> environment = Map.of(
-                OpenPlayerIntentParserConfig.ENABLED_KEY, "true",
-                OpenPlayerIntentParserConfig.ENDPOINT_KEY, "https://env.example.invalid/v1/chat/completions",
-                OpenPlayerIntentParserConfig.MODEL_KEY, "env-model"
-        );
-        OpenPlayerIntentParserConfig.ProviderConfigSaveResult result = OpenPlayerIntentParserConfig.saveProviderConfig(
-                configPath,
-                new OpenPlayerIntentParserConfig.ProviderConfigSaveRequest(false, "", "", "", true),
-                Map.<String, String>of()::get,
-                environment::get
-        );
-        require(!result.accepted(), "Higher-priority enabled=true must reject clearing the only API key");
-        require("secret-a".equals(load(configPath).getProperty(OpenPlayerIntentParserConfig.PROVIDER_API_KEY_PROPERTY)), "Rejected effective config must preserve the existing API key");
-    }
-
-    private static void acceptsEnabledConfigCompletedByHigherPriorityValues() throws Exception {
+    private static void acceptsConfigCompletedByHigherPriorityValues() throws Exception {
         Path configPath = Files.createTempDirectory("openplayer-provider-test").resolve("provider.properties");
         Map<String, String> properties = Map.of(OpenPlayerIntentParserConfig.API_KEY_KEY, "jvm-key");
         Map<String, String> environment = Map.of(
@@ -181,13 +150,12 @@ public final class OpenPlayerIntentParserConfigTest {
         );
         OpenPlayerIntentParserConfig.ProviderConfigSaveResult result = OpenPlayerIntentParserConfig.saveProviderConfig(
                 configPath,
-                new OpenPlayerIntentParserConfig.ProviderConfigSaveRequest(true, "", "", "", true),
+                new OpenPlayerIntentParserConfig.ProviderConfigSaveRequest("", "", "", true),
                 properties::get,
                 environment::get
         );
-        require(result.accepted(), "Enabled provider config must accept missing UI fields completed by JVM or environment values");
+        require(result.accepted(), "Provider config must accept missing UI fields completed by JVM or environment values");
         Properties saved = load(configPath);
-        require("true".equals(saved.getProperty(OpenPlayerIntentParserConfig.PROVIDER_ENABLED_PROPERTY)), "Enabled UI fallback must be saved");
         require(saved.getProperty(OpenPlayerIntentParserConfig.PROVIDER_ENDPOINT_PROPERTY) == null, "Blank endpoint input must not persist when environment supplies it");
         require(saved.getProperty(OpenPlayerIntentParserConfig.PROVIDER_MODEL_PROPERTY) == null, "Blank model input must not persist when environment supplies it");
         require(saved.getProperty(OpenPlayerIntentParserConfig.PROVIDER_API_KEY_PROPERTY) == null, "Explicit clear must not persist a UI API key when JVM supplies it");

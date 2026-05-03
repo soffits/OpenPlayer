@@ -188,7 +188,6 @@ public final class OpenPlayerNetworking {
     }
 
     private static void receiveProviderConfigSaveRequest(FriendlyByteBuf buffer, NetworkManager.PacketContext context) {
-        boolean enabled = buffer.readBoolean();
         String endpoint = buffer.readUtf(OpenPlayerIntentParserConfig.MAX_ENDPOINT_LENGTH);
         String model = buffer.readUtf(OpenPlayerIntentParserConfig.MAX_MODEL_LENGTH);
         String apiKey = buffer.readUtf(OpenPlayerIntentParserConfig.MAX_API_KEY_LENGTH);
@@ -196,7 +195,6 @@ public final class OpenPlayerNetworking {
         context.queue(() -> {
             if (context.getPlayer() instanceof ServerPlayer player) {
                 handleProviderConfigSaveRequest(player, new OpenPlayerIntentParserConfig.ProviderConfigSaveRequest(
-                        enabled,
                         endpoint,
                         model,
                         apiKey,
@@ -296,7 +294,7 @@ public final class OpenPlayerNetworking {
             try {
                 OpenPlayerRuntime.reloadIntentParser();
             } catch (IllegalStateException exception) {
-                statusMessage = "Provider config saved; parser reload needs endpoint, model, and API key";
+                statusMessage = "Provider config saved; parser auto-enables when endpoint, model, and API key resolve";
             }
         }
         sendSafeStatusMessage(sender, statusMessage);

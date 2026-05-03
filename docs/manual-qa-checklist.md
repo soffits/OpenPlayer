@@ -49,7 +49,7 @@ Use this checklist before publishing a local/offline OpenPlayer release candidat
 
 ## Conversation And Provider Disabled
 
-- With `OPENPLAYER_INTENT_PARSER_ENABLED` unset or false, select a character with `conversationPrompt` or `conversationSettings`.
+- With provider endpoint, model, or API key missing, select a character with `conversationPrompt` or `conversationSettings`.
 - Confirm conversation status reports disabled or unavailable without contacting any provider.
 - Send command text to that selected assignment and confirm it reports parser disabled rather than executing raw free-form model text.
 - Confirm status lines show bounded player text, deterministic greetings, or safe failure messages only.
@@ -73,7 +73,7 @@ Use this checklist before publishing a local/offline OpenPlayer release candidat
 
 - With world actions disabled, submit `EQUIP_ARMOR`, `USE_SELECTED_ITEM`, `SWAP_TO_OFFHAND`, `EQUIP_BEST_ITEM`, `DROP_ITEM`, `BREAK_BLOCK`, `PLACE_BLOCK`, `ATTACK_NEAREST`, and `GUARD_OWNER`.
 - Confirm each disabled world or inventory action rejects without mutating the world, inventory, or nearby entities.
-- Enable local world actions only in a throwaway test world with `OPENPLAYER_AUTOMATION_ALLOW_WORLD_ACTIONS=true` or `openplayer.automation.allowWorldActions=true`.
+- Enable local world actions only in a throwaway test world by spawning a selected character whose local character file has `allowWorldActions=true`.
 - Confirm armor equip, offhand swap, selected edible item use, selected stack drop, block break, block place, attack nearest, and guard owner follow documented preconditions and cooldowns.
 - Confirm unsupported player-only, container, crafting, trading, and arbitrary block-entity interactions reject safely.
 - Watch for item duplication, owner targeting, player targeting, unloaded-chunk mutation, or permission bypasses; treat any occurrence as a release blocker.

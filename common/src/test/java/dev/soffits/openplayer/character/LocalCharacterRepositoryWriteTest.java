@@ -14,11 +14,13 @@ public final class LocalCharacterRepositoryWriteTest {
 
     public static void main(String[] args) {
         serializesOnlyApprovedNonBlankFields();
+        loadsAndSavesAllowWorldActions();
         createsAndUpdatesCharacterFiles();
         importsOnlyFromImportsDirectoryBySafeFileName();
         exportsOnlyLoadedLocalCharacters();
         rejectsUnsafeFileNamesForImportAndExport();
         rejectsUnknownImportedFields();
+        rejectsNonBooleanAllowWorldActions();
         rejectsSecretLikeImportedText();
         rejectsOverwritingInvalidExistingFile();
         cleansTemporaryFilesAfterAtomicWrite();
@@ -28,6 +30,33 @@ public final class LocalCharacterRepositoryWriteTest {
         loadAllDoesNotLoadSymlinkedCharacterFile();
         truncatesUnknownImportedFieldNames();
         formatsFileOperationResponseWithinNetworkLimit();
+    }
+
+    private static void loadsAndSavesAllowWorldActions() {
+        Path root = createTempDirectory();
+        LocalCharacterRepository repository = new LocalCharacterRepository(root.resolve("characters"));
+        LocalCharacterFileOperationResult result = repository.save(new LocalCharacterDefinition(
+                "alex_01",
+                "Alex",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                true
+        ));
+        require(result.succeeded(), "allowWorldActions character save must succeed: " + result);
+        Properties properties = loadProperties(root.resolve("characters").resolve("alex_01.properties"));
+        require("true".equals(properties.getProperty("allowWorldActions")), "true allowWorldActions must serialize");
+        require(repository.loadAll().characters().get(0).allowWorldActions(), "true allowWorldActions must load");
+
+        write(root.resolve("characters").resolve("bob_01.properties"), "id=bob_01\ndisplayName=Bob\n");
+        LocalCharacterDefinition bob = repository.loadAll().characters().stream()
+                .filter(character -> character.id().equals("bob_01"))
+                .findFirst()
+                .orElseThrow();
+        require(!bob.allowWorldActions(), "missing allowWorldActions must default false");
     }
 
     private static void serializesOnlyApprovedNonBlankFields() {
@@ -122,6 +151,17 @@ public final class LocalCharacterRepositoryWriteTest {
                 .importFromDirectory(root.resolve("imports"), "alex_01.properties");
         require(result.status() == LocalCharacterFileOperationStatus.REJECTED, "unknown import fields must reject");
         require(!Files.exists(root.resolve("characters").resolve("alex_01.properties")), "rejected import must not write character file");
+    }
+
+    private static void rejectsNonBooleanAllowWorldActions() {
+        Path root = createTempDirectory();
+        write(root.resolve("imports").resolve("alex_01.properties"), "id=alex_01\ndisplayName=Alex\nallowWorldActions=yes\n");
+        LocalCharacterFileOperationResult result = new LocalCharacterRepository(root.resolve("characters"))
+                .importFromDirectory(root.resolve("imports"), "alex_01.properties");
+        require(result.status() == LocalCharacterFileOperationStatus.REJECTED,
+                "non-boolean allowWorldActions must reject");
+        require(!Files.exists(root.resolve("characters").resolve("alex_01.properties")),
+                "rejected allowWorldActions import must not write character file");
     }
 
     private static void rejectsSecretLikeImportedText() {
@@ -257,7 +297,8 @@ public final class LocalCharacterRepositoryWriteTest {
                 "localSkinFile",
                 "defaultRoleId",
                 "conversationPrompt",
-                "conversationSettings"
+                "conversationSettings",
+                "allowWorldActions"
         ).contains(fieldName);
     }
 

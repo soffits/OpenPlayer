@@ -29,6 +29,11 @@ public final class ConversationPromptAssembler {
         StringBuilder builder = new StringBuilder();
         builder.append("OpenPlayer selected-character conversation.\n");
         builder.append("Character: ").append(character.displayName()).append("\n");
+        if (character.allowWorldActions()) {
+            builder.append("Action policy: world, inventory, and combat actions are allowed for this selected character.\n");
+        } else {
+            builder.append("Action policy: world, inventory, and combat actions are disabled for this selected character. Do not choose BREAK_BLOCK, PLACE_BLOCK, ATTACK_NEAREST, GUARD_OWNER, DROP_ITEM, EQUIP_BEST_ITEM, EQUIP_ARMOR, USE_SELECTED_ITEM, or SWAP_TO_OFFHAND.\n");
+        }
         character.optionalDescription().ifPresent(value -> builder.append("Description: ").append(value).append("\n"));
         character.optionalConversationPrompt().ifPresent(value -> builder.append("Conversation prompt: ").append(value).append("\n"));
         character.optionalConversationSettings().ifPresent(value -> builder.append("Conversation settings: ").append(value).append("\n"));

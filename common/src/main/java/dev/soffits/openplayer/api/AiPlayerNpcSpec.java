@@ -1,7 +1,12 @@
 package dev.soffits.openplayer.api;
 
 public record AiPlayerNpcSpec(NpcRoleId roleId, NpcOwnerId ownerId, NpcProfileSpec profile,
-                              NpcSpawnLocation spawnLocation) {
+                              NpcSpawnLocation spawnLocation, boolean allowWorldActions) {
+    public AiPlayerNpcSpec(NpcRoleId roleId, NpcOwnerId ownerId, NpcProfileSpec profile,
+                           NpcSpawnLocation spawnLocation) {
+        this(roleId, ownerId, profile, spawnLocation, false);
+    }
+
     public AiPlayerNpcSpec {
         if (roleId == null) {
             throw new IllegalArgumentException("roleId cannot be null");

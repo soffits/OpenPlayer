@@ -50,20 +50,15 @@ The Gradle archive base name is `openplayer-<module>` and the version comes from
 
 ## Runtime Configuration
 
-OpenPlayer is offline and provider-disabled by default.
+OpenPlayer is offline and provider-disabled until endpoint, model, and API key all resolve.
 
 The `OPENPLAYER_*` names below can be set as environment variables or as JVM system properties with `-D<name>=<value>`. JVM system properties have highest priority, environment variables have second priority, and the optional in-game UI fallback in `<Minecraft config>/openplayer/provider.properties` has third priority.
 
-- `OPENPLAYER_INTENT_PARSER_ENABLED=true` enables the optional runtime intent parser path.
 - `OPENPLAYER_INTENT_PROVIDER_ENDPOINT=...` sets the OpenAI-compatible endpoint.
-- `OPENPLAYER_INTENT_PROVIDER_API_KEY=<secret>` sets the provider API key. Never put this in character files, screenshots, logs, docs, or release notes.
+- `OPENPLAYER_INTENT_PROVIDER_API_KEY=your-provider-key` sets the provider API key. Never put this in character files, screenshots, logs, docs, or release notes.
 - `OPENPLAYER_INTENT_PROVIDER_MODEL=...` sets the provider model.
-- `OPENPLAYER_AUTOMATION_BACKEND=vanilla` uses the default NPC-backed vanilla automation layer.
-- `OPENPLAYER_AUTOMATION_BACKEND=disabled` rejects automation commands.
-- `OPENPLAYER_AUTOMATION_BACKEND=baritone` tries the optional reflective Baritone command bridge when a compatible separate Baritone install is present.
-- `OPENPLAYER_AUTOMATION_ALLOW_WORLD_ACTIONS=true` or `openplayer.automation.allowWorldActions=true` enables local world, inventory, and violent actions. Keep this disabled for ordinary release QA except in throwaway worlds.
 
-Singleplayer hosts and players with sufficient server permission can save the provider fallback through the OpenPlayer controls UI. The fallback file uses `parserEnabled`, `endpoint`, `model`, and `apiKey`, and is separate from character files. Blank API key saves preserve the existing key unless the explicit clear-key option is selected. Do not package local `provider.properties` files or screenshots showing provider secrets.
+Singleplayer hosts and players with sufficient server permission can save the provider fallback through the OpenPlayer controls UI. The fallback file uses `endpoint`, `model`, and `apiKey`, and is separate from character files. Blank API key saves preserve the existing key unless the explicit clear-key option is selected. Do not package local `provider.properties` files or screenshots showing provider secrets. World, inventory, and combat actions are controlled per character with `allowWorldActions=true`; missing values and default spawns are disabled.
 
 ## Known Limitations
 
@@ -72,8 +67,7 @@ Singleplayer hosts and players with sufficient server permission can save the pr
 - Provider-backed conversation is optional and disabled by default. Provider output is treated as untrusted and must parse into constrained intents before any action runs.
 - There is no TTS, speech recognition, persisted conversation memory, raw model response display, per-character provider key support, or online memory service.
 - The vanilla automation layer is bounded NPC-backed behavior, not full PlayerEngine parity.
-- The optional Baritone bridge is reflective and controls only supported Baritone command paths when available; it is not a true NPC-backed Baritone adapter.
-- World, inventory, and violent actions remain disabled unless explicitly enabled by local configuration.
+- World, inventory, and combat actions remain disabled unless the selected local character has `allowWorldActions=true`.
 - Full real-player emulation, containers, crafting, trading, arbitrary block entity interaction, and broad inventory transfer are not implemented.
 
 ## License And Source Obligations
@@ -83,4 +77,3 @@ Singleplayer hosts and players with sufficient server permission can save the pr
 - When distributing binaries, provide the corresponding source for the exact release revision and retain AGPL license notices.
 - Architectury API is used from public Maven coordinates and is LGPL-3.0-only.
 - Optional provider access uses Java 17 `HttpClient` and adds no provider SDK dependency.
-- Optional Baritone support is reflective only and requires users to install a compatible separate Baritone mod/API when they choose that backend.

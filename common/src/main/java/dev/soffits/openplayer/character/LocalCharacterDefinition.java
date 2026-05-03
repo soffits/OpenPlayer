@@ -12,8 +12,8 @@ import java.util.Optional;
 import java.util.regex.Pattern;
 
 public record LocalCharacterDefinition(String id, String displayName, String description, String skinTexture,
-                                       String localSkinFile, String defaultRoleId, String conversationPrompt,
-                                       String conversationSettings) {
+                                        String localSkinFile, String defaultRoleId, String conversationPrompt,
+                                        String conversationSettings, boolean allowWorldActions) {
     private static final int MAX_ID_LENGTH = 64;
     private static final int MAX_DISPLAY_NAME_LENGTH = 32;
     private static final int MAX_DESCRIPTION_LENGTH = 1024;
@@ -26,6 +26,13 @@ public record LocalCharacterDefinition(String id, String displayName, String des
             "(^|[^a-z0-9])(?:api[ _-]?key|access[ _-]?token|client[ _-]?secret|token|bearer|password|passwd|cookie|secret|credential)(?=$|[^a-z0-9])",
             Pattern.CASE_INSENSITIVE
     );
+
+    public LocalCharacterDefinition(String id, String displayName, String description, String skinTexture,
+                                    String localSkinFile, String defaultRoleId, String conversationPrompt,
+                                    String conversationSettings) {
+        this(id, displayName, description, skinTexture, localSkinFile, defaultRoleId, conversationPrompt,
+                conversationSettings, false);
+    }
 
     public LocalCharacterDefinition {
         id = normalizeRequired(id, "id");
@@ -78,7 +85,7 @@ public record LocalCharacterDefinition(String id, String displayName, String des
         if (spawnLocation == null) {
             throw new IllegalArgumentException("spawnLocation cannot be null");
         }
-        return new AiPlayerNpcSpec(toSessionRoleId(), ownerId, toProfileSpec(), spawnLocation);
+        return new AiPlayerNpcSpec(toSessionRoleId(), ownerId, toProfileSpec(), spawnLocation, allowWorldActions);
     }
 
     public NpcRoleId toSessionRoleId() {
