@@ -12,7 +12,7 @@ The initial target is Minecraft 1.20.1 on Java 17 with an Architectury-style mul
 
 ## Milestone Status
 
-Current implementation includes runtime NPC sessions, duplicate prevention, a server-side companion lifecycle manager for selected local assignments, local character and assignment definition parsing, safe local character create/update/import/export repository foundations, server-authoritative local companion selection from the OpenPlayer UI, basic and expanded local command intents, item pickup with inventory persistence, explicit NPC hotbar, offhand, armor, and held-equipment helpers, owner lifecycle cleanup and restore, spawn/despawn networking, a paged local assignment gallery with safe runtime status, a player-shaped renderer with optional profile skin resource support, client-side local PNG skin loading, and vanilla feature layers for held items, armor, head-slot items, elytra, arrows, and bee stingers, a vanilla NPC-backed task backend, an optional reflective Baritone command bridge, a disabled-by-default runtime intent parser that can use an opt-in JDK-only OpenAI-compatible provider, and an optional per-character conversation loop on top of that parser. Automatone is not directly integrated yet.
+Current implementation includes runtime NPC sessions, duplicate prevention, a server-side companion lifecycle manager for selected local assignments, local character and assignment definition parsing, safe local character create/update/import/export repository foundations, server-authoritative local companion selection from the OpenPlayer UI, basic and expanded local command intents, item pickup with inventory persistence, explicit NPC hotbar, offhand, armor, and held-equipment helpers, owner lifecycle cleanup and restore, spawn/despawn networking, a paged local assignment gallery with safe runtime status, a player-shaped renderer with optional profile skin resource support, client-side local PNG skin loading, and vanilla feature layers for held items, armor, head-slot items, elytra, arrows, and bee stingers, a vanilla NPC-backed task backend, an optional reflective Baritone command bridge, a disabled-by-default runtime intent parser that can use an opt-in JDK-only OpenAI-compatible provider, and an optional per-character conversation loop on top of that parser. Phase O adds cross-loader manual QA and release packaging guidance for the current near-parity local/offline Player2NPC-style companion experience. This is not commercial online 1:1 Player2NPC parity, and Automatone is not directly integrated yet.
 
 ## Local Character Config
 
@@ -95,6 +95,18 @@ The bottom status lines remain safe and presence-only for automation backend, pa
 - Baritone is supported only through an optional reflective command bridge. OpenPlayer does not add a hard Gradle dependency on Baritone; install a Minecraft 1.20.1-compatible Baritone API/mod separately when using `OPENPLAYER_AUTOMATION_BACKEND=baritone`.
 - Baritone upstream publishes Minecraft 1.20.1 Fabric and Forge API jars from public GitHub releases and marks the project as LGPL-3.0 with an anime exception. This repository does not redistribute those jars.
 
+## QA And Release Packaging
+
+Release candidates should be built with Java 17 from the repository root:
+
+```sh
+./gradlew build
+```
+
+Run `git diff --check` before reporting documentation or packaging changes. Manual release QA is tracked in `docs/manual-qa-checklist.md`, including Fabric and Forge passes for local characters, assignments, skins, gallery, file operations, conversation status, automation intents, navigation monitor behavior, interaction helpers, disabled world actions, provider-disabled behavior, and multiplayer or server restart basics.
+
+Upload the loader-specific runtime jars from `fabric/build/libs/openplayer-fabric-<version>.jar` and `forge/build/libs/openplayer-forge-<version>.jar`. Do not upload `common/build/libs` jars, `*-dev-shadow.jar` files, Gradle caches, logs, local configs, provider credentials, remote skin caches, opaque jars, or copied proprietary code. Packaging scope, known limitations, configuration flags, artifact locations, and AGPL source obligations are documented in `docs/release-packaging.md`.
+
 ## Runtime Intent Parser
 
 Raw command text submitted through the public NPC service is parsed by the runtime-owned intent parser before becoming an `AiPlayerNpcCommand`. The parser is disabled by default and returns unavailable intents without contacting a provider.
@@ -141,7 +153,7 @@ The Baritone backend is intentionally honest about scope: stock Baritone control
 - Establish loader-neutral NPC domain contracts.
 - Add entity, persistence, and networking slices.
 - Evaluate provider-backed command parsing behavior in runtime playtesting.
-- Continue near-1:1 local parity extension phases for full character editor UI polish, spoken response UX, expanded safe intents, NPC-backed navigation, interaction management, and cross-loader packaging QA.
+- Continue near-parity local/offline extension work only where gaps are explicitly documented; cross-loader QA and release packaging guidance now exist for the current local companion release scope.
 - Expand NPC-backed automation beyond the current vanilla task layer only through a clean pathfinding and action adapter boundary.
 - Evaluate Automatone integration for movement automation once public coordinates, loader/version compatibility, license posture, and adapter boundaries are clear.
 - Keep future parity work clean-room and local/offline by default: no account login, online character service, remote skin downloads, opaque jars, or secrets in character files.

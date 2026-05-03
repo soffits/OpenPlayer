@@ -303,7 +303,7 @@ Provide enough automated and manual verification for implementation agents to co
 
 ## Near-1:1 Local Parity Extension Phases
 
-These extension phases define future clean-room work for near-1:1 local Player2NPC-style parity after the baseline rewrite phases. They must remain local/offline by default and must not add commercial account login, online character services, remote skin downloads, opaque jars, Player2NPC code, PlayerEngine vendoring, provider secrets in files, or unreviewed dependencies.
+These extension phases define future clean-room work for a near-parity local/offline Player2NPC-style companion experience after the baseline rewrite phases. They must remain local/offline by default and must not claim commercial online 1:1 parity, commercial account login, online character services, remote skin downloads, opaque jars, Player2NPC code, PlayerEngine vendoring, provider secrets in files, or unreviewed dependencies.
 
 ## Phase H: Local Assignments And Multi-Companion Lifecycle
 
@@ -617,6 +617,14 @@ Complete cross-loader verification and package clean local parity releases with 
 - No release gating on online services, account login, remote skins, cloud character sync, or proprietary dependencies.
 - No hiding known limitations behind vague parity language.
 - No committing or publishing artifacts without an explicit release task.
+
+### Current Implementation Notes
+
+Phase O is implemented as documentation and release-check guidance only; it does not change runtime behavior. `docs/manual-qa-checklist.md` now defines repeatable Fabric and Forge manual QA for local characters, assignments, skins, gallery behavior, safe file operations, conversation and provider-disabled statuses, automation intents, navigation monitor behavior, interaction helpers, disabled world actions, and multiplayer or server restart basics.
+
+`docs/release-packaging.md` documents the exact build command, Java 17 requirement, artifact locations, loader-specific upload guidance, files not to upload, known limitations, runtime environment variables and JVM properties, dependency posture, and `AGPL-3.0-only` source obligations. README now points release candidates to those documents and describes the current milestone as a near-parity local/offline Player2NPC-style companion experience rather than commercial online 1:1 parity.
+
+Final local near-parity status: OpenPlayer has practical local/offline companion support across the documented phases, including local character and assignment files, safe import/export foundations, selected-assignment lifecycle control, local PNG skins, player-like rendering layers, bounded vanilla NPC-backed automation, disabled-by-default provider-backed conversation, spoken status lines, expanded safe intent vocabulary, navigation monitoring, and focused interaction helpers. Known gaps remain explicit: no account login, online character service, remote skin downloads, PlayerEngine, Automatone, opaque jars, true Baritone-driven NPC pathfinding, TTS, speech recognition, persisted conversation memory, full real-player emulation, containers, crafting, trading, or broad inventory transfer.
 
 ## Implementation Order
 
