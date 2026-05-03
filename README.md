@@ -12,12 +12,13 @@ The initial target is Minecraft 1.20.1 on Java 17 with an Architectury-style mul
 
 ## Milestone Status
 
-Current implementation includes runtime NPC sessions, duplicate prevention, basic command intents, item pickup with inventory persistence, owner lifecycle cleanup and restore, spawn/despawn networking, a minimal client control screen with safe runtime status, a default player-shaped renderer, a vanilla NPC-backed task backend, an optional reflective Baritone command bridge, and a disabled-by-default runtime intent parser that can use an opt-in JDK-only OpenAI-compatible provider. Automatone is not directly integrated yet.
+Current implementation includes runtime NPC sessions, duplicate prevention, basic command intents, item pickup with inventory persistence, owner lifecycle cleanup and restore, spawn/despawn networking, a minimal client control screen with safe runtime status, a player-shaped renderer with optional profile skin resource support, a vanilla NPC-backed task backend, an optional reflective Baritone command bridge, and a disabled-by-default runtime intent parser that can use an opt-in JDK-only OpenAI-compatible provider. Automatone is not directly integrated yet.
 
 ## Dependencies
 
 - Architectury API `9.2.14` is used from public Maven coordinates for shared Fabric and Forge entity registration and lifecycle hooks. Architectury API is LGPL-3.0-only.
 - The OpenAI-compatible intent provider uses only Java 17 `java.net.http.HttpClient` and adds no external dependency.
+- Profile skin resource ids are local Minecraft texture references only; OpenPlayer does not add account skin lookup or downloading dependencies.
 - No pathfinding or automation jar is vendored. Direct PlayerEngine vendoring remains forbidden.
 - Baritone is supported only through an optional reflective command bridge. OpenPlayer does not add a hard Gradle dependency on Baritone; install a Minecraft 1.20.1-compatible Baritone API/mod separately when using `OPENPLAYER_AUTOMATION_BACKEND=baritone`.
 - Baritone upstream publishes Minecraft 1.20.1 Fabric and Forge API jars from public GitHub releases and marks the project as LGPL-3.0 with an anime exception. This repository does not redistribute those jars.
@@ -52,7 +53,7 @@ The Baritone backend is intentionally honest about scope: stock Baritone control
 - Evaluate provider-backed command parsing behavior in runtime playtesting.
 - Expand NPC-backed automation beyond the current vanilla task layer if a clean pathfinding and action adapter boundary is identified.
 - Evaluate Automatone integration for movement automation once public coordinates, loader/version compatibility, license posture, and adapter boundaries are clear.
-- Add player skin and profile support.
+- Evaluate external player account profile and skin lookup support without adding opaque runtime fetch behavior.
 
 ## License
 
