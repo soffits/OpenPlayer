@@ -121,10 +121,10 @@ The Baritone backend is intentionally honest about scope: stock Baritone control
 - Establish loader-neutral NPC domain contracts.
 - Add entity, persistence, and networking slices.
 - Evaluate provider-backed command parsing behavior in runtime playtesting.
-- Expand conversation UX only after a small safe response surface is designed.
-- Expand NPC-backed automation beyond the current vanilla task layer if a clean pathfinding and action adapter boundary is identified.
+- Continue near-1:1 local parity extension phases for multi-companion assignments, gallery/detail UI polish, local character editing/import/export, spoken response UX, expanded safe intents, NPC-backed navigation, interaction management, and cross-loader packaging QA.
+- Expand NPC-backed automation beyond the current vanilla task layer only through a clean pathfinding and action adapter boundary.
 - Evaluate Automatone integration for movement automation once public coordinates, loader/version compatibility, license posture, and adapter boundaries are clear.
-- Evaluate external player account profile and skin lookup support without adding opaque runtime fetch behavior.
+- Keep future parity work clean-room and local/offline by default: no account login, online character service, remote skin downloads, opaque jars, or secrets in character files.
 
 ## License
 
