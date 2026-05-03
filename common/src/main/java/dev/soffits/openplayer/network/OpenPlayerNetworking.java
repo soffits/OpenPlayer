@@ -16,6 +16,7 @@ import dev.soffits.openplayer.api.OpenPlayerApi;
 import dev.soffits.openplayer.character.LocalCharacterListEntry;
 import dev.soffits.openplayer.character.LocalCharacterListView;
 import dev.soffits.openplayer.character.LocalCharacterFileOperationResult;
+import dev.soffits.openplayer.character.LocalCharacterDefinition;
 import dev.soffits.openplayer.character.LocalCharacterRepositoryResult;
 import dev.soffits.openplayer.character.LocalSkinPathResolver;
 import dev.soffits.openplayer.character.OpenPlayerLocalCharacters;
@@ -25,6 +26,7 @@ import dev.soffits.openplayer.intent.IntentPriority;
 import dev.soffits.openplayer.runtime.CompanionLifecycleManager;
 import dev.soffits.openplayer.runtime.OpenPlayerRuntime;
 import io.netty.buffer.Unpooled;
+import java.util.List;
 import java.util.UUID;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -85,6 +87,16 @@ public final class OpenPlayerNetworking {
                 NetworkManager.Side.C2S,
                 OpenPlayerConstants.CHARACTER_IMPORT_REQUEST_PACKET_ID,
                 OpenPlayerNetworking::receiveCharacterImportRequest
+        );
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.C2S,
+                OpenPlayerConstants.CHARACTER_SAVE_REQUEST_PACKET_ID,
+                OpenPlayerNetworking::receiveCharacterSaveRequest
+        );
+        NetworkManager.registerReceiver(
+                NetworkManager.Side.C2S,
+                OpenPlayerConstants.CHARACTER_DELETE_REQUEST_PACKET_ID,
+                OpenPlayerNetworking::receiveCharacterDeleteRequest
         );
         NetworkManager.registerReceiver(
                 NetworkManager.Side.C2S,
@@ -167,6 +179,10 @@ public final class OpenPlayerNetworking {
         String characterId = buffer.readUtf(64).trim();
         context.queue(() -> {
             if (context.getPlayer() instanceof ServerPlayer player) {
+                if (!canManageLocalProfiles(player)) {
+                    rejectLocalProfileOperation(player);
+                    return;
+                }
                 LocalCharacterFileOperationResult result = OpenPlayerLocalCharacters.repository()
                         .exportToDirectory(OpenPlayerLocalCharacters.exportsDirectory(), characterId);
                 sendCharacterFileOperationResponse(player, result);
@@ -179,8 +195,52 @@ public final class OpenPlayerNetworking {
         String fileName = buffer.readUtf(80).trim();
         context.queue(() -> {
             if (context.getPlayer() instanceof ServerPlayer player) {
+                if (!canManageLocalProfiles(player)) {
+                    rejectLocalProfileOperation(player);
+                    return;
+                }
                 LocalCharacterFileOperationResult result = OpenPlayerLocalCharacters.repository()
-                        .importFromDirectory(OpenPlayerLocalCharacters.importsDirectory(), fileName);
+                        .importFromDirectory(OpenPlayerLocalCharacters.importsDirectory(), fileName, true);
+                sendCharacterFileOperationResponse(player, result);
+                sendCharacterListResponse(player);
+            }
+        });
+    }
+
+    private static void receiveCharacterSaveRequest(FriendlyByteBuf buffer, NetworkManager.PacketContext context) {
+        LocalCharacterDefinition character = new LocalCharacterDefinition(
+                buffer.readUtf(64),
+                buffer.readUtf(32),
+                buffer.readUtf(1024),
+                null,
+                buffer.readUtf(256),
+                buffer.readUtf(64),
+                buffer.readUtf(4096),
+                buffer.readUtf(2048),
+                buffer.readBoolean()
+        );
+        context.queue(() -> {
+            if (context.getPlayer() instanceof ServerPlayer player) {
+                if (!canManageLocalProfiles(player)) {
+                    rejectLocalProfileOperation(player);
+                    return;
+                }
+                LocalCharacterFileOperationResult result = OpenPlayerLocalCharacters.repository().save(character);
+                sendCharacterFileOperationResponse(player, result);
+                sendCharacterListResponse(player);
+            }
+        });
+    }
+
+    private static void receiveCharacterDeleteRequest(FriendlyByteBuf buffer, NetworkManager.PacketContext context) {
+        String characterId = buffer.readUtf(64).trim();
+        context.queue(() -> {
+            if (context.getPlayer() instanceof ServerPlayer player) {
+                if (!canManageLocalProfiles(player)) {
+                    rejectLocalProfileOperation(player);
+                    return;
+                }
+                LocalCharacterFileOperationResult result = OpenPlayerLocalCharacters.repository().delete(characterId);
                 sendCharacterFileOperationResponse(player, result);
                 sendCharacterListResponse(player);
             }
@@ -282,6 +342,16 @@ public final class OpenPlayerNetworking {
         sendCharacterListResponse(sender);
     }
 
+    public static boolean submitAssignmentCommandText(ServerPlayer sender, String assignmentId, String commandText) {
+        if (sender == null || assignmentId == null || assignmentId.isBlank()
+                || commandText == null || commandText.isBlank() || commandText.length() > MAX_COMMAND_TEXT_LENGTH) {
+            return false;
+        }
+        COMPANION_LIFECYCLE_MANAGER.submitSelectedCommandText(sender.getUUID(), assignmentId.trim(), commandText.trim());
+        sendCharacterListResponse(sender);
+        return true;
+    }
+
     private static void handleProviderConfigSaveRequest(ServerPlayer sender, OpenPlayerIntentParserConfig.ProviderConfigSaveRequest request) {
         if (!canSaveProviderConfig(sender)) {
             sendSafeStatusMessage(sender, "Provider config save rejected: permission required");
@@ -336,6 +406,11 @@ public final class OpenPlayerNetworking {
             buffer.writeUtf(character.characterId(), 64);
             buffer.writeUtf(character.displayName(), 32);
             buffer.writeUtf(character.description(), 1024);
+            buffer.writeUtf(character.localSkinFile(), 256);
+            buffer.writeUtf(character.defaultRoleId(), 64);
+            buffer.writeUtf(character.conversationPrompt(), 4096);
+            buffer.writeUtf(character.conversationSettings(), 2048);
+            buffer.writeBoolean(character.allowWorldActions());
             buffer.writeUtf(character.skinStatus(), 64);
             buffer.writeUtf(character.lifecycleStatus(), 64);
             buffer.writeUtf(character.conversationStatus(), 64);
@@ -347,6 +422,11 @@ public final class OpenPlayerNetworking {
         buffer.writeVarInt(view.errors().size());
         for (String error : view.errors()) {
             buffer.writeUtf(error, 512);
+        }
+        List<String> importFileNames = OpenPlayerLocalCharacters.repository().listImportFileNames(OpenPlayerLocalCharacters.importsDirectory());
+        buffer.writeVarInt(importFileNames.size());
+        for (String fileName : importFileNames) {
+            buffer.writeUtf(fileName, 80);
         }
         NetworkManager.sendToPlayer(player, OpenPlayerConstants.CHARACTER_LIST_RESPONSE_PACKET_ID, buffer);
     }
@@ -369,6 +449,19 @@ public final class OpenPlayerNetworking {
 
     static boolean maySaveProviderConfig(boolean singleplayerOwner, boolean sufficientPermission) {
         return singleplayerOwner || sufficientPermission;
+    }
+
+    private static boolean canManageLocalProfiles(ServerPlayer player) {
+        return mayManageLocalProfiles(player.server.isSingleplayerOwner(player.getGameProfile()), player.hasPermissions(2));
+    }
+
+    static boolean mayManageLocalProfiles(boolean singleplayerOwner, boolean sufficientPermission) {
+        return singleplayerOwner || sufficientPermission;
+    }
+
+    private static void rejectLocalProfileOperation(ServerPlayer player) {
+        sendSafeStatusMessage(player, "Profile operation rejected: permission required");
+        sendCharacterListResponse(player);
     }
 
     static boolean isLegacyDefaultNetworkNpcSession(UUID ownerId, String ownerProfileName, AiPlayerNpcSession session) {

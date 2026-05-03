@@ -18,7 +18,7 @@ public final class OpenPlayerGalleryPageTest {
         require(page.pageCount() == 0, "empty galleries must have no pages");
         require(page.firstIndex() == 0, "empty first index must be zero");
         require(page.lastExclusiveIndex() == 0, "empty last index must be zero");
-        require("Page 0/0".equals(page.label()), "empty label must be explicit");
+        require(page.displayPageIndex() == 0, "empty display page must be explicit");
     }
 
     private static void pagesMoreThanSixAssignments() {
@@ -39,7 +39,7 @@ public final class OpenPlayerGalleryPageTest {
         require(last.pageIndex() == 1, "requested page must clamp to last page");
         require(last.hasPrevious(), "last page must have previous navigation");
         require(!last.hasNext(), "last page must not have next navigation");
-        require("Page 2/2".equals(last.label()), "non-empty labels are one-based");
+        require(last.displayPageIndex() == 2, "non-empty display pages are one-based");
     }
 
     private static void mapsSelectedAssignmentIndexToStablePage() {

@@ -1,6 +1,6 @@
 # OpenPlayer Agent Rules
 
-OpenPlayer is an AGPL-3.0-only Minecraft mod developed as a legally clean, open replacement direction for Player2NPC-style AI NPC features. Keep every repository-visible text string in English.
+OpenPlayer is an AGPL-3.0-only Minecraft mod developed as a legally clean, open replacement direction for Player2NPC-style AI NPC features. Keep every repository-visible text string in English except translated locale resource values.
 
 ## Scope
 
@@ -35,6 +35,11 @@ OpenPlayer is an AGPL-3.0-only Minecraft mod developed as a legally clean, open 
 - Do not add dead code, speculative abstractions, or compatibility shims without a concrete need.
 - Avoid inline logic comments. Short file headers, API contracts, and security contracts are acceptable.
 - Keep pure Java seams separate from Minecraft runtime code when possible.
+
+## UI Conventions
+
+- All user-facing Minecraft UI text must be translatable via `assets/openplayer/lang/*.json`; avoid hard-coded `Component.literal("English UI text")` except dynamic values, ids, commands, file names, and developer/debug-only text.
+- Add new UI translation keys to `en_us.json`, `ja_jp.json`, and `fr_fr.json` for now.
 
 ## Verification
 

@@ -87,6 +87,11 @@ public final class OpenPlayerClient {
             String characterId = buffer.readUtf(64);
             String displayName = buffer.readUtf(32);
             String description = buffer.readUtf(1024);
+            String localSkinFile = buffer.readUtf(256);
+            String defaultRoleId = buffer.readUtf(64);
+            String conversationPrompt = buffer.readUtf(4096);
+            String conversationSettings = buffer.readUtf(2048);
+            boolean allowWorldActions = buffer.readBoolean();
             String skinStatus = buffer.readUtf(64);
             String lifecycleStatus = buffer.readUtf(64);
             String conversationStatus = buffer.readUtf(64);
@@ -101,6 +106,11 @@ public final class OpenPlayerClient {
                     characterId,
                     displayName,
                     description,
+                    localSkinFile,
+                    defaultRoleId,
+                    conversationPrompt,
+                    conversationSettings,
+                    allowWorldActions,
                     skinStatus,
                     lifecycleStatus,
                     conversationStatus,
@@ -112,7 +122,15 @@ public final class OpenPlayerClient {
         for (int index = 0; index < errorCount; index++) {
             errors.add(buffer.readUtf(512));
         }
-        context.queue(() -> OpenPlayerClientStatus.updateCharacters(new LocalCharacterListView(characters, errors)));
+        int importCount = buffer.isReadable() ? buffer.readVarInt() : 0;
+        List<String> importFileNames = new ArrayList<>();
+        for (int index = 0; index < importCount; index++) {
+            importFileNames.add(buffer.readUtf(80));
+        }
+        context.queue(() -> {
+            OpenPlayerClientStatus.updateCharacters(new LocalCharacterListView(characters, errors));
+            OpenPlayerClientStatus.updateImportFileNames(importFileNames);
+        });
     }
 
     private static void receiveCharacterFileOperationResponse(net.minecraft.network.FriendlyByteBuf buffer, NetworkManager.PacketContext context) {

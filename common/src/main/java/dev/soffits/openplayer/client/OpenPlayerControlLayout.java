@@ -14,6 +14,11 @@ public final class OpenPlayerControlLayout {
     private static final int MAIN_DEFAULT_DETAIL_LINES = 4;
     private static final int MAIN_DETAIL_ACTION_GAP = 5;
     private static final int MAIN_ACTION_ROW_OFFSET = 84;
+    public static final int PROFILE_ROW_TOP = PAGE_TOP + 14;
+    public static final int PROFILE_ROW_STEP = BUTTON_HEIGHT + 4;
+    public static final int PROFILE_DEFAULT_NOTE_TOP = PAGE_TOP + 254;
+    public static final int PROFILE_STATUS_TOP = PAGE_TOP + 268;
+    private static final int PROFILE_LAST_CONTROL_ROW = 9;
 
     private OpenPlayerControlLayout() {
     }
@@ -54,6 +59,14 @@ public final class OpenPlayerControlLayout {
     public static int mainControlsBottom() {
         int rowStep = BUTTON_HEIGHT + BUTTON_SPACING;
         return mainActionRowTop() + rowStep * 4 + BUTTON_HEIGHT;
+    }
+
+    public static int profileControlsBottom() {
+        return PROFILE_ROW_TOP + PROFILE_ROW_STEP * PROFILE_LAST_CONTROL_ROW + BUTTON_HEIGHT;
+    }
+
+    public static int profileStatusBottom() {
+        return PROFILE_STATUS_TOP + TEXT_LINE_HEIGHT;
     }
 
     private static int mainDetailBottom(int lineCount) {

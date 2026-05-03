@@ -34,12 +34,18 @@ public final class LocalCharacterRepository {
     );
 
     private final Path directory;
+    private final String protectedCharacterId;
 
     public LocalCharacterRepository(Path directory) {
+        this(directory, "openplayer_default");
+    }
+
+    public LocalCharacterRepository(Path directory, String protectedCharacterId) {
         if (directory == null) {
             throw new IllegalArgumentException("directory cannot be null");
         }
         this.directory = directory;
+        this.protectedCharacterId = protectedCharacterId == null ? "" : protectedCharacterId.trim();
     }
 
     public Path directory() {
@@ -147,6 +153,10 @@ public final class LocalCharacterRepository {
     }
 
     public LocalCharacterFileOperationResult importFromDirectory(Path importDirectory, String fileName) {
+        return importFromDirectory(importDirectory, fileName, false);
+    }
+
+    public LocalCharacterFileOperationResult importFromDirectory(Path importDirectory, String fileName, boolean removeSourceAfterSuccess) {
         LocalCharacterFileOperationResult fileNameValidation = validateSafeCharacterFileName(fileName);
         if (fileNameValidation != null) {
             return fileNameValidation;
@@ -163,6 +173,10 @@ public final class LocalCharacterRepository {
             if (!saved.succeeded()) {
                 return new LocalCharacterFileOperationResult(saved.status(), fileName, saved.message());
             }
+            if (removeSourceAfterSuccess) {
+                rejectSymbolicLinkTarget(source);
+                Files.delete(source);
+            }
             return new LocalCharacterFileOperationResult(LocalCharacterFileOperationStatus.IMPORTED, fileName,
                     "Imported local character " + imported.character().id());
         } catch (UnsafeCharacterPathException exception) {
@@ -170,6 +184,61 @@ public final class LocalCharacterRepository {
         } catch (IOException exception) {
             return new LocalCharacterFileOperationResult(LocalCharacterFileOperationStatus.FAILED, safeFileName(fileName),
                     "Unable to import local character");
+        }
+    }
+
+    public List<String> listImportFileNames(Path importDirectory) {
+        try {
+            ensureReadableDirectory(importDirectory);
+        } catch (IOException exception) {
+            return List.of();
+        }
+        List<String> fileNames = new ArrayList<>();
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(importDirectory, "*" + FILE_EXTENSION)) {
+            for (Path file : stream) {
+                String fileName = file.getFileName() == null ? "" : file.getFileName().toString();
+                if (Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)
+                        && !Files.isSymbolicLink(file)
+                        && validateSafeCharacterFileName(fileName) == null) {
+                    fileNames.add(fileName);
+                }
+            }
+        } catch (IOException exception) {
+            return List.of();
+        }
+        fileNames.sort(String::compareTo);
+        return List.copyOf(fileNames);
+    }
+
+    public LocalCharacterFileOperationResult delete(String characterId) {
+        String normalizedId = characterId == null ? "" : characterId.trim();
+        String fileName = normalizedId + FILE_EXTENSION;
+        if (!protectedCharacterId.isBlank() && protectedCharacterId.equals(normalizedId)) {
+            return rejected(fileName, "The default local profile cannot be deleted");
+        }
+        LocalCharacterFileOperationResult fileNameValidation = validateSafeCharacterFileName(fileName);
+        if (fileNameValidation != null) {
+            return rejected(safeFileName(fileName), "Character id is not safe for deletion");
+        }
+        try {
+            ensureReadableDirectory(directory);
+            Path target = safeChild(directory, fileName);
+            rejectSymbolicLinkTarget(target);
+            LocalCharacterFileResult loaded = loadFile(target);
+            if (loaded.character() == null || !loaded.errors().isEmpty()) {
+                return rejected(fileName, safeErrorMessage(loaded.errors(), "Local character is not valid for deletion"));
+            }
+            if (!loaded.character().id().equals(normalizedId)) {
+                return rejected(fileName, "Local character id does not match its file name");
+            }
+            Files.delete(target);
+            return new LocalCharacterFileOperationResult(LocalCharacterFileOperationStatus.DELETED, fileName,
+                    "Deleted local character " + normalizedId);
+        } catch (UnsafeCharacterPathException exception) {
+            return rejected(fileName, "Delete file path is not safe");
+        } catch (IOException exception) {
+            return new LocalCharacterFileOperationResult(LocalCharacterFileOperationStatus.FAILED, fileName,
+                    "Unable to delete local character");
         }
     }
 

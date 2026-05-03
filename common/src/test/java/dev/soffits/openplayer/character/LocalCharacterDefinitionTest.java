@@ -20,6 +20,8 @@ public final class LocalCharacterDefinitionTest {
         acceptsReadmeSample();
         convertsToNpcSpec();
         createsSafeListView();
+        mergesAssignedAndUnassignedProfilesInAssignmentListView();
+        avoidsDuplicateAssignedProfilesInAssignmentListView();
         createsSafeConversationStatusInListView();
         sanitizesExceptionPathsInListView();
         resolvesSafeLocalSkinPaths();
@@ -140,6 +142,38 @@ public final class LocalCharacterDefinitionTest {
         require("bad.properties: displayName is required".equals(view.errors().get(0)), "UI errors must not expose absolute paths: " + view.errors());
     }
 
+    private static void mergesAssignedAndUnassignedProfilesInAssignmentListView() {
+        LocalCharacterDefinition assigned = character("alex_01", "Alex");
+        LocalCharacterDefinition unassigned = character("openplayer_default", "Default Profile");
+        LocalAssignmentDefinition assignment = new LocalAssignmentDefinition("left_slot", "alex_01", "Left Alex");
+        LocalCharacterListView view = LocalCharacterListView.fromAssignmentRepositoryResult(
+                new LocalAssignmentRepositoryResult(List.of(assignment), List.of(assigned, unassigned), List.of()),
+                (candidateAssignment, ignoredCharacter) -> "lifecycle:" + candidateAssignment.id(),
+                null,
+                ignored -> "available"
+        );
+        require(view.characters().size() == 2, "assigned and unassigned profiles must both appear");
+        require("left_slot".equals(view.characters().get(0).assignmentId()), "assigned profile must preserve assignment id");
+        require("alex_01".equals(view.characters().get(0).characterId()), "assigned profile must preserve character id");
+        require("openplayer_default".equals(view.characters().get(1).assignmentId()), "unassigned profile must use profile id as stable assignment id");
+        require("openplayer_default".equals(view.characters().get(1).characterId()), "default profile must remain selectable as a profile");
+    }
+
+    private static void avoidsDuplicateAssignedProfilesInAssignmentListView() {
+        LocalCharacterDefinition character = character("alex_01", "Alex");
+        LocalCharacterListView view = LocalCharacterListView.fromAssignmentRepositoryResult(
+                new LocalAssignmentRepositoryResult(List.of(
+                        new LocalAssignmentDefinition("left_slot", "alex_01", "Left Alex"),
+                        LocalAssignmentDefinition.defaultFor(character)
+                ), List.of(character), List.of()),
+                (ignoredAssignment, ignoredCharacter) -> "despawned",
+                null,
+                ignored -> "available"
+        );
+        require(view.characters().size() == 1, "assigned profiles must not duplicate default profile rows");
+        require("left_slot".equals(view.characters().get(0).assignmentId()), "first assignment row must be preserved");
+    }
+
     private static void sanitizesExceptionPathsInListView() {
         LocalCharacterRepositoryResult result = new LocalCharacterRepositoryResult(
                 List.of(),
@@ -250,6 +284,19 @@ public final class LocalCharacterDefinitionTest {
         } catch (IOException exception) {
             throw new AssertionError("unable to create temp directory", exception);
         }
+    }
+
+    private static LocalCharacterDefinition character(String id, String displayName) {
+        return new LocalCharacterDefinition(
+                id,
+                displayName,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
     }
 
     private static void require(boolean condition, String message) {

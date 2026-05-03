@@ -14,6 +14,7 @@ public final class OpenPlayerClientStatus {
     private static String characterListStatus = "loading";
     private static String characterFileOperationStatus = "none";
     private static LocalCharacterListView characterList = new LocalCharacterListView(List.of(), List.of());
+    private static List<String> importFileNames = List.of();
 
     private OpenPlayerClientStatus() {
     }
@@ -72,6 +73,10 @@ public final class OpenPlayerClientStatus {
         }
     }
 
+    public static void updateImportFileNames(List<String> values) {
+        importFileNames = values == null ? List.of() : List.copyOf(values);
+    }
+
     public static void updateCharacterFileOperationStatus(String value) {
         characterFileOperationStatus = value == null || value.isBlank() ? "none" : value;
     }
@@ -90,5 +95,9 @@ public final class OpenPlayerClientStatus {
 
     public static String characterFileOperationStatus() {
         return characterFileOperationStatus;
+    }
+
+    public static List<String> importFileNames() {
+        return importFileNames;
     }
 }

@@ -4,7 +4,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 public record LocalCharacterListEntry(String id, String assignmentId, String characterId, String displayName,
-                                       String description, String skinStatus, String lifecycleStatus,
+                                       String description, String localSkinFile, String defaultRoleId,
+                                       String conversationPrompt, String conversationSettings,
+                                       boolean allowWorldActions, String skinStatus, String lifecycleStatus,
                                        String conversationStatus, List<String> conversationEvents) {
     public LocalCharacterListEntry {
         id = requireText(id, "id");
@@ -12,6 +14,10 @@ public record LocalCharacterListEntry(String id, String assignmentId, String cha
         characterId = requireText(characterId, "characterId");
         displayName = requireText(displayName, "displayName");
         description = normalize(description);
+        localSkinFile = normalize(localSkinFile);
+        defaultRoleId = normalize(defaultRoleId);
+        conversationPrompt = normalize(conversationPrompt);
+        conversationSettings = normalize(conversationSettings);
         skinStatus = requireText(skinStatus, "skinStatus");
         lifecycleStatus = requireText(lifecycleStatus, "lifecycleStatus");
         conversationStatus = requireText(conversationStatus, "conversationStatus");
@@ -19,15 +25,16 @@ public record LocalCharacterListEntry(String id, String assignmentId, String cha
     }
 
     public LocalCharacterListEntry(String id, String assignmentId, String characterId, String displayName,
-                                   String description, String skinStatus, String lifecycleStatus,
-                                   String conversationStatus) {
-        this(id, assignmentId, characterId, displayName, description, skinStatus, lifecycleStatus,
+                                    String description, String skinStatus, String lifecycleStatus,
+                                    String conversationStatus) {
+        this(id, assignmentId, characterId, displayName, description, "", "", "", "", false, skinStatus, lifecycleStatus,
                 conversationStatus, List.of());
     }
 
     public LocalCharacterListEntry(String id, String displayName, String description, String skinStatus,
-                                    String lifecycleStatus, String conversationStatus) {
-        this(id, id, id, displayName, description, skinStatus, lifecycleStatus, conversationStatus, List.of());
+                                     String lifecycleStatus, String conversationStatus) {
+        this(id, id, id, displayName, description, "", "", "", "", false, skinStatus, lifecycleStatus,
+                conversationStatus, List.of());
     }
 
     public static LocalCharacterListEntry from(LocalCharacterDefinition character, String lifecycleStatus) {
@@ -58,6 +65,11 @@ public record LocalCharacterListEntry(String id, String assignmentId, String cha
                 character.id(),
                 character.displayName(),
                 character.description(),
+                character.localSkinFile(),
+                character.defaultRoleId(),
+                character.conversationPrompt(),
+                character.conversationSettings(),
+                character.allowWorldActions(),
                 skinStatus,
                 lifecycleStatus,
                 conversationStatus,
@@ -105,6 +117,11 @@ public record LocalCharacterListEntry(String id, String assignmentId, String cha
                 assignment.characterId(),
                 assignment.resolvedDisplayName(character),
                 character.description(),
+                character.localSkinFile(),
+                character.defaultRoleId(),
+                character.conversationPrompt(),
+                character.conversationSettings(),
+                character.allowWorldActions(),
                 skinStatus,
                 lifecycleStatus,
                 conversationStatus,

@@ -18,6 +18,9 @@ public final class LocalCharacterRepositoryWriteTest {
         createsAndUpdatesCharacterFiles();
         importsOnlyFromImportsDirectoryBySafeFileName();
         exportsOnlyLoadedLocalCharacters();
+        listsOnlySafeImportFiles();
+        deletesImportSourceOnlyAfterSuccessfulImport();
+        protectsDefaultProfileFromDeletion();
         rejectsUnsafeFileNamesForImportAndExport();
         rejectsUnknownImportedFields();
         rejectsNonBooleanAllowWorldActions();
@@ -124,6 +127,49 @@ public final class LocalCharacterRepositoryWriteTest {
         Properties properties = loadProperties(root.resolve("exports").resolve("alex_01.properties"));
         require("alex_01".equals(properties.getProperty("id")), "export must write selected local character id");
         require("Alex".equals(properties.getProperty("displayName")), "export must write selected local character fields");
+    }
+
+    private static void listsOnlySafeImportFiles() {
+        Path root = createTempDirectory();
+        write(root.resolve("imports").resolve("bob_01.properties"), "id=bob_01\ndisplayName=Bob\n");
+        write(root.resolve("imports").resolve("Bad_01.properties"), "id=bad_01\ndisplayName=Bad\n");
+        write(root.resolve("imports").resolve("bad.txt"), "id=bad\ndisplayName=Bad\n");
+        write(root.resolve("imports").resolve(".hidden.properties"), "id=hidden\ndisplayName=Hidden\n");
+
+        java.util.List<String> imports = new LocalCharacterRepository(root.resolve("characters"))
+                .listImportFileNames(root.resolve("imports"));
+
+        require(imports.equals(java.util.List.of("bob_01.properties")), "import listing must include only safe import file names: " + imports);
+    }
+
+    private static void deletesImportSourceOnlyAfterSuccessfulImport() {
+        Path root = createTempDirectory();
+        Path importFile = root.resolve("imports").resolve("bob_01.properties");
+        write(importFile, "id=bob_01\ndisplayName=Bob\n");
+        LocalCharacterRepository repository = new LocalCharacterRepository(root.resolve("characters"));
+
+        LocalCharacterFileOperationResult result = repository.importFromDirectory(root.resolve("imports"), "bob_01.properties", true);
+
+        require(result.status() == LocalCharacterFileOperationStatus.IMPORTED, "successful import should import: " + result);
+        require(!Files.exists(importFile), "successful remove-after-import must delete the exact import source file");
+        require(Files.exists(root.resolve("characters").resolve("bob_01.properties")), "successful import must save character file");
+
+        Path invalidImportFile = root.resolve("imports").resolve("bad_01.properties");
+        write(invalidImportFile, "id=bad_01\ndisplayName=Bad\nextra=value\n");
+        LocalCharacterFileOperationResult rejected = repository.importFromDirectory(root.resolve("imports"), "bad_01.properties", true);
+        require(rejected.status() == LocalCharacterFileOperationStatus.REJECTED, "invalid import should reject: " + rejected);
+        require(Files.exists(invalidImportFile), "failed import must not delete source file");
+    }
+
+    private static void protectsDefaultProfileFromDeletion() {
+        Path root = createTempDirectory();
+        LocalCharacterRepository repository = new LocalCharacterRepository(root.resolve("characters"));
+        require(repository.save(character("openplayer_default", "Default")).succeeded(), "default profile setup must save");
+
+        LocalCharacterFileOperationResult result = repository.delete("openplayer_default");
+
+        require(result.status() == LocalCharacterFileOperationStatus.REJECTED, "default profile delete must reject");
+        require(Files.exists(root.resolve("characters").resolve("openplayer_default.properties")), "default profile file must remain after delete rejection");
     }
 
     private static void rejectsUnsafeFileNamesForImportAndExport() {

@@ -3,6 +3,7 @@ package dev.soffits.openplayer.client;
 import dev.architectury.networking.NetworkManager;
 import dev.soffits.openplayer.OpenPlayerConstants;
 import dev.soffits.openplayer.OpenPlayerIntentParserConfig;
+import dev.soffits.openplayer.character.LocalCharacterDefinition;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
 
@@ -79,6 +80,26 @@ public final class OpenPlayerRequestSender {
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
         buffer.writeUtf(fileName, 80);
         NetworkManager.sendToServer(OpenPlayerConstants.CHARACTER_IMPORT_REQUEST_PACKET_ID, buffer);
+    }
+
+    public static void sendCharacterSaveRequest(LocalCharacterDefinition character) {
+        if (character == null) {
+            throw new IllegalArgumentException("character cannot be null");
+        }
+        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+        buffer.writeUtf(character.id(), 64);
+        buffer.writeUtf(character.displayName(), 32);
+        buffer.writeUtf(character.description() == null ? "" : character.description(), 1024);
+        buffer.writeUtf(character.localSkinFile() == null ? "" : character.localSkinFile(), 256);
+        buffer.writeUtf(character.defaultRoleId() == null ? "" : character.defaultRoleId(), 64);
+        buffer.writeUtf(character.conversationPrompt() == null ? "" : character.conversationPrompt(), 4096);
+        buffer.writeUtf(character.conversationSettings() == null ? "" : character.conversationSettings(), 2048);
+        buffer.writeBoolean(character.allowWorldActions());
+        NetworkManager.sendToServer(OpenPlayerConstants.CHARACTER_SAVE_REQUEST_PACKET_ID, buffer);
+    }
+
+    public static void sendCharacterDeleteRequest(String characterId) {
+        NetworkManager.sendToServer(OpenPlayerConstants.CHARACTER_DELETE_REQUEST_PACKET_ID, characterPayload(characterId));
     }
 
     public static void sendProviderConfigSaveRequest(String endpoint, String model, String apiKey, boolean clearApiKey) {

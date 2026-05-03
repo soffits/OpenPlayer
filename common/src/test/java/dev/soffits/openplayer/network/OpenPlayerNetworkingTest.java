@@ -28,6 +28,9 @@ public final class OpenPlayerNetworkingTest {
         acceptsSingleplayerOwnerProviderConfigSave();
         acceptsPermittedProviderConfigSave();
         rejectsUnauthorizedProviderConfigSave();
+        acceptsSingleplayerOwnerLocalProfileManagement();
+        acceptsPermittedLocalProfileManagement();
+        rejectsUnauthorizedLocalProfileManagement();
     }
 
     private static void matchesLegacyDefaultNetworkNpc() {
@@ -64,6 +67,18 @@ public final class OpenPlayerNetworkingTest {
 
     private static void rejectsUnauthorizedProviderConfigSave() {
         require(!OpenPlayerNetworking.maySaveProviderConfig(false, false), "unauthorized player must not save provider config");
+    }
+
+    private static void acceptsSingleplayerOwnerLocalProfileManagement() {
+        require(OpenPlayerNetworking.mayManageLocalProfiles(true, false), "singleplayer owner must be allowed to manage local profiles");
+    }
+
+    private static void acceptsPermittedLocalProfileManagement() {
+        require(OpenPlayerNetworking.mayManageLocalProfiles(false, true), "permitted player must be allowed to manage local profiles");
+    }
+
+    private static void rejectsUnauthorizedLocalProfileManagement() {
+        require(!OpenPlayerNetworking.mayManageLocalProfiles(false, false), "unauthorized player must not manage local profiles");
     }
 
     private static AiPlayerNpcSession session(UUID ownerId, String roleId, String profileName) {

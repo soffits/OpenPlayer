@@ -2,7 +2,9 @@ package dev.soffits.openplayer.character;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 public record LocalCharacterListView(List<LocalCharacterListEntry> characters, List<String> errors) {
     public LocalCharacterListView {
@@ -55,9 +57,23 @@ public record LocalCharacterListView(List<LocalCharacterListEntry> characters, L
             throw new IllegalArgumentException("conversationEventResolver cannot be null");
         }
         List<LocalCharacterListEntry> entries = new ArrayList<>();
+        Set<String> listedCharacterIds = new LinkedHashSet<>();
         for (LocalAssignmentDefinition assignment : result.assignments()) {
             LocalCharacterDefinition character = findCharacter(result.characters(), assignment.characterId());
-            if (character != null) {
+            if (character != null && listedCharacterIds.add(character.id())) {
+                entries.add(LocalCharacterListEntry.from(
+                        assignment,
+                        character,
+                        lifecycleResolver.lifecycleStatus(assignment, character),
+                        localSkinPathResolver,
+                        conversationStatusResolver,
+                        conversationEventResolver
+                ));
+            }
+        }
+        for (LocalCharacterDefinition character : result.characters()) {
+            if (listedCharacterIds.add(character.id())) {
+                LocalAssignmentDefinition assignment = LocalAssignmentDefinition.defaultFor(character);
                 entries.add(LocalCharacterListEntry.from(
                         assignment,
                         character,

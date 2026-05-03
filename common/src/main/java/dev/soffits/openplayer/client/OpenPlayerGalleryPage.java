@@ -54,11 +54,11 @@ public final class OpenPlayerGalleryPage {
         return pageIndex + 1 < pageCount();
     }
 
-    public String label() {
+    public int displayPageIndex() {
         if (totalItems == 0) {
-            return "Page 0/0";
+            return 0;
         }
-        return "Page " + (pageIndex + 1) + "/" + pageCount();
+        return pageIndex + 1;
     }
 
     private static int pageCount(int totalItems, int pageSize) {

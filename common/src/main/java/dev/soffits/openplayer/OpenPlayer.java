@@ -15,6 +15,7 @@ public final class OpenPlayer {
     public static void initialize() {
         OpenPlayerApi.registerUnavailableNpcService();
         OpenPlayerRuntime.initialize();
+        OpenPlayerCommands.register();
         OpenPlayerNetworking.registerServerReceivers();
         initialized = true;
     }
