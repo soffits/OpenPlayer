@@ -80,11 +80,11 @@ Press the OpenPlayer controls key, `O` by default, to open the compact control s
 
 The left panel is a paged local assignment gallery with loading, empty, validation-error, selected-row, active/spawned, and despawned states. More than six assignments are navigable with Prev/Next buttons, and selection is preserved by stable assignment id across list refreshes. Validation errors show only safe file names and messages, not absolute filesystem paths or stack traces.
 
-Selecting a row shows its display name, assignment id, character id, description, skin status, lifecycle status, conversation status, and action hints. Lifecycle status is resolved by the server-side companion manager from the active runtime session and reports `despawned` when no matching owner plus stable assignment id session exists. Spawn, despawn, follow, stop, and command text then target that selected assignment, and button labels reflect whether the selected assignment or default NPC path is targeted. With no character selected, the Spawn button keeps the original default OpenPlayer NPC spawn behavior.
+Selecting a row shows its display name, assignment id, character id, description, skin status, lifecycle status, conversation status, recent spoken status lines, and action hints. Lifecycle status is resolved by the server-side companion manager from the active runtime session and reports `despawned` when no matching owner plus stable assignment id session exists. Spawn, despawn, follow, stop, and command text then target that selected assignment, and button labels reflect whether the selected assignment or default NPC path is targeted. With no character selected, the Spawn button keeps the original default OpenPlayer NPC spawn behavior.
 
 Despawning a runtime NPC stops its active runtime commands before the entity is discarded. Owner disconnect and server stop continue to use the runtime cleanup hooks so companion tasks are stopped without persisting transient session ids as long-term identity.
 
-The bottom status lines remain safe and presence-only for automation backend, parser state, endpoint, model, API key status, and local character file operation results. Character list entries report conversation as `not configured`, `unavailable: parser disabled`, or `available`; they never include provider credentials, absolute paths, or raw provider responses.
+The bottom status lines remain safe and presence-only for automation backend, parser state, endpoint, model, API key status, and local character file operation results. Character list entries report conversation as `not configured`, `unavailable: parser disabled`, or `available`; spoken status lines are server-authored bounded strings such as deterministic greetings, sanitized player messages, accepted intent summaries, or safe failures. They never include provider credentials, absolute paths, or raw provider responses.
 
 ## Dependencies
 
@@ -103,7 +103,7 @@ For a selected local character, command text uses the per-character conversation
 
 The conversation loop assembles a bounded prompt from the selected character's display text, `conversationPrompt`, `conversationSettings`, recent in-memory history, and the player's message. Those character fields are non-secret text only. Provider endpoint, model, and API key remain environment variables or JVM properties only and are never read from character files.
 
-Provider output is untrusted. It must pass through the existing `IntentParser`, become a constrained `CommandIntent`, and then submit through the selected-character `CompanionLifecycleManager` path. Invalid, unavailable, oversized, or unparsable output is rejected without submitting an NPC action. Conversation history is in-memory only, bounded, and stores player messages plus accepted intent summaries rather than raw provider responses.
+Provider output is untrusted. It must pass through the existing `IntentParser`, become a constrained `CommandIntent`, and then submit through the selected-character `CompanionLifecycleManager` path. Invalid, unavailable, oversized, or unparsable output is rejected without submitting an NPC action. Conversation history and spoken status are in-memory only and bounded; the UI shows sanitized player messages, deterministic greetings, accepted intent summaries, and safe failure/status messages rather than raw provider responses.
 
 Set safe JVM system properties or environment variables with these exact names to enable the OpenAI-compatible provider:
 
@@ -112,7 +112,7 @@ Set safe JVM system properties or environment variables with these exact names t
 - `OPENPLAYER_INTENT_PROVIDER_API_KEY=...`
 - `OPENPLAYER_INTENT_PROVIDER_MODEL=...`
 
-Remaining conversation gaps: there is no chat bubble or separate NPC spoken-response UI, no persisted conversation memory, no per-character model or provider override, no per-character API key support, no rate-limit scheduler beyond provider failure rejection, and unsupported intent kinds still rely on the automation backend to reject safely.
+Remaining conversation gaps: there is no TTS, speech recognition, audio dependency, chat bubble, raw model response display, persisted conversation memory, per-character model or provider override, per-character API key support, rate-limit scheduler beyond provider failure rejection, or broader action permission profile beyond the automation backend safety gates.
 
 ## Automation Backend
 

@@ -76,15 +76,29 @@ public final class OpenPlayerClient {
         int characterCount = buffer.readVarInt();
         List<LocalCharacterListEntry> characters = new ArrayList<>();
         for (int index = 0; index < characterCount; index++) {
+            String id = buffer.readUtf(64);
+            String assignmentId = buffer.readUtf(64);
+            String characterId = buffer.readUtf(64);
+            String displayName = buffer.readUtf(32);
+            String description = buffer.readUtf(1024);
+            String skinStatus = buffer.readUtf(64);
+            String lifecycleStatus = buffer.readUtf(64);
+            String conversationStatus = buffer.readUtf(64);
+            int eventCount = buffer.readVarInt();
+            List<String> conversationEvents = new ArrayList<>();
+            for (int eventIndex = 0; eventIndex < eventCount; eventIndex++) {
+                conversationEvents.add(buffer.readUtf(128));
+            }
             characters.add(new LocalCharacterListEntry(
-                    buffer.readUtf(64),
-                    buffer.readUtf(64),
-                    buffer.readUtf(64),
-                    buffer.readUtf(32),
-                    buffer.readUtf(1024),
-                    buffer.readUtf(64),
-                    buffer.readUtf(64),
-                    buffer.readUtf(64)
+                    id,
+                    assignmentId,
+                    characterId,
+                    displayName,
+                    description,
+                    skinStatus,
+                    lifecycleStatus,
+                    conversationStatus,
+                    conversationEvents
             ));
         }
         int errorCount = buffer.readVarInt();

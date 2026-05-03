@@ -1,8 +1,11 @@
 package dev.soffits.openplayer.character;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public record LocalCharacterListEntry(String id, String assignmentId, String characterId, String displayName,
-                                      String description, String skinStatus, String lifecycleStatus,
-                                      String conversationStatus) {
+                                       String description, String skinStatus, String lifecycleStatus,
+                                       String conversationStatus, List<String> conversationEvents) {
     public LocalCharacterListEntry {
         id = requireText(id, "id");
         assignmentId = requireText(assignmentId, "assignmentId");
@@ -12,11 +15,19 @@ public record LocalCharacterListEntry(String id, String assignmentId, String cha
         skinStatus = requireText(skinStatus, "skinStatus");
         lifecycleStatus = requireText(lifecycleStatus, "lifecycleStatus");
         conversationStatus = requireText(conversationStatus, "conversationStatus");
+        conversationEvents = safeEvents(conversationEvents);
+    }
+
+    public LocalCharacterListEntry(String id, String assignmentId, String characterId, String displayName,
+                                   String description, String skinStatus, String lifecycleStatus,
+                                   String conversationStatus) {
+        this(id, assignmentId, characterId, displayName, description, skinStatus, lifecycleStatus,
+                conversationStatus, List.of());
     }
 
     public LocalCharacterListEntry(String id, String displayName, String description, String skinStatus,
-                                   String lifecycleStatus, String conversationStatus) {
-        this(id, id, id, displayName, description, skinStatus, lifecycleStatus, conversationStatus);
+                                    String lifecycleStatus, String conversationStatus) {
+        this(id, id, id, displayName, description, skinStatus, lifecycleStatus, conversationStatus, List.of());
     }
 
     public static LocalCharacterListEntry from(LocalCharacterDefinition character, String lifecycleStatus) {
@@ -49,7 +60,8 @@ public record LocalCharacterListEntry(String id, String assignmentId, String cha
                 character.description(),
                 skinStatus,
                 lifecycleStatus,
-                conversationStatus
+                conversationStatus,
+                List.of()
         );
     }
 
@@ -58,6 +70,16 @@ public record LocalCharacterListEntry(String id, String assignmentId, String cha
                                                String lifecycleStatus,
                                                LocalSkinPathResolver localSkinPathResolver,
                                                ConversationStatusResolver conversationStatusResolver) {
+        return from(assignment, character, lifecycleStatus, localSkinPathResolver, conversationStatusResolver,
+                (ignoredAssignment, ignoredCharacter) -> List.of());
+    }
+
+    public static LocalCharacterListEntry from(LocalAssignmentDefinition assignment,
+                                               LocalCharacterDefinition character,
+                                               String lifecycleStatus,
+                                               LocalSkinPathResolver localSkinPathResolver,
+                                               ConversationStatusResolver conversationStatusResolver,
+                                               ConversationEventResolver conversationEventResolver) {
         if (assignment == null) {
             throw new IllegalArgumentException("assignment cannot be null");
         }
@@ -67,10 +89,16 @@ public record LocalCharacterListEntry(String id, String assignmentId, String cha
         if (conversationStatusResolver == null) {
             throw new IllegalArgumentException("conversationStatusResolver cannot be null");
         }
+        if (conversationEventResolver == null) {
+            throw new IllegalArgumentException("conversationEventResolver cannot be null");
+        }
         String skinStatus = skinStatus(character, localSkinPathResolver);
         String conversationStatus = character.conversationPrompt() == null && character.conversationSettings() == null
                 ? "not configured"
                 : conversationStatusResolver.conversationStatus(character);
+        List<String> conversationEvents = character.conversationPrompt() == null && character.conversationSettings() == null
+                ? List.of()
+                : conversationEventResolver.conversationEvents(assignment, character);
         return new LocalCharacterListEntry(
                 character.id(),
                 assignment.id(),
@@ -79,7 +107,8 @@ public record LocalCharacterListEntry(String id, String assignmentId, String cha
                 character.description(),
                 skinStatus,
                 lifecycleStatus,
-                conversationStatus
+                conversationStatus,
+                conversationEvents
         );
     }
 
@@ -109,8 +138,27 @@ public record LocalCharacterListEntry(String id, String assignmentId, String cha
         return value == null ? "" : value.trim();
     }
 
+    private static List<String> safeEvents(List<String> values) {
+        if (values == null) {
+            return List.of();
+        }
+        List<String> safeValues = new ArrayList<>();
+        for (String value : values) {
+            String normalized = normalize(value);
+            if (!normalized.isEmpty()) {
+                safeValues.add(normalized);
+            }
+        }
+        return List.copyOf(safeValues);
+    }
+
     @FunctionalInterface
     public interface ConversationStatusResolver {
         String conversationStatus(LocalCharacterDefinition character);
+    }
+
+    @FunctionalInterface
+    public interface ConversationEventResolver {
+        List<String> conversationEvents(LocalAssignmentDefinition assignment, LocalCharacterDefinition character);
     }
 }
