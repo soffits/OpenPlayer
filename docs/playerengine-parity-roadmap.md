@@ -133,6 +133,8 @@ OpenPlayer already has:
 
 ### Phase 5: Inventory, Equipment, and Item Transfer
 
+**Status:** MVP implemented for inventory query, exact-id equip, selected/exact-id drop, and owner-only give. Item/count give and drop are one-stack MVP operations capped to the item's vanilla max stack. Containers, stash memory, crafting, resource planning, arbitrary nearby-player transfer, and fuzzy item names remain out of scope.
+
 **Objective:** Implement player-like inventory interaction parity before larger crafting/resource tasks.
 
 **Capabilities:**

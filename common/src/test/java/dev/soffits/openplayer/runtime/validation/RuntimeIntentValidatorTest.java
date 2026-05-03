@@ -5,15 +5,20 @@ import dev.soffits.openplayer.intent.IntentKind;
 import dev.soffits.openplayer.intent.IntentPriority;
 import java.util.EnumSet;
 import java.util.Set;
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
 
 public final class RuntimeIntentValidatorTest {
     private RuntimeIntentValidatorTest() {
     }
 
     public static void main(String[] args) {
+        SharedConstants.tryDetectVersion();
+        Bootstrap.bootStrap();
         rejectsNullIntent();
         validatesWorldActionGate();
         validatesBlankOnlyInstructions();
+        validatesPhaseFiveInventoryInstructions();
         validatesCoordinateInstructions();
         validatesRadiusInstructions();
         rejectsNonAutomationConversationKinds();
@@ -52,7 +57,7 @@ public final class RuntimeIntentValidatorTest {
                 IntentKind.EQUIP_ARMOR,
                 IntentKind.USE_SELECTED_ITEM,
                 IntentKind.SWAP_TO_OFFHAND,
-                IntentKind.DROP_ITEM
+                IntentKind.INVENTORY_QUERY
         };
         for (IntentKind kind : blankOnlyKinds) {
             require(RuntimeIntentValidator.validate(intent(kind, ""), true).isAccepted(),
@@ -62,6 +67,36 @@ public final class RuntimeIntentValidatorTest {
             requireRejected(RuntimeIntentValidator.validate(intent(kind, "extra"), true),
                     kind.name() + " requires a blank instruction");
         }
+    }
+
+    private static void validatesPhaseFiveInventoryInstructions() {
+        require(RuntimeIntentValidator.validate(intent(IntentKind.INVENTORY_QUERY, ""), true).isAccepted(),
+                "INVENTORY_QUERY should accept blank instruction");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.INVENTORY_QUERY, "minecraft:bread"), true),
+                "INVENTORY_QUERY requires a blank instruction");
+
+        require(RuntimeIntentValidator.validate(intent(IntentKind.EQUIP_ITEM, "minecraft:iron_sword"), true).isAccepted(),
+                "EQUIP_ITEM should accept exact item id");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.EQUIP_ITEM, "iron sword"), true),
+                "EQUIP_ITEM requires instruction: <item_id>");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.EQUIP_ITEM, "minecraft:air"), true),
+                "EQUIP_ITEM requires instruction: <item_id>");
+
+        require(RuntimeIntentValidator.validate(intent(IntentKind.GIVE_ITEM, "minecraft:bread"), true).isAccepted(),
+                "GIVE_ITEM should accept default owner syntax");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.GIVE_ITEM, "minecraft:bread 3 owner"), true).isAccepted(),
+                "GIVE_ITEM should accept count and owner syntax");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.GIVE_ITEM, "minecraft:bread 0"), true),
+                "GIVE_ITEM requires instruction: <item_id> [count] [owner]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.GIVE_ITEM, "minecraft:bread 1 Steve"), true),
+                "GIVE_ITEM requires instruction: <item_id> [count] [owner]");
+
+        require(RuntimeIntentValidator.validate(intent(IntentKind.DROP_ITEM, ""), true).isAccepted(),
+                "DROP_ITEM should preserve blank selected-hotbar syntax");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.DROP_ITEM, "minecraft:cobblestone 16"), true).isAccepted(),
+                "DROP_ITEM should accept exact item count syntax");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.DROP_ITEM, "minecraft:cobblestone 0"), true),
+                "DROP_ITEM requires blank or instruction: <item_id> [count]");
     }
 
     private static void validatesCoordinateInstructions() {
@@ -152,10 +187,10 @@ public final class RuntimeIntentValidatorTest {
             case ATTACK_NEAREST, GUARD_OWNER -> "12";
             case INTERACT, CHAT, UNAVAILABLE -> "details";
             case GOTO -> "home";
-            case INVENTORY_QUERY,
-                    EQUIP_ITEM,
-                    GIVE_ITEM,
-                    DEPOSIT_ITEM,
+            case INVENTORY_QUERY -> "";
+            case EQUIP_ITEM -> "minecraft:iron_sword";
+            case GIVE_ITEM -> "minecraft:bread 1 owner";
+            case DEPOSIT_ITEM,
                     STASH_ITEM,
                     GET_ITEM,
                     COLLECT_FOOD,
@@ -190,8 +225,6 @@ public final class RuntimeIntentValidatorTest {
 
     private static EnumSet<IntentKind> plannedGatedKinds() {
         return EnumSet.of(
-                IntentKind.EQUIP_ITEM,
-                IntentKind.GIVE_ITEM,
                 IntentKind.DEPOSIT_ITEM,
                 IntentKind.STASH_ITEM,
                 IntentKind.GET_ITEM,
@@ -207,7 +240,6 @@ public final class RuntimeIntentValidatorTest {
     private static EnumSet<IntentKind> plannedNonGatedKinds() {
         return EnumSet.of(
                 IntentKind.GOTO,
-                IntentKind.INVENTORY_QUERY,
                 IntentKind.PAUSE,
                 IntentKind.UNPAUSE,
                 IntentKind.RESET_MEMORY,

@@ -17,6 +17,7 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -28,6 +29,7 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.UseAnim;
 import net.minecraft.world.level.Level;
@@ -245,15 +247,95 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
     }
 
     public boolean dropSelectedHotbarStack() {
-        ItemStack selectedStack = getMainHandItem();
-        if (selectedStack.isEmpty()) {
+        ItemStack droppedStack = NpcInventoryTransfer.selectedHotbarDropStackOrEmpty(internalInventory, selectedMainHandSlot);
+        if (droppedStack.isEmpty()) {
             return false;
         }
-        ItemStack droppedStack = selectedStack.copy();
-        internalInventory.set(selectedMainHandSlot, ItemStack.EMPTY);
         ItemEntity itemEntity = spawnAtLocation(droppedStack, 0.0F);
-        if (itemEntity != null) {
-            itemEntity.setPickUpDelay(40);
+        if (itemEntity == null) {
+            return false;
+        }
+        if (!NpcInventoryTransfer.commitSelectedHotbarDrop(internalInventory, selectedMainHandSlot, true)) {
+            return false;
+        }
+        itemEntity.setPickUpDelay(40);
+        return true;
+    }
+
+    public String inventorySummary() {
+        return NpcInventorySummary.format(internalInventory, selectedMainHandSlot);
+    }
+
+    public boolean equipMatchingItem(Item item) {
+        if (item == null) {
+            return false;
+        }
+        if (item instanceof ArmorItem) {
+            return NpcInventoryTransfer.equipArmorByItem(internalInventory, item);
+        }
+        int slot = NpcInventoryTransfer.firstHotbarSlotMatchingItem(internalInventory, item);
+        return slot >= 0 && selectHotbarSlot(slot);
+    }
+
+    public boolean dropInventoryItem(Item item, int count) {
+        if (item == null || count < 1) {
+            return false;
+        }
+        List<ItemStack> snapshot = NpcInventoryTransfer.copyStacks(internalInventory);
+        ItemStack droppedStack = NpcInventoryTransfer.removeExactCount(
+                internalInventory,
+                item,
+                count,
+                NpcInventoryTransfer.FIRST_NORMAL_SLOT,
+                NpcInventoryTransfer.FIRST_EQUIPMENT_SLOT
+        );
+        if (droppedStack.isEmpty()) {
+            restoreInternalInventory(snapshot);
+            return false;
+        }
+        ItemEntity itemEntity = spawnAtLocation(droppedStack, 0.0F);
+        if (itemEntity == null) {
+            restoreInternalInventory(snapshot);
+            return false;
+        }
+        itemEntity.setPickUpDelay(40);
+        return true;
+    }
+
+    public boolean giveInventoryItemToPlayer(ServerPlayer player, Item item, int count) {
+        if (player == null || item == null || count < 1) {
+            return false;
+        }
+        ItemStack transferStack = new ItemStack(item, count);
+        List<ItemStack> playerInventorySnapshot = NpcInventoryTransfer.copyStacks(player.getInventory().items);
+        if (!NpcInventoryTransfer.canInsertAll(
+                playerInventorySnapshot,
+                transferStack,
+                0,
+                playerInventorySnapshot.size()
+        )) {
+            return false;
+        }
+
+        List<ItemStack> npcSnapshot = NpcInventoryTransfer.copyStacks(internalInventory);
+        List<ItemStack> livePlayerSnapshot = NpcInventoryTransfer.copyStacks(player.getInventory().items);
+        ItemStack extractedStack = NpcInventoryTransfer.removeExactCount(
+                internalInventory,
+                item,
+                count,
+                NpcInventoryTransfer.FIRST_NORMAL_SLOT,
+                NpcInventoryTransfer.FIRST_EQUIPMENT_SLOT
+        );
+        if (extractedStack.isEmpty()) {
+            restoreInternalInventory(npcSnapshot);
+            return false;
+        }
+        ItemStack remainingStack = extractedStack.copy();
+        boolean accepted = player.getInventory().add(remainingStack) && remainingStack.isEmpty();
+        if (!accepted) {
+            restoreInternalInventory(npcSnapshot);
+            restorePlayerMainInventory(player, livePlayerSnapshot);
+            return false;
         }
         return true;
     }
@@ -445,6 +527,18 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
             items.add(internalInventory.get(slot));
         }
         return items;
+    }
+
+    private void restoreInternalInventory(List<ItemStack> snapshot) {
+        for (int slot = 0; slot < internalInventory.size() && slot < snapshot.size(); slot++) {
+            internalInventory.set(slot, snapshot.get(slot).copy());
+        }
+    }
+
+    private static void restorePlayerMainInventory(ServerPlayer player, List<ItemStack> snapshot) {
+        for (int slot = 0; slot < player.getInventory().items.size() && slot < snapshot.size(); slot++) {
+            player.getInventory().items.set(slot, snapshot.get(slot).copy());
+        }
     }
 
     private boolean equipBestAvailableArmor(EquipmentSlot equipmentSlot) {

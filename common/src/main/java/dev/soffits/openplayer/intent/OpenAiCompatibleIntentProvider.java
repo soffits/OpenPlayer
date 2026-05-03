@@ -118,7 +118,8 @@ public final class OpenAiCompatibleIntentProvider implements IntentProvider {
             + "priority must be one of LOW, NORMAL, HIGH. Keep instruction short and actionable. "
             + "For CHAT, instruction must be the selected character's concise conversational reply, not a restatement of the player text. For UNAVAILABLE, instruction may be blank or a short safe reason. "
             + "Return JSON only, with no secrets, credentials, markdown, or explanatory text. "
-            + "Use x y z for MOVE, LOOK, PATROL, BREAK_BLOCK, and PLACE_BLOCK; blank instruction for COLLECT_ITEMS, DROP_ITEM, EQUIP_BEST_ITEM, EQUIP_ARMOR, USE_SELECTED_ITEM, SWAP_TO_OFFHAND, and REPORT_STATUS; blank or radius number for ATTACK_NEAREST and GUARD_OWNER. "
+            + "Use x y z for MOVE, LOOK, PATROL, BREAK_BLOCK, and PLACE_BLOCK; blank instruction for COLLECT_ITEMS, EQUIP_BEST_ITEM, EQUIP_ARMOR, USE_SELECTED_ITEM, SWAP_TO_OFFHAND, REPORT_STATUS, and INVENTORY_QUERY; blank or radius number for ATTACK_NEAREST and GUARD_OWNER. "
+            + "For EQUIP_ITEM use exact item id <item_id>; for DROP_ITEM use blank to drop selected hotbar stack or exact one-stack MVP item id syntax <item_id> [count]; for GIVE_ITEM use exact owner-only one-stack MVP syntax <item_id> [count] or <item_id> [count] owner. "
             + "Planned PlayerEngine-style intents may be recognized but are unsupported until implemented; use UNAVAILABLE when the vanilla runtime cannot perform the requested action. "
             + "Only select world, inventory, or combat actions when the user prompt says the selected character allows world actions.";
     }

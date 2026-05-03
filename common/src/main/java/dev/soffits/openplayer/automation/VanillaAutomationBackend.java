@@ -2,6 +2,7 @@ package dev.soffits.openplayer.automation;
 
 import dev.soffits.openplayer.api.NpcOwnerId;
 import dev.soffits.openplayer.automation.AutomationInstructionParser.Coordinate;
+import dev.soffits.openplayer.automation.InventoryActionInstructionParser.ParsedItemInstruction;
 import dev.soffits.openplayer.debug.OpenPlayerDebugEvents;
 import dev.soffits.openplayer.debug.OpenPlayerRawTrace;
 import dev.soffits.openplayer.entity.OpenPlayerNpcEntity;
@@ -58,6 +59,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private static final int COLLECT_REACH_TICKS = 20;
         private static final double BLOCK_TASK_MAX_DISTANCE = 24.0D;
         private static final double BLOCK_INTERACTION_DISTANCE = 4.0D;
+        private static final double OWNER_ITEM_TRANSFER_DISTANCE = 4.0D;
         private static final double ATTACK_DEFAULT_RADIUS = 12.0D;
         private static final double ATTACK_MAX_RADIUS = 24.0D;
         private static final double ATTACK_REACH_DISTANCE = 2.5D;
@@ -110,6 +112,12 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                     return rejected("REPORT_STATUS requires a blank instruction");
                 }
                 return accepted("REPORT_STATUS accepted: " + statusSummary());
+            }
+            if (kind == IntentKind.INVENTORY_QUERY) {
+                if (!AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
+                    return rejected("INVENTORY_QUERY requires a blank instruction");
+                }
+                return accepted("INVENTORY_QUERY accepted: " + entity.inventorySummary());
             }
             if (kind == IntentKind.MOVE) {
                 Coordinate coordinate = AutomationInstructionParser.parseCoordinateOrNull(intent.instruction());
@@ -220,18 +228,67 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return accepted("SWAP_TO_OFFHAND accepted");
             }
             if (kind == IntentKind.DROP_ITEM) {
-                if (!AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
-                    return rejected("DROP_ITEM requires a blank instruction");
+                if (!canAcquireInteractionCooldown()) {
+                    return rejected(interactionCooldownMessage());
+                }
+                boolean dropped;
+                String failureMessage;
+                if (AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
+                    dropped = acquireInteractionCooldown() && entity.dropSelectedHotbarStack();
+                    failureMessage = "DROP_ITEM requires a selected hotbar stack";
+                } else {
+                    ParsedItemInstruction parsed = InventoryActionInstructionParser.parseItemCountOrNull(
+                            intent.instruction(), false
+                    );
+                    if (parsed == null) {
+                        return rejected("DROP_ITEM requires blank or instruction: <item_id> [count]");
+                    }
+                    dropped = acquireInteractionCooldown() && entity.dropInventoryItem(parsed.item(), parsed.count());
+                    failureMessage = "DROP_ITEM requires the requested item count in NPC inventory";
+                }
+                if (!dropped) {
+                    rollbackInteractionCooldown();
+                    return rejected(failureMessage);
+                }
+                entity.swingMainHandAction();
+                return accepted("DROP_ITEM accepted");
+            }
+            if (kind == IntentKind.EQUIP_ITEM) {
+                ParsedItemInstruction parsed = InventoryActionInstructionParser.parseItemOnlyOrNull(intent.instruction());
+                if (parsed == null) {
+                    return rejected("EQUIP_ITEM requires instruction: <item_id>");
                 }
                 if (!canAcquireInteractionCooldown()) {
                     return rejected(interactionCooldownMessage());
                 }
-                if (!acquireInteractionCooldown() || !entity.dropSelectedHotbarStack()) {
+                if (!acquireInteractionCooldown() || !entity.equipMatchingItem(parsed.item())) {
                     rollbackInteractionCooldown();
-                    return rejected("DROP_ITEM requires a selected hotbar stack");
+                    return rejected("EQUIP_ITEM found no matching equippable armor or hotbar item: " + parsed.itemId());
                 }
                 entity.swingMainHandAction();
-                return accepted("DROP_ITEM accepted");
+                return accepted("EQUIP_ITEM accepted");
+            }
+            if (kind == IntentKind.GIVE_ITEM) {
+                ParsedItemInstruction parsed = InventoryActionInstructionParser.parseItemCountOrNull(intent.instruction(), true);
+                if (parsed == null) {
+                    return rejected("GIVE_ITEM requires instruction: <item_id> [count] [owner]");
+                }
+                ServerPlayer owner = owner();
+                if (owner == null || !owner.isAlive()) {
+                    return rejected("GIVE_ITEM requires the NPC owner online and alive in this dimension");
+                }
+                if (entity.distanceToSqr(owner) > OWNER_ITEM_TRANSFER_DISTANCE * OWNER_ITEM_TRANSFER_DISTANCE) {
+                    return rejected("GIVE_ITEM requires the NPC owner within " + (int) OWNER_ITEM_TRANSFER_DISTANCE + " blocks");
+                }
+                if (!canAcquireInteractionCooldown()) {
+                    return rejected(interactionCooldownMessage());
+                }
+                if (!acquireInteractionCooldown() || !entity.giveInventoryItemToPlayer(owner, parsed.item(), parsed.count())) {
+                    rollbackInteractionCooldown();
+                    return rejected("GIVE_ITEM requires the requested item count and owner inventory capacity");
+                }
+                entity.swingMainHandAction();
+                return accepted("GIVE_ITEM accepted");
             }
             if (kind == IntentKind.BREAK_BLOCK) {
                 Coordinate coordinate = AutomationInstructionParser.parseCoordinateOrNull(intent.instruction());

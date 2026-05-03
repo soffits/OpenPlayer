@@ -1,6 +1,7 @@
 package dev.soffits.openplayer.runtime.validation;
 
 import dev.soffits.openplayer.automation.AutomationInstructionParser;
+import dev.soffits.openplayer.automation.InventoryActionInstructionParser;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentKind;
 
@@ -28,19 +29,19 @@ public final class RuntimeIntentValidator {
             case EQUIP_ARMOR -> requireBlankInstruction(intent, "EQUIP_ARMOR");
             case USE_SELECTED_ITEM -> requireBlankInstruction(intent, "USE_SELECTED_ITEM");
             case SWAP_TO_OFFHAND -> requireBlankInstruction(intent, "SWAP_TO_OFFHAND");
-            case DROP_ITEM -> requireBlankInstruction(intent, "DROP_ITEM");
+            case DROP_ITEM -> requireBlankOrItemCountInstruction(intent, "DROP_ITEM");
             case BREAK_BLOCK -> requireCoordinateInstruction(intent, "BREAK_BLOCK");
             case PLACE_BLOCK -> requireCoordinateInstruction(intent, "PLACE_BLOCK");
             case ATTACK_NEAREST -> requireBlankOrPositiveRadius(intent, "ATTACK_NEAREST");
             case GUARD_OWNER -> requireBlankOrPositiveRadius(intent, "GUARD_OWNER");
+            case INVENTORY_QUERY -> requireBlankInstruction(intent, "INVENTORY_QUERY");
+            case EQUIP_ITEM -> requireItemOnlyInstruction(intent, "EQUIP_ITEM");
+            case GIVE_ITEM -> requireGiveItemInstruction(intent);
             case INTERACT -> RuntimeIntentValidationResult.rejected("INTERACT is not implemented by the vanilla runtime");
             case CHAT -> RuntimeIntentValidationResult.rejected("CHAT cannot be submitted to automation");
             case UNAVAILABLE -> RuntimeIntentValidationResult.rejected("UNAVAILABLE cannot be submitted to automation");
             case OBSERVE -> RuntimeIntentValidationResult.rejected("OBSERVE cannot be submitted to automation");
             case GOTO,
-                    INVENTORY_QUERY,
-                    EQUIP_ITEM,
-                    GIVE_ITEM,
                     DEPOSIT_ITEM,
                     STASH_ITEM,
                     GET_ITEM,
@@ -71,6 +72,30 @@ public final class RuntimeIntentValidator {
     private static RuntimeIntentValidationResult requireCoordinateInstruction(CommandIntent intent, String kindName) {
         if (AutomationInstructionParser.parseCoordinateOrNull(intent.instruction()) == null) {
             return RuntimeIntentValidationResult.rejected(kindName + " requires instruction: x y z");
+        }
+        return RuntimeIntentValidationResult.accepted();
+    }
+
+    private static RuntimeIntentValidationResult requireItemOnlyInstruction(CommandIntent intent, String kindName) {
+        if (InventoryActionInstructionParser.parseItemOnlyOrNull(intent.instruction()) == null) {
+            return RuntimeIntentValidationResult.rejected(kindName + " requires instruction: <item_id>");
+        }
+        return RuntimeIntentValidationResult.accepted();
+    }
+
+    private static RuntimeIntentValidationResult requireBlankOrItemCountInstruction(CommandIntent intent, String kindName) {
+        if (AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
+            return RuntimeIntentValidationResult.accepted();
+        }
+        if (InventoryActionInstructionParser.parseItemCountOrNull(intent.instruction(), false) == null) {
+            return RuntimeIntentValidationResult.rejected(kindName + " requires blank or instruction: <item_id> [count]");
+        }
+        return RuntimeIntentValidationResult.accepted();
+    }
+
+    private static RuntimeIntentValidationResult requireGiveItemInstruction(CommandIntent intent) {
+        if (InventoryActionInstructionParser.parseItemCountOrNull(intent.instruction(), true) == null) {
+            return RuntimeIntentValidationResult.rejected("GIVE_ITEM requires instruction: <item_id> [count] [owner]");
         }
         return RuntimeIntentValidationResult.accepted();
     }

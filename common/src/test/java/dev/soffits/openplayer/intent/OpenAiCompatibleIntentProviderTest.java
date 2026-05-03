@@ -13,6 +13,7 @@ public final class OpenAiCompatibleIntentProviderTest {
         preservesQueryWhenResolvingV1BaseEndpoint();
         systemPromptConstrainConversationReplies();
         systemPromptContainsEveryIntentKind();
+        systemPromptIncludesPhaseFiveSyntax();
         systemPromptIncludesPlannedUnsupportedInstruction();
     }
 
@@ -71,6 +72,17 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must include deterministic planned unsupported instruction");
         require(prompt.contains("use UNAVAILABLE when the vanilla runtime cannot perform the requested action"),
                 "system prompt must tell providers not to overclaim unsupported planned actions");
+    }
+
+    private static void systemPromptIncludesPhaseFiveSyntax() {
+        String prompt = OpenAiCompatibleIntentProvider.systemPrompt();
+        require(prompt.contains("INVENTORY_QUERY"), "system prompt must document inventory query syntax");
+        require(prompt.contains("For EQUIP_ITEM use exact item id <item_id>"),
+                "system prompt must document exact equip item ids");
+        require(prompt.contains("DROP_ITEM use blank to drop selected hotbar stack or exact one-stack MVP item id syntax <item_id> [count]"),
+                "system prompt must document drop item count syntax");
+        require(prompt.contains("GIVE_ITEM use exact owner-only one-stack MVP syntax <item_id> [count]"),
+                "system prompt must document owner-only give syntax");
     }
 
     private static String normalize(String value) throws Exception {
