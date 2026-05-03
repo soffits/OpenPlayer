@@ -5,6 +5,7 @@
   "commands.openplayer.ai.selected_unavailable": "Le chat IA sélectionné n'est pas encore disponible côté serveur. Utilisez /openplayer chat <assignmentId> <message>.",
   "commands.openplayer.ai.sent": "Message envoyé à %s.",
   "commands.openplayer.chat.reply": "%s: %s",
+  "commands.openplayer.chat.sent": "Vous à %s : %s",
   "commands.openplayer.result": "OpenPlayer : %s",
   "commands.openplayer.status.empty": "Aucune affectation locale trouvée.",
   "commands.openplayer.status.header": "Affectations OpenPlayer :",

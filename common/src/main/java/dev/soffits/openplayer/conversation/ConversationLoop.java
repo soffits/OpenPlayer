@@ -46,16 +46,26 @@ public final class ConversationLoop {
     }
 
     public CommandSubmissionResult submit(LocalCharacterDefinition character, String playerMessage,
-                                          List<ConversationTurn> history, CommandSubmitter submitter) {
-        return submit(character, playerMessage, history, submitter, ignored -> {
+                                           List<ConversationTurn> history, CommandSubmitter submitter) {
+        return submit(character, playerMessage, history, ConversationContextSnapshot.EMPTY, submitter, ignored -> {
         });
     }
 
     public CommandSubmissionResult submit(LocalCharacterDefinition character, String playerMessage,
-                                          List<ConversationTurn> history, CommandSubmitter submitter,
-                                          Consumer<CommandIntent> acceptedIntentRecorder) {
+                                           List<ConversationTurn> history, CommandSubmitter submitter,
+                                           Consumer<CommandIntent> acceptedIntentRecorder) {
+        return submit(character, playerMessage, history, ConversationContextSnapshot.EMPTY, submitter, acceptedIntentRecorder);
+    }
+
+    public CommandSubmissionResult submit(LocalCharacterDefinition character, String playerMessage,
+                                           List<ConversationTurn> history, ConversationContextSnapshot contextSnapshot,
+                                           CommandSubmitter submitter,
+                                           Consumer<CommandIntent> acceptedIntentRecorder) {
         if (character == null) {
             throw new IllegalArgumentException("character cannot be null");
+        }
+        if (contextSnapshot == null) {
+            throw new IllegalArgumentException("contextSnapshot cannot be null");
         }
         if (submitter == null) {
             throw new IllegalArgumentException("submitter cannot be null");
@@ -74,7 +84,8 @@ public final class ConversationLoop {
             prompt = ConversationPromptAssembler.assemble(
                     character,
                     playerMessage,
-                    ConversationHistoryTrimmer.trim(history, MAX_HISTORY_TURNS, MAX_HISTORY_CHARACTERS)
+                    ConversationHistoryTrimmer.trim(history, MAX_HISTORY_TURNS, MAX_HISTORY_CHARACTERS),
+                    contextSnapshot
             );
         } catch (IllegalArgumentException exception) {
             return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, exception.getMessage());

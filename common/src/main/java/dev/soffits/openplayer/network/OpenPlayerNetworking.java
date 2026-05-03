@@ -359,6 +359,7 @@ public final class OpenPlayerNetworking {
         OpenPlayerDebugEvents.record("command_text", "received", characterId, null, null, "length=" + commandText.trim().length());
         OpenPlayerRawTrace.commandText("network_character", sender.getUUID().toString(), characterId, null, commandText);
         if (characterId != null && !characterId.isBlank()) {
+            sendCompanionChatEcho(sender, characterId.trim(), commandText.trim());
             CommandSubmissionResult result = COMPANION_LIFECYCLE_MANAGER.submitSelectedCommandText(sender.getUUID(), characterId, commandText);
             OpenPlayerDebugEvents.record("command_submission", result.status().name(), characterId, null, null, result.message());
             sendSelectedCommandTextResultMessage(sender, characterId, result);
@@ -370,6 +371,7 @@ public final class OpenPlayerNetworking {
         boolean submitted = false;
         for (AiPlayerNpcSession session : service.listSessions()) {
             if (isLegacyDefaultNetworkNpcSession(sender.getUUID(), sender.getGameProfile().getName(), session)) {
+                sendCompanionChatEcho(sender, session.spec().profile().name(), commandText.trim());
                 CommandSubmissionResult result = service.submitCommandText(session.sessionId(), commandText);
                 OpenPlayerDebugEvents.record("command_submission", result.status().name(), null, null,
                         session.sessionId().value().toString(), result.message());
@@ -395,6 +397,7 @@ public final class OpenPlayerNetworking {
                 "length=" + trimmedCommandText.length());
         OpenPlayerRawTrace.commandText("network_assignment", sender.getUUID().toString(), trimmedAssignmentId, null,
                 trimmedCommandText);
+        sendCompanionChatEcho(sender, trimmedAssignmentId, trimmedCommandText);
         CommandSubmissionResult result = COMPANION_LIFECYCLE_MANAGER.submitSelectedCommandText(
                 sender.getUUID(), trimmedAssignmentId, trimmedCommandText
         );
@@ -406,6 +409,10 @@ public final class OpenPlayerNetworking {
 
     public static boolean submitAssignmentCommandText(ServerPlayer sender, String assignmentId, String commandText) {
         return submitAssignmentCommandTextResult(sender, assignmentId, commandText).status() == CommandSubmissionStatus.ACCEPTED;
+    }
+
+    private static void sendCompanionChatEcho(ServerPlayer sender, String assignmentId, String commandText) {
+        sender.sendSystemMessage(Component.translatable("commands.openplayer.chat.sent", assignmentId, commandText));
     }
 
     private static void sendSelectedCommandTextResultMessage(ServerPlayer sender, String assignmentId,

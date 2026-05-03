@@ -14,6 +14,7 @@ import dev.soffits.openplayer.character.LocalAssignmentRepositoryResult;
 import dev.soffits.openplayer.character.LocalCharacterDefinition;
 import dev.soffits.openplayer.character.LocalCharacterRepositoryResult;
 import dev.soffits.openplayer.conversation.ConversationHistoryTrimmer;
+import dev.soffits.openplayer.conversation.ConversationContextSnapshot;
 import dev.soffits.openplayer.conversation.ConversationLoop;
 import dev.soffits.openplayer.conversation.ConversationStatusRepository;
 import dev.soffits.openplayer.conversation.ConversationTurn;
@@ -192,12 +193,14 @@ public final class CompanionLifecycleManager {
         List<ConversationTurn> history = conversationHistory.getOrDefault(historyKey, List.of());
         AiPlayerNpcCommand[] submittedCommand = new AiPlayerNpcCommand[1];
         String sessionId = session.get().sessionId().value().toString();
+        ConversationContextSnapshot contextSnapshot = conversationContextSnapshot(session.get());
         OpenPlayerDebugEvents.record("provider_parse", "attempted", assignment.id(), character.id(), sessionId,
                 "source=conversation messageLength=" + commandText.trim().length());
         CommandSubmissionResult result = conversationLoop.submit(
                 character,
                 commandText,
                 history,
+                contextSnapshot,
                 command -> {
                     submittedCommand[0] = command;
                     return submitSelectedCommand(ownerId, assignment.id(), command);
@@ -387,6 +390,14 @@ public final class CompanionLifecycleManager {
 
     private AiPlayerNpcService npcService() {
         return npcServiceSupplier.get();
+    }
+
+    private ConversationContextSnapshot conversationContextSnapshot(AiPlayerNpcSession session) {
+        AiPlayerNpcService service = npcService();
+        if (service instanceof RuntimeAiPlayerNpcService runtimeService) {
+            return runtimeService.conversationContextSnapshot(session.sessionId());
+        }
+        return ConversationContextSnapshot.EMPTY;
     }
 
     private CommandSubmissionResult unknownOrMissingSession(String characterId) {

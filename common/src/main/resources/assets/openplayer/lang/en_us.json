@@ -5,6 +5,7 @@
   "commands.openplayer.ai.selected_unavailable": "Selected AI chat is not available server-side yet. Use /openplayer chat <assignmentId> <message>.",
   "commands.openplayer.ai.sent": "Sent message to %s.",
   "commands.openplayer.chat.reply": "%s: %s",
+  "commands.openplayer.chat.sent": "You to %s: %s",
   "commands.openplayer.result": "OpenPlayer: %s",
   "commands.openplayer.status.empty": "No local assignments found.",
   "commands.openplayer.status.header": "OpenPlayer assignments:",

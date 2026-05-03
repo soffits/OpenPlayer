@@ -5,6 +5,7 @@
   "commands.openplayer.ai.selected_unavailable": "選択中の AI チャットはまだサーバー側で利用できません。/openplayer chat <assignmentId> <message> を使用してください。",
   "commands.openplayer.ai.sent": "%s にメッセージを送信しました。",
   "commands.openplayer.chat.reply": "%s: %s",
+  "commands.openplayer.chat.sent": "%s へのあなたの発言: %s",
   "commands.openplayer.result": "OpenPlayer: %s",
   "commands.openplayer.status.empty": "ローカル割り当てが見つかりません。",
   "commands.openplayer.status.header": "OpenPlayer の割り当て:",

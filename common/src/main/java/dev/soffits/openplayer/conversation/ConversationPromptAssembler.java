@@ -10,7 +10,12 @@ public final class ConversationPromptAssembler {
     }
 
     public static String assemble(LocalCharacterDefinition character, String playerMessage,
-                                  List<ConversationTurn> history) {
+                                   List<ConversationTurn> history) {
+        return assemble(character, playerMessage, history, ConversationContextSnapshot.EMPTY);
+    }
+
+    public static String assemble(LocalCharacterDefinition character, String playerMessage,
+                                   List<ConversationTurn> history, ConversationContextSnapshot contextSnapshot) {
         if (character == null) {
             throw new IllegalArgumentException("character cannot be null");
         }
@@ -19,6 +24,9 @@ public final class ConversationPromptAssembler {
         }
         if (history == null) {
             throw new IllegalArgumentException("history cannot be null");
+        }
+        if (contextSnapshot == null) {
+            throw new IllegalArgumentException("contextSnapshot cannot be null");
         }
 
         String normalizedMessage = playerMessage.trim();
@@ -41,6 +49,11 @@ public final class ConversationPromptAssembler {
         builder.append("Do not include provider credentials, secrets, markdown, or free-form command text.\n");
         builder.append("When kind is CHAT, instruction must be the selected character's concise conversational reply to the player, following the conversation prompt and settings. ");
         builder.append("When kind is UNAVAILABLE, instruction may be blank or a short safe reason the selected character cannot help.\n");
+        builder.append("Use the bounded server context below for nearby visible facts. If the player asks for a nearby action, choose an actionable intent using available targets instead of asking for details already present in context; execution validators still enforce safety and allowWorldActions.\n");
+        if (!contextSnapshot.isEmpty()) {
+            builder.append("Server context:\n");
+            builder.append(contextSnapshot.text()).append("\n");
+        }
         if (!history.isEmpty()) {
             builder.append("Recent bounded history:\n");
             for (ConversationTurn turn : history) {

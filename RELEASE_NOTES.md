@@ -1,5 +1,17 @@
 # Release Notes
 
+## v0.1.0-alpha.8
+
+- Adds Gradle dependency caching to build and release GitHub Actions workflows to reduce Minecraft mod build time without changing release semantics.
+- Echoes player companion chat submissions back to the sender with translatable chat text before showing the existing NPC reply or status path.
+- Reattaches newly loaded persisted OpenPlayer NPC entities during runtime session, status, command, and spawn queries so existing companions become controllable without respawn after chunks load.
+- Adds a bounded server-side world and agent context snapshot to conversation prompts, including dimension, weather, time, nearby blocks, entities, items, players, NPCs, and NPC equipment/inventory summaries.
+
+Artifacts:
+
+- `openplayer-fabric-0.1.0-alpha.8.jar`
+- `openplayer-forge-0.1.0-alpha.8.jar`
+
 ## v0.1.0-alpha.7
 
 - Reattaches valid persisted OpenPlayer NPC entities into runtime sessions on server start so UI and commands can control companions after re-entering a world without spawning duplicates.

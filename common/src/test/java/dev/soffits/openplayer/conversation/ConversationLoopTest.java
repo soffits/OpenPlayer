@@ -52,7 +52,8 @@ public final class ConversationLoopTest {
         String prompt = ConversationPromptAssembler.assemble(
                 CHARACTER,
                 "follow me",
-                List.of(new ConversationTurn("player", "hello"))
+                List.of(new ConversationTurn("player", "hello")),
+                new ConversationContextSnapshot("world: dimension=minecraft:overworld\nnearbyBlocks: minecraft:oak_log x3")
         );
         require(prompt.contains("Speak briefly"), "prompt must include per-character conversationPrompt text");
         require(prompt.contains("No secrets"), "prompt must include per-character conversationSettings text");
@@ -61,6 +62,11 @@ public final class ConversationLoopTest {
                 "prompt must tell providers that CHAT instruction is the NPC reply");
         require(prompt.contains("When kind is UNAVAILABLE, instruction may be blank or a short safe reason"),
                 "prompt must allow UNAVAILABLE to provide a short safe reason");
+        require(prompt.contains("Server context:"), "prompt must include a server context section when available");
+        require(prompt.contains("nearbyBlocks: minecraft:oak_log x3"),
+                "prompt must include bounded nearby block context");
+        require(prompt.contains("choose an actionable intent using available targets"),
+                "prompt must guide nearby world actions from context");
         require(prompt.contains("Player: follow me"), "prompt must include the current player message");
     }
 
