@@ -12,7 +12,6 @@ import dev.soffits.openplayer.api.NpcProfileSpec;
 import dev.soffits.openplayer.api.NpcRoleId;
 import dev.soffits.openplayer.api.NpcSpawnLocation;
 import dev.soffits.openplayer.api.OpenPlayerApi;
-import dev.soffits.openplayer.character.LocalCharacterDefinition;
 import dev.soffits.openplayer.character.LocalCharacterListEntry;
 import dev.soffits.openplayer.character.LocalCharacterListView;
 import dev.soffits.openplayer.character.LocalCharacterRepositoryResult;
@@ -21,15 +20,19 @@ import dev.soffits.openplayer.character.OpenPlayerLocalCharacters;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentKind;
 import dev.soffits.openplayer.intent.IntentPriority;
+import dev.soffits.openplayer.runtime.CompanionLifecycleManager;
 import dev.soffits.openplayer.runtime.OpenPlayerRuntime;
 import io.netty.buffer.Unpooled;
-import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
 public final class OpenPlayerNetworking {
     private static final int MAX_COMMAND_TEXT_LENGTH = 512;
+    private static final CompanionLifecycleManager COMPANION_LIFECYCLE_MANAGER = new CompanionLifecycleManager(
+            OpenPlayerApi::npcService,
+            () -> OpenPlayerLocalCharacters.repository().loadAll()
+    );
 
     private OpenPlayerNetworking() {
     }
@@ -150,10 +153,11 @@ public final class OpenPlayerNetworking {
                 sender.getZ()
         );
         if (characterId != null && !characterId.isBlank()) {
-            findCharacter(characterId).ifPresent(character -> OpenPlayerApi.npcService().spawn(character.toNpcSpec(
+            COMPANION_LIFECYCLE_MANAGER.spawnSelected(
                     new NpcOwnerId(sender.getUUID()),
-                    location
-            )));
+                    location,
+                    characterId
+            );
             sendCharacterListResponse(sender);
             return;
         }
@@ -168,9 +172,14 @@ public final class OpenPlayerNetworking {
     }
 
     private static void handleDespawnRequest(ServerPlayer sender, String characterId) {
+        if (characterId != null && !characterId.isBlank()) {
+            COMPANION_LIFECYCLE_MANAGER.despawnSelected(sender.getUUID(), characterId);
+            sendCharacterListResponse(sender);
+            return;
+        }
         AiPlayerNpcService service = OpenPlayerApi.npcService();
         for (AiPlayerNpcSession session : service.listSessions()) {
-            if (isSenderNetworkNpcSession(sender, session, characterId)) {
+            if (isLegacyDefaultNetworkNpcSession(sender.getUUID(), sender.getGameProfile().getName(), session)) {
                 service.despawn(session.sessionId());
             }
         }
@@ -183,8 +192,13 @@ public final class OpenPlayerNetworking {
                 UUID.randomUUID(),
                 new CommandIntent(intentKind, IntentPriority.HIGH, intentKind.name())
         );
+        if (characterId != null && !characterId.isBlank()) {
+            COMPANION_LIFECYCLE_MANAGER.submitSelectedCommand(sender.getUUID(), characterId, command);
+            sendCharacterListResponse(sender);
+            return;
+        }
         for (AiPlayerNpcSession session : service.listSessions()) {
-            if (isSenderNetworkNpcSession(sender, session, characterId)) {
+            if (isLegacyDefaultNetworkNpcSession(sender.getUUID(), sender.getGameProfile().getName(), session)) {
                 service.submitCommand(session.sessionId(), command);
             }
         }
@@ -195,9 +209,14 @@ public final class OpenPlayerNetworking {
         if (commandText == null || commandText.isBlank() || commandText.length() > MAX_COMMAND_TEXT_LENGTH) {
             return;
         }
+        if (characterId != null && !characterId.isBlank()) {
+            COMPANION_LIFECYCLE_MANAGER.submitSelectedCommandText(sender.getUUID(), characterId, commandText);
+            sendCharacterListResponse(sender);
+            return;
+        }
         AiPlayerNpcService service = OpenPlayerApi.npcService();
         for (AiPlayerNpcSession session : service.listSessions()) {
-            if (isSenderNetworkNpcSession(sender, session, characterId)) {
+            if (isLegacyDefaultNetworkNpcSession(sender.getUUID(), sender.getGameProfile().getName(), session)) {
                 service.submitCommandText(session.sessionId(), commandText);
             }
         }
@@ -220,7 +239,7 @@ public final class OpenPlayerNetworking {
         LocalCharacterRepositoryResult result = OpenPlayerLocalCharacters.repository().loadAll();
         LocalCharacterListView view = LocalCharacterListView.fromRepositoryResult(
                 result,
-                character -> lifecycleStatus(player, character),
+                character -> COMPANION_LIFECYCLE_MANAGER.lifecycleStatus(player.getUUID(), character),
                 new LocalSkinPathResolver(OpenPlayerLocalCharacters.openPlayerDirectory())
         );
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
@@ -240,33 +259,6 @@ public final class OpenPlayerNetworking {
         NetworkManager.sendToPlayer(player, OpenPlayerConstants.CHARACTER_LIST_RESPONSE_PACKET_ID, buffer);
     }
 
-    private static String lifecycleStatus(ServerPlayer player, LocalCharacterDefinition character) {
-        for (AiPlayerNpcSession session : OpenPlayerApi.npcService().listSessions()) {
-            if (matchesCharacterSession(player, session, character)) {
-                return OpenPlayerApi.npcService().status(session.sessionId()).name().toLowerCase(java.util.Locale.ROOT);
-            }
-        }
-        return "despawned";
-    }
-
-    private static Optional<LocalCharacterDefinition> findCharacter(String characterId) {
-        LocalCharacterRepositoryResult result = OpenPlayerLocalCharacters.repository().loadAll();
-        for (LocalCharacterDefinition character : result.characters()) {
-            if (character.id().equals(characterId)) {
-                return Optional.of(character);
-            }
-        }
-        return Optional.empty();
-    }
-
-    private static boolean isSenderNetworkNpcSession(ServerPlayer sender, AiPlayerNpcSession session, String characterId) {
-        if (characterId != null && !characterId.isBlank()) {
-            Optional<LocalCharacterDefinition> character = findCharacter(characterId);
-            return character.isPresent() && matchesCharacterSession(sender, session, character.get());
-        }
-        return isLegacyDefaultNetworkNpcSession(sender.getUUID(), sender.getGameProfile().getName(), session);
-    }
-
     static boolean isLegacyDefaultNetworkNpcSession(UUID ownerId, String ownerProfileName, AiPlayerNpcSession session) {
         return session.spec().ownerId().value().equals(ownerId)
                 && session.spec().roleId().value().equals(OpenPlayerConstants.DEFAULT_NETWORK_NPC_ROLE_ID)
@@ -275,15 +267,6 @@ public final class OpenPlayerNetworking {
 
     static String defaultNetworkNpcProfileName(String ownerProfileName) {
         return ownerProfileName + OpenPlayerConstants.DEFAULT_NETWORK_NPC_PROFILE_SUFFIX;
-    }
-
-    private static boolean matchesCharacterSession(ServerPlayer sender, AiPlayerNpcSession session, LocalCharacterDefinition character) {
-        return matchesLocalCharacterSession(sender.getUUID(), session, character);
-    }
-
-    static boolean matchesLocalCharacterSession(UUID ownerId, AiPlayerNpcSession session, LocalCharacterDefinition character) {
-        return session.spec().ownerId().value().equals(ownerId)
-                && session.spec().roleId().value().equals(character.toSessionRoleId().value());
     }
 
     private static String readOptionalCharacterId(FriendlyByteBuf buffer) {

@@ -119,8 +119,9 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
             return false;
         }
         removeIndexes(sessionId);
-        Entity entity = entityFor(session);
+        OpenPlayerNpcEntity entity = entityFor(session);
         if (entity != null) {
+            entity.stopRuntimeCommands();
             entity.discard();
         }
         return true;

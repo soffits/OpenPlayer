@@ -186,6 +186,14 @@ Add a higher-level companion lifecycle manager that coordinates local character 
 - Persisted NPC entities are restored into runtime sessions after world load when their identity is valid.
 - UI status remains accurate after spawn, despawn, restore, and owner lifecycle events.
 
+### Current Implementation Notes
+
+OpenPlayer now routes selected local-character spawn, despawn, follow, stop, command text, and UI lifecycle status through a server-side `CompanionLifecycleManager`. The manager is intentionally small and sits on top of `RuntimeAiPlayerNpcService` and `OpenPlayerApi`; it resolves local character data from the repository for each action and matches active companions by owner UUID plus the deterministic local-character session role id derived from the stable character id. It does not store transient runtime session ids as long-term character identity.
+
+Spawning the same selected local character calls the runtime service with the same stable identity, so the existing runtime duplicate-prevention path reuses or relocates the current session instead of creating a duplicate. Unknown, invalid, blank, or deleted selected character ids reject safely and do not fall through to legacy NPC sessions. With no selected character id, networking keeps the legacy default OpenPlayer NPC path.
+
+Lifecycle status shown in the UI comes from the manager and returns the matched runtime session status or `despawned` when no owner plus stable character id session exists. Runtime despawn now stops active commands before discarding the NPC entity, while the existing owner disconnect and server stop hooks continue to stop owner tasks and clear runtime sessions safely. Persisted NPC restore remains owned by `RuntimeAiPlayerNpcService`, which adopts valid persisted identities and uses the same stable local-character identity key for restored selected-character sessions.
+
 ## Phase 6: Player-Like Interaction And Action Layer
 
 ### Goal

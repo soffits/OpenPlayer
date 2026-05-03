@@ -24,8 +24,15 @@ tasks.register('runRuntimeNpcIdentityKeyTest', JavaExec) {
     mainClass = 'dev.soffits.openplayer.runtime.RuntimeNpcIdentityKeyTest'
 }
 
+tasks.register('runCompanionLifecycleManagerTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.runtime.CompanionLifecycleManagerTest'
+}
+
 tasks.named('check') {
     dependsOn tasks.named('runLocalCharacterDefinitionTest')
     dependsOn tasks.named('runOpenPlayerNetworkingTest')
     dependsOn tasks.named('runRuntimeNpcIdentityKeyTest')
+    dependsOn tasks.named('runCompanionLifecycleManagerTest')
 }

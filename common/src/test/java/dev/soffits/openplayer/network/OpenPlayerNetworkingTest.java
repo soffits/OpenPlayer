@@ -12,7 +12,6 @@ import dev.soffits.openplayer.api.NpcRoleId;
 import dev.soffits.openplayer.api.NpcSessionId;
 import dev.soffits.openplayer.api.NpcSessionStatus;
 import dev.soffits.openplayer.api.NpcSpawnLocation;
-import dev.soffits.openplayer.character.LocalCharacterDefinition;
 import java.util.UUID;
 
 public final class OpenPlayerNetworkingTest {
@@ -24,7 +23,6 @@ public final class OpenPlayerNetworkingTest {
 
     public static void main(String[] args) {
         matchesLegacyDefaultNetworkNpc();
-        matchesLocalCharacterByStableIdRole();
         rejectsCharacterSessionUsingDefaultRole();
         rejectsOtherOwnerLegacyDefaultNetworkNpc();
     }
@@ -43,24 +41,6 @@ public final class OpenPlayerNetworkingTest {
                 "Alex",
                 session(OWNER_ID, OpenPlayerConstants.DEFAULT_NETWORK_NPC_ROLE_ID, "Alex Helper")
         ), "absent character id must not target a local character session using the default role");
-    }
-
-    private static void matchesLocalCharacterByStableIdRole() {
-        LocalCharacterDefinition character = new LocalCharacterDefinition(
-                "alex_01",
-                "Renamed Alex",
-                null,
-                null,
-                null,
-                "helper_01",
-                null,
-                null
-        );
-        require(OpenPlayerNetworking.matchesLocalCharacterSession(
-                OWNER_ID,
-                session(OWNER_ID, "openplayer-local-character-alex_01", "Original Alex"),
-                character
-        ), "selected character actions must match stable character id role, not displayName or defaultRoleId");
     }
 
     private static void rejectsOtherOwnerLegacyDefaultNetworkNpc() {
