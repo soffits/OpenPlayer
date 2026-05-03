@@ -12,7 +12,6 @@ import java.util.Queue;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.BlockItem;
@@ -131,9 +130,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 if (coordinate == null) {
                     return rejected("PLACE_BLOCK requires instruction: x y z");
                 }
-                ItemStack mainHandStack = entity.getMainHandItem();
-                if (!(mainHandStack.getItem() instanceof BlockItem)) {
-                    return rejected("PLACE_BLOCK requires a block item in the NPC main hand");
+                if (!(entity.getMainHandItem().getItem() instanceof BlockItem)
+                        && !entity.selectFirstHotbarBlockItem()) {
+                    return rejected("PLACE_BLOCK requires a block item in the NPC selected hotbar slot");
                 }
                 queuedCommands.add(QueuedCommand.placeBlock(coordinate));
                 return accepted("PLACE_BLOCK accepted");
@@ -284,12 +283,14 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 activeCommand = null;
                 return;
             }
+            entity.selectBestToolFor(blockState, serverLevel, blockPos);
             lookAtBlock(blockPos);
             if (!isWithinInteractionDistance(blockPos)) {
                 moveNearBlock(blockPos);
                 return;
             }
             entity.getNavigation().stop();
+            entity.swingMainHandAction();
             serverLevel.destroyBlock(blockPos, true, entity);
             activeCommand = null;
         }
@@ -328,7 +329,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             entity.getNavigation().stop();
             if (serverLevel.setBlock(blockPos, placedState, Block.UPDATE_ALL)) {
                 mainHandStack.shrink(1);
-                entity.swing(InteractionHand.MAIN_HAND);
+                entity.swingMainHandAction();
             }
             activeCommand = null;
         }
@@ -356,7 +357,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return;
             }
             entity.getNavigation().stop();
-            entity.swing(InteractionHand.MAIN_HAND);
+            entity.swingMainHandAction();
             entity.doHurtTarget(target);
             activeCommand = null;
         }

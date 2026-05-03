@@ -30,9 +30,16 @@ tasks.register('runCompanionLifecycleManagerTest', JavaExec) {
     mainClass = 'dev.soffits.openplayer.runtime.CompanionLifecycleManagerTest'
 }
 
+tasks.register('runNpcHotbarSelectionTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.entity.NpcHotbarSelectionTest'
+}
+
 tasks.named('check') {
     dependsOn tasks.named('runLocalCharacterDefinitionTest')
     dependsOn tasks.named('runOpenPlayerNetworkingTest')
     dependsOn tasks.named('runRuntimeNpcIdentityKeyTest')
     dependsOn tasks.named('runCompanionLifecycleManagerTest')
+    dependsOn tasks.named('runNpcHotbarSelectionTest')
 }

@@ -222,6 +222,14 @@ Expand NPC behavior from command execution into a safer player-like interaction 
 - Stuck movement, unreachable targets, full inventory collection, and unloaded target chunks time out or reject safely.
 - Existing `STOP` behavior interrupts active actions reliably.
 
+### Current Implementation Notes
+
+OpenPlayer now exposes a focused server-side action seam on `OpenPlayerNpcEntity`: selected hotbar slot validation and mutation, selected held item and equipment access through vanilla slot methods, bounded inventory item get/set helpers, hotbar tool selection for block breaking, hotbar block-item selection for placement, and visible main-hand swing actions. The selected main-hand slot is constrained to the nine-slot hotbar; invalid persisted selections are normalized to slot `0`.
+
+The vanilla automation backend uses those helpers without adding dependencies. With world actions enabled, `BREAK_BLOCK` selects the best scored hotbar tool before destroying a loaded, reachable, breakable target block and swings the main hand. `PLACE_BLOCK` keeps selected-slot semantics when the selected hotbar item is a `BlockItem`; otherwise it selects the first hotbar `BlockItem`, then applies the existing simple survival and collision checks before placing and swinging. `ATTACK_NEAREST` also uses the same main-hand swing helper.
+
+This phase remains intentionally narrow. OpenPlayer still does not emulate full player item use, block/entity interaction routing, container transfers, cooldown managers, crafting, inventory rearrangement, PlayerEngine, Automatone, or true Baritone control of `OpenPlayerNpcEntity`.
+
 ## Phase 7: Per-Character AI And Conversation Loop
 
 ### Goal
