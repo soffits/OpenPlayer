@@ -110,9 +110,14 @@ import net.minecraft.sounds.SoundSource;
 public final class VanillaAutomationBackend implements AutomationBackend {
     public static final String NAME = "vanilla";
     public static final double PLAYER_LIKE_NAVIGATION_SPEED = 1.25D;
+    static final String DROPPED_ITEM_NAVIGATION_REJECTED_REASON = "navigation_item_position_rejected";
 
     static boolean isLocalWorldOrInventoryAction(IntentKind kind) {
         return RuntimeIntentPolicies.isLocalWorldOrInventoryAction(kind);
+    }
+
+    static NavigationTarget droppedItemNavigationTarget(Vec3 position) {
+        return NavigationTarget.position(position.x, position.y, position.z);
     }
 
     @Override
@@ -1722,7 +1727,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             entity.getLookControl().setLookAt(itemEntity);
             if (entity.distanceToSqr(itemEntity) > COLLECT_REACH_DISTANCE * COLLECT_REACH_DISTANCE) {
-                if (!moveToEntity(itemEntity, NavigationTarget.entity(entityTypeId(itemEntity)))) {
+                if (!moveToDroppedItem(itemEntity)) {
                     return;
                 }
                 command.resetReachTicks();
@@ -1775,7 +1780,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             entity.getLookControl().setLookAt(itemEntity);
             if (entity.distanceToSqr(itemEntity) > COLLECT_REACH_DISTANCE * COLLECT_REACH_DISTANCE) {
-                if (!moveToEntity(itemEntity, NavigationTarget.entity(entityTypeId(itemEntity)))) {
+                if (!moveToDroppedItem(itemEntity)) {
                     return;
                 }
                 command.resetReachTicks();
@@ -1850,7 +1855,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             entity.getLookControl().setLookAt(itemEntity);
             if (entity.distanceToSqr(itemEntity) > COLLECT_REACH_DISTANCE * COLLECT_REACH_DISTANCE) {
-                if (!moveToEntity(itemEntity, NavigationTarget.entity(entityTypeId(itemEntity)))) {
+                if (!moveToDroppedItem(itemEntity)) {
                     return;
                 }
                 command.resetReachTicks();
@@ -3386,7 +3391,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 int missing = activeCommand.targetItemCount() - entity.normalInventoryCount(activeCommand.targetItem());
                 ItemEntity target = nearestRequestedItem(serverLevel, activeCommand, missing);
                 if (target != null) {
-                    moveToEntity(target, NavigationTarget.entity(entityTypeId(target)));
+                    moveToDroppedItem(target);
                     return;
                 }
                 if (activeCommand.allowVisibleBlockSource()) {
@@ -3478,6 +3483,25 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             );
             if (!accepted) {
                 failActiveCommand("navigation_block_rejected");
+                return false;
+            }
+            navigationRuntime.markReachable(true);
+            return true;
+        }
+
+        private boolean moveToDroppedItem(ItemEntity itemEntity) {
+            Vec3 position = itemEntity.position();
+            boolean loaded = isBlockLoaded(itemEntity.blockPosition());
+            navigationRuntime.plan(droppedItemNavigationTarget(position), entity.distanceToSqr(position), loaded);
+            if (!loaded) {
+                failActiveCommand("navigation_target_unloaded");
+                return false;
+            }
+            boolean accepted = entity.getNavigation().moveTo(
+                    position.x, position.y, position.z, PLAYER_LIKE_NAVIGATION_SPEED
+            );
+            if (!accepted) {
+                failActiveCommand(DROPPED_ITEM_NAVIGATION_REJECTED_REASON);
                 return false;
             }
             navigationRuntime.markReachable(true);
