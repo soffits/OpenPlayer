@@ -12,6 +12,8 @@ allprojects {
     version = mod_version
 }
 
+ext.runtime_artifact_version = mod_version.startsWith("${mod_id}_") ? mod_version.substring("${mod_id}_".length()) : mod_version
+
 subprojects {
     apply plugin: 'dev.architectury.loom'
     apply plugin: 'architectury-plugin'
@@ -22,6 +24,10 @@ subprojects {
 
     base {
         archivesName = "${mod_id}-${project.name}"
+    }
+
+    tasks.withType(org.gradle.api.tasks.bundling.AbstractArchiveTask).configureEach {
+        archiveVersion = rootProject.runtime_artifact_version
     }
 
     dependencies {

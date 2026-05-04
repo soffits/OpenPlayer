@@ -3,11 +3,11 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - 'openplayer_*_*'
   workflow_dispatch:
     inputs:
       tag:
-        description: Version tag to release, for example v0.1.0-alpha.1
+        description: Version tag to release, for example openplayer_1.20.1_1-alpha.1
         required: true
         type: string
 
@@ -37,15 +37,24 @@ jobs:
 
       - name: Validate release tag version
         run: |
-          VERSION_FROM_TAG="${RELEASE_TAG#v}"
+          VERSION_FROM_TAG="$RELEASE_TAG"
           MOD_VERSION="$(grep '^mod_version=' gradle.properties | cut -d= -f2-)"
 
+          case "$RELEASE_TAG" in
+            openplayer_*_*) ;;
+            *)
+              echo "Release tag $RELEASE_TAG must use the openplayer_<minecraft>_<release> version family."
+              exit 1
+              ;;
+          esac
+
           if [ "$VERSION_FROM_TAG" != "$MOD_VERSION" ]; then
-            echo "Release tag version $VERSION_FROM_TAG does not match gradle.properties mod_version $MOD_VERSION."
+            echo "Release tag $VERSION_FROM_TAG does not match gradle.properties mod_version $MOD_VERSION."
             exit 1
           fi
 
           echo "VERSION_FROM_TAG=$VERSION_FROM_TAG" >> "$GITHUB_ENV"
+          echo "ARTIFACT_VERSION=${VERSION_FROM_TAG#openplayer_}" >> "$GITHUB_ENV"
 
       - name: Build
         run: ./gradlew clean build
@@ -54,8 +63,8 @@ jobs:
         run: |
           mkdir -p release-artifacts
 
-          fabric_jar="fabric/build/libs/openplayer-fabric-$VERSION_FROM_TAG.jar"
-          forge_jar="forge/build/libs/openplayer-forge-$VERSION_FROM_TAG.jar"
+          fabric_jar="fabric/build/libs/openplayer-fabric-$ARTIFACT_VERSION.jar"
+          forge_jar="forge/build/libs/openplayer-forge-$ARTIFACT_VERSION.jar"
 
           missing=0
           for jar in "$fabric_jar" "$forge_jar"; do
@@ -87,7 +96,7 @@ jobs:
           if [ -s "$section_file" ]; then
             cp "$section_file" "$notes_file"
           else
-            printf 'OpenPlayer %s prerelease artifacts for Minecraft 1.20.1 and Java 17.\n\nArtifacts:\n\n- openplayer-fabric-%s.jar\n- openplayer-forge-%s.jar\n' "$RELEASE_TAG" "$VERSION_FROM_TAG" "$VERSION_FROM_TAG" > "$notes_file"
+            printf 'OpenPlayer %s artifacts for Minecraft 1.20.1 and Java 17.\n\nArtifacts:\n\n- openplayer-fabric-%s.jar\n- openplayer-forge-%s.jar\n' "$RELEASE_TAG" "$ARTIFACT_VERSION" "$ARTIFACT_VERSION" > "$notes_file"
           fi
 
       - name: Create GitHub release
@@ -95,7 +104,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           prerelease_arg=()
-          if [[ "$RELEASE_TAG" =~ (-alpha|-beta|-rc|pre|canary) ]]; then
+          if [[ "$RELEASE_TAG" =~ (-alpha\.|-beta\.|-rc\.|-pre\.|-canary\.) ]]; then
             prerelease_arg=(--prerelease)
           fi
 

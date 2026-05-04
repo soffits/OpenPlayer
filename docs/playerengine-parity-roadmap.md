@@ -1,7 +1,5 @@
 # PlayerEngine-Style Parity Roadmap
 
-> **For Hermes:** Use `subagent-driven-development` and OpenCode for implementation. Keep each phase reviewed and verified, but group related player-like capabilities into coherent adapter clusters instead of splitting every small adapter into its own phase.
-
 **Goal:** Build a legally clean, local/offline, open-source PlayerEngine-style Minecraft agent runtime for OpenPlayer, excluding Player2 commercial/online service features while pursuing broad runtime behavior parity.
 
 **Architecture:** OpenPlayer remains an AGPL-3.0-only Minecraft 1.20.1 Java 17 multiloader mod. PlayerEngine and Player2NPC may be inspected for behavior categories, command/task surface, and runtime expectations, but their code, opaque jars, online APIs, auth flows, token storage, heartbeat services, and remote character/skin/TTS services must not be copied, vendored, or required. The runtime should evolve through bounded clean-room phases: observe, validate, plan, act, monitor, and report.
@@ -34,7 +32,7 @@ OpenPlayer already has:
 - Safe debug events and local-only raw traces.
 - Canonical `/openplayer` command tree, including `/openplayer queue <assignmentId> <kind> [instruction]` for explicit validated automation intent submission.
 - Vanilla server-side NPC actions for movement, follow, patrol, item pickup, block break/place, nearest attack, guard owner, equipment selection, item use, offhand swap, drop item, report status, and chat replies.
-- Alpha.8 context snapshots containing bounded world/agent context for conversation prompts.
+- Bounded world/agent context snapshots for conversation prompts.
 
 ---
 
