@@ -60,8 +60,8 @@ public final class RuntimeIntentValidator {
             case FIND_LOADED_BIOME -> requireLoadedSearchInstruction(
                     intent, AdvancedTaskInstructionParser.FIND_LOADED_BIOME_USAGE
             );
+            case EXPLORE_CHUNKS -> requireExploreChunksInstruction(intent);
             case LOCATE_STRUCTURE,
-                    EXPLORE_CHUNKS,
                     USE_PORTAL,
                     TRAVEL_NETHER,
                     LOCATE_STRONGHOLD,
@@ -225,6 +225,13 @@ public final class RuntimeIntentValidator {
     private static RuntimeIntentValidationResult requireLoadedSearchInstruction(CommandIntent intent, String usage) {
         if (AdvancedTaskInstructionParser.parseLoadedSearchOrNull(intent.instruction()) == null) {
             return RuntimeIntentValidationResult.rejected(usage);
+        }
+        return RuntimeIntentValidationResult.accepted();
+    }
+
+    private static RuntimeIntentValidationResult requireExploreChunksInstruction(CommandIntent intent) {
+        if (AdvancedTaskInstructionParser.parseExploreChunksOrNull(intent.instruction()) == null) {
+            return RuntimeIntentValidationResult.rejected(AdvancedTaskInstructionParser.EXPLORE_CHUNKS_USAGE);
         }
         return RuntimeIntentValidationResult.accepted();
     }

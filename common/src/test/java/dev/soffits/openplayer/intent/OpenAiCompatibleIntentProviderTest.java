@@ -131,6 +131,8 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must document control command blank syntax");
         require(prompt.contains("RESET_MEMORY clears only bounded local conversation history"),
                 "system prompt must document bounded reset memory scope");
+        require(prompt.contains("does not clear automation-local exploration or navigation memory"),
+                "system prompt must document reset memory does not clear automation-local exploration/navigation memory");
         require(prompt.contains("For BODY_LANGUAGE, instruction must be blank, idle, wave, swing, crouch, uncrouch, or look_owner"),
                 "system prompt must document body language grammar");
         require(prompt.contains("unsupported gestures such as nod and shake should use UNAVAILABLE"),
@@ -159,6 +161,12 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must prevent DEFEND_OWNER kind token in instruction");
         require(prompt.contains("not players, OpenPlayer NPCs, or passive animals by default"),
                 "system prompt must document defense target limits");
+        require(prompt.contains("EXPLORE_CHUNKS is loaded-only bounded navigation"),
+                "system prompt must document loaded-only chunk exploration");
+        require(prompt.contains("radius=<blocks> steps=<count>"),
+                "system prompt must document EXPLORE_CHUNKS key/value syntax");
+        require(prompt.contains("never generates chunks, never teleports"),
+                "system prompt must not overclaim unsafe exploration behavior");
         require(!prompt.contains("COLLECT_FOOD <"),
                 "system prompt must not tell providers to include COLLECT_FOOD token syntax");
         require(!prompt.contains("DEFEND_OWNER <"),

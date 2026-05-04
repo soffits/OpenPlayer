@@ -370,9 +370,11 @@ The first twelve phases establish a bounded first-party runtime foundation, but 
 
 **Objective:** Upgrade `EXPLORE_CHUNKS` from deterministic unsupported to a bounded loaded/opt-in exploration task.
 
+**Status:** Phase 16 implements a safe loaded-only subset. `EXPLORE_CHUNKS` accepts blank defaults, `radius=<blocks> steps=<count>`, and `reset`/`clear`; it is gated by `allowWorldActions`, scans only already-loaded chunks near the NPC, chooses bounded safe navigation targets near chunk centers, tracks capped per-controller visited-chunk memory, and reports active navigation through existing status snapshots. It does not generate chunks, call long-range locate APIs, teleport, mutate the world, or claim structure/Nether/End/speedrun support.
+
 **Capabilities:**
 
-- Search only loaded chunks by default; optionally allow limited server-authorized chunk stepping with strict caps.
+- Search only already-loaded chunks with strict radius, candidate, step, and tick caps.
 - Maintain visited-chunk memory per NPC/session with reset support.
 - Search for blocks/entities/biomes through the existing loaded-area navigator and report progress.
 

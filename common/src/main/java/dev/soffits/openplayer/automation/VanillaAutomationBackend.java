@@ -6,11 +6,13 @@ import dev.soffits.openplayer.automation.AutomationInstructionParser.GotoInstruc
 import dev.soffits.openplayer.automation.InventoryActionInstructionParser.ParsedItemInstruction;
 import dev.soffits.openplayer.automation.InteractionInstruction.InteractionTargetKind;
 import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser;
+import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser.ExploreChunksInstruction;
 import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser.LoadedSearchInstruction;
 import dev.soffits.openplayer.automation.advanced.AdvancedTaskPolicy;
 import dev.soffits.openplayer.automation.building.BuildPlan;
 import dev.soffits.openplayer.automation.building.BuildPlanParser;
 import dev.soffits.openplayer.automation.navigation.LoadedAreaNavigator;
+import dev.soffits.openplayer.automation.navigation.LoadedChunkExplorationMemory;
 import dev.soffits.openplayer.automation.navigation.NavigationRuntime;
 import dev.soffits.openplayer.automation.navigation.NavigationTarget;
 import dev.soffits.openplayer.automation.resource.GetItemRequest;
@@ -130,6 +132,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private static final double GOTO_DEFAULT_RADIUS = LoadedAreaNavigator.DEFAULT_RADIUS;
         private static final double GOTO_MAX_RADIUS = LoadedAreaNavigator.MAX_RADIUS;
         private static final double GOTO_REACH_DISTANCE = 2.0D;
+        private static final double EXPLORE_CHUNK_REACH_DISTANCE = 2.0D;
+        private static final int EXPLORE_MAX_CANDIDATE_CHUNKS = 81;
         private static final int MOVE_MAX_TICKS = 20 * 60;
         private static final int SHORT_TASK_MAX_TICKS = 20 * 30;
         private static final int COLLECT_MAX_TICKS = 20 * 45;
@@ -156,6 +160,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private final NavigationRuntime navigationRuntime = new NavigationRuntime(NAVIGATION_MAX_RECOVERIES);
         private final WorkstationLocator workstationLocator = new WorkstationLocator();
         private final LoadedAreaNavigator loadedAreaNavigator = new LoadedAreaNavigator();
+        private final LoadedChunkExplorationMemory loadedChunkExplorationMemory = new LoadedChunkExplorationMemory();
         private QueuedCommand activeCommand;
         private AutomationControllerMonitor activeMonitor;
         private NpcOwnerId ownerId;
@@ -723,6 +728,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (kind == IntentKind.FIND_LOADED_BIOME) {
                 return reportLoadedBiome(intent.instruction());
             }
+            if (kind == IntentKind.EXPLORE_CHUNKS) {
+                return submitExploreChunks(intent.instruction());
+            }
             if (AdvancedTaskPolicy.isUnsupportedAdvancedKind(kind)) {
                 return rejected(AdvancedTaskPolicy.unsupportedReason(kind));
             }
@@ -928,6 +936,20 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                     + " diagnostics=" + result.diagnostics().summary());
         }
 
+        private AutomationCommandResult submitExploreChunks(String instruction) {
+            ExploreChunksInstruction exploreInstruction = AdvancedTaskInstructionParser.parseExploreChunksOrNull(instruction);
+            if (exploreInstruction == null) {
+                return rejected(AdvancedTaskInstructionParser.EXPLORE_CHUNKS_USAGE);
+            }
+            if (exploreInstruction.resetOnly()) {
+                loadedChunkExplorationMemory.clear();
+                return accepted("EXPLORE_CHUNKS reset accepted: visited=0");
+            }
+            queuedCommands.add(QueuedCommand.exploreChunks(exploreInstruction.radius(), exploreInstruction.steps()));
+            return accepted("EXPLORE_CHUNKS accepted: loaded_only radius=" + formatRadius(exploreInstruction.radius())
+                    + " steps=" + exploreInstruction.steps());
+        }
+
         @Override
         public void tick() {
             if (entity.level().isClientSide) {
@@ -1023,6 +1045,10 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 startGoto(command);
                 return;
             }
+            if (command.kind() == IntentKind.EXPLORE_CHUNKS) {
+                startExploreChunks(command);
+                return;
+            }
             if (command.kind() == IntentKind.LOOK) {
                 Coordinate coordinate = command.coordinate();
                 entity.getLookControl().setLookAt(coordinate.x(), coordinate.y(), coordinate.z());
@@ -1063,6 +1089,10 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             if (activeCommand.kind() == IntentKind.GOTO) {
                 continueGoto(activeCommand);
+                return;
+            }
+            if (activeCommand.kind() == IntentKind.EXPLORE_CHUNKS) {
+                continueExploreChunks(activeCommand);
                 return;
             }
             if (activeCommand.kind() == IntentKind.FOLLOW_OWNER) {
@@ -1326,6 +1356,173 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (entity.getNavigation().isDone()) {
                 completeActiveCommand();
             }
+        }
+
+        private void startExploreChunks(QueuedCommand command) {
+            if (!entity.allowWorldActions()) {
+                failActiveCommand("world_actions_disabled_before_explore");
+                return;
+            }
+            LoadedChunkTarget target = nextLoadedChunkTarget(command.radius());
+            if (target == null) {
+                failActiveCommand("no_safe_loaded_chunk_target");
+                return;
+            }
+            command.setExplorationTarget(target.targetPos());
+            command.setExplorationChunk(target.chunkX(), target.chunkZ());
+            if (activeMonitor != null) {
+                activeMonitor.note("explore:chunk=" + target.chunkX() + ',' + target.chunkZ()
+                        + " visited=" + loadedChunkExplorationMemory.visitedCount()
+                        + " remaining=" + command.repeatRemaining()
+                        + " mode=" + (target.visited() ? "revisit" : "unvisited"));
+            }
+            moveToExploreTarget(target.targetPos());
+        }
+
+        private void continueExploreChunks(QueuedCommand command) {
+            if (!entity.allowWorldActions()) {
+                failActiveCommand("world_actions_disabled_during_explore");
+                return;
+            }
+            BlockPos target = command.explorationTarget();
+            if (target == null) {
+                failActiveCommand("explore_target_unavailable");
+                return;
+            }
+            if (!isBlockLoaded(target)) {
+                failActiveCommand("explore_target_unloaded");
+                return;
+            }
+            navigationRuntime.updateDistance(distanceTo(target));
+            if (entity.distanceToSqr(Vec3.atCenterOf(target)) <= EXPLORE_CHUNK_REACH_DISTANCE * EXPLORE_CHUNK_REACH_DISTANCE) {
+                loadedChunkExplorationMemory.markVisited(
+                        dimensionId(serverLevel()), command.explorationChunkX(), command.explorationChunkZ()
+                );
+                stopNavigation();
+                completeActiveCommand("explore_reached chunk=" + command.explorationChunkX() + ','
+                        + command.explorationChunkZ() + " visited=" + loadedChunkExplorationMemory.visitedCount(), true);
+                return;
+            }
+            if (entity.getNavigation().isDone()) {
+                failActiveCommand("explore_target_not_reached");
+            }
+        }
+
+        private boolean moveToExploreTarget(BlockPos target) {
+            boolean loaded = isBlockLoaded(target);
+            navigationRuntime.plan(NavigationTarget.block(target.getX(), target.getY(), target.getZ()), distanceTo(target), loaded);
+            if (!loaded) {
+                failActiveCommand("explore_target_unloaded");
+                return false;
+            }
+            boolean accepted = entity.getNavigation().moveTo(
+                    target.getX() + 0.5D, target.getY(), target.getZ() + 0.5D, PLAYER_LIKE_NAVIGATION_SPEED
+            );
+            if (!accepted) {
+                failActiveCommand("explore_navigation_rejected");
+                return false;
+            }
+            navigationRuntime.markReachable(true);
+            return true;
+        }
+
+        private LoadedChunkTarget nextLoadedChunkTarget(double radius) {
+            ServerLevel serverLevel = serverLevel();
+            if (serverLevel == null) {
+                return null;
+            }
+            String dimensionId = dimensionId(serverLevel);
+            Vec3 origin = entity.position();
+            int boundedRadius = (int) Math.max(1.0D, Math.min(AdvancedTaskInstructionParser.EXPLORE_MAX_RADIUS, Math.floor(radius)));
+            int radiusSquared = boundedRadius * boundedRadius;
+            BlockPos originPos = entity.blockPosition();
+            int originChunkX = Math.floorDiv(originPos.getX(), 16);
+            int originChunkZ = Math.floorDiv(originPos.getZ(), 16);
+            int chunkRadius = (int) Math.ceil(boundedRadius / 16.0D);
+            LoadedChunkTarget bestUnvisited = null;
+            LoadedChunkTarget bestVisited = null;
+            int scanned = 0;
+            for (int deltaX = -chunkRadius; deltaX <= chunkRadius && scanned < EXPLORE_MAX_CANDIDATE_CHUNKS; deltaX++) {
+                for (int deltaZ = -chunkRadius; deltaZ <= chunkRadius && scanned < EXPLORE_MAX_CANDIDATE_CHUNKS; deltaZ++) {
+                    int chunkX = originChunkX + deltaX;
+                    int chunkZ = originChunkZ + deltaZ;
+                    int centerX = chunkX * 16 + 8;
+                    int centerZ = chunkZ * 16 + 8;
+                    double distanceSquared = horizontalDistanceSquared(origin.x, origin.z, centerX + 0.5D, centerZ + 0.5D);
+                    if (distanceSquared > radiusSquared) {
+                        continue;
+                    }
+                    BlockPos target = safeExploreTargetNear(serverLevel, centerX, originPos.getY(), centerZ);
+                    scanned++;
+                    if (target == null) {
+                        continue;
+                    }
+                    boolean visited = loadedChunkExplorationMemory.isVisited(dimensionId, chunkX, chunkZ);
+                    int recency = loadedChunkExplorationMemory.recency(dimensionId, chunkX, chunkZ);
+                    LoadedChunkTarget candidate = new LoadedChunkTarget(chunkX, chunkZ, target, distanceSquared, visited, recency);
+                    if (visited) {
+                        if (isBetterVisitedChunk(candidate, bestVisited)) {
+                            bestVisited = candidate;
+                        }
+                    } else if (isBetterUnvisitedChunk(candidate, bestUnvisited)) {
+                        bestUnvisited = candidate;
+                    }
+                }
+            }
+            return bestUnvisited == null ? bestVisited : bestUnvisited;
+        }
+
+        private BlockPos safeExploreTargetNear(ServerLevel serverLevel, int centerX, int originY, int centerZ) {
+            int[] horizontalOffsets = {0, 1, -1, 2, -2};
+            for (int yOffset = 0; yOffset <= 2; yOffset++) {
+                for (int verticalSign = -1; verticalSign <= 1; verticalSign += 2) {
+                    int y = originY + yOffset * verticalSign;
+                    for (int xOffset : horizontalOffsets) {
+                        for (int zOffset : horizontalOffsets) {
+                            BlockPos candidate = new BlockPos(centerX + xOffset, y, centerZ + zOffset);
+                            if (!serverLevel.hasChunkAt(candidate)) {
+                                continue;
+                            }
+                            if (isSafeAdjacentTarget(serverLevel, candidate)) {
+                                return candidate.immutable();
+                            }
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        private static boolean isBetterUnvisitedChunk(LoadedChunkTarget candidate, LoadedChunkTarget current) {
+            if (current == null) {
+                return true;
+            }
+            int distance = Double.compare(candidate.distanceSquared(), current.distanceSquared());
+            if (distance != 0) {
+                return distance < 0;
+            }
+            int chunkX = Integer.compare(candidate.chunkX(), current.chunkX());
+            if (chunkX != 0) {
+                return chunkX < 0;
+            }
+            return candidate.chunkZ() < current.chunkZ();
+        }
+
+        private static boolean isBetterVisitedChunk(LoadedChunkTarget candidate, LoadedChunkTarget current) {
+            if (current == null) {
+                return true;
+            }
+            int recency = Integer.compare(candidate.recency(), current.recency());
+            if (recency != 0) {
+                return recency < 0;
+            }
+            return isBetterUnvisitedChunk(candidate, current);
+        }
+
+        private static double horizontalDistanceSquared(double firstX, double firstZ, double secondX, double secondZ) {
+            double deltaX = firstX - secondX;
+            double deltaZ = firstZ - secondZ;
+            return deltaX * deltaX + deltaZ * deltaZ;
         }
 
         private void collectItems(QueuedCommand command) {
@@ -2368,6 +2565,18 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 startGoto(activeCommand);
                 return;
             }
+            if (kind == IntentKind.EXPLORE_CHUNKS) {
+                if (!entity.allowWorldActions()) {
+                    failActiveCommand("world_actions_disabled_before_explore");
+                    return;
+                }
+                if (activeCommand.explorationTarget() != null) {
+                    moveToExploreTarget(activeCommand.explorationTarget());
+                } else {
+                    startExploreChunks(activeCommand);
+                }
+                return;
+            }
             if (kind == IntentKind.PATROL) {
                 if (activeCommand.returningToStart() && activeCommand.startPosition() != null) {
                     moveToBlock(activeCommand.startPosition());
@@ -2507,7 +2716,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (command.maxTicks() > 0) {
                 return command.maxTicks();
             }
-            if (kind == IntentKind.MOVE || kind == IntentKind.GOTO) {
+            if (kind == IntentKind.MOVE || kind == IntentKind.GOTO || kind == IntentKind.EXPLORE_CHUNKS) {
                 return MOVE_MAX_TICKS;
             }
             if (kind == IntentKind.COLLECT_ITEMS || kind == IntentKind.COLLECT_FOOD) {
@@ -2699,6 +2908,16 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private record FuelPlan(Item item, int count, int burnTicksPerItem) {
         }
 
+        private record LoadedChunkTarget(
+                int chunkX,
+                int chunkZ,
+                BlockPos targetPos,
+                double distanceSquared,
+                boolean visited,
+                int recency
+        ) {
+        }
+
         private static final class QueuedCommand {
             private final IntentKind kind;
             private final Coordinate coordinate;
@@ -2716,6 +2935,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             private Item buildMaterial;
             private int buildIndex;
             private BlockPos startPosition;
+            private BlockPos explorationTarget;
+            private int explorationChunkX;
+            private int explorationChunkZ;
             private int reachTicks;
             private boolean patrolReturn;
             private boolean smeltStarted;
@@ -2834,6 +3056,11 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return new QueuedCommand(IntentKind.PATROL, coordinate, 0.0D);
             }
 
+            private static QueuedCommand exploreChunks(double radius, int steps) {
+                return new QueuedCommand(IntentKind.EXPLORE_CHUNKS, null, radius, null, null, false, null, null, null, 0,
+                        false, steps);
+            }
+
             private static QueuedCommand smelt(BlockPos furnacePos, SmeltingPlan smeltingPlan, FuelPlan fuelPlan) {
                 int maxTicks = FURNACE_START_MARGIN_TICKS
                         + smeltingPlan.inputCount() * smeltingPlan.cookingTimeTicks()
@@ -2949,6 +3176,27 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
             private void setStartPosition(BlockPos startPosition) {
                 this.startPosition = startPosition;
+            }
+
+            private BlockPos explorationTarget() {
+                return explorationTarget;
+            }
+
+            private void setExplorationTarget(BlockPos explorationTarget) {
+                this.explorationTarget = explorationTarget;
+            }
+
+            private int explorationChunkX() {
+                return explorationChunkX;
+            }
+
+            private int explorationChunkZ() {
+                return explorationChunkZ;
+            }
+
+            private void setExplorationChunk(int explorationChunkX, int explorationChunkZ) {
+                this.explorationChunkX = explorationChunkX;
+                this.explorationChunkZ = explorationChunkZ;
             }
 
             private boolean returningToStart() {

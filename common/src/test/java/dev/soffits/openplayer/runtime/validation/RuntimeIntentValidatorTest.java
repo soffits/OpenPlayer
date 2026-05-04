@@ -319,7 +319,6 @@ public final class RuntimeIntentValidatorTest {
         for (IntentKind kind : plannedKinds()) {
             String expectedMessage = switch (kind) {
                 case LOCATE_STRUCTURE -> "LOCATE_STRUCTURE is unsupported: vanilla runtime does not run long-range structure search or load chunks";
-                case EXPLORE_CHUNKS -> "EXPLORE_CHUNKS is unsupported: vanilla runtime does not explore or load chunks automatically";
                 case USE_PORTAL -> "USE_PORTAL is unsupported: portal construction/use needs a separate reviewed safe phase";
                 case TRAVEL_NETHER -> "TRAVEL_NETHER is unsupported: Nether travel needs a separate reviewed safe phase";
                 case LOCATE_STRONGHOLD -> "LOCATE_STRONGHOLD is unsupported: stronghold location needs a separate reviewed safe phase";
@@ -369,6 +368,17 @@ public final class RuntimeIntentValidatorTest {
                 "FIND_LOADED_BIOME should accept exact biome id and radius");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.FIND_LOADED_BIOME, "plains 16"), true),
                 "FIND_LOADED_BIOME requires instruction: <biome_id> [radius]");
+
+        require(RuntimeIntentValidator.validate(intent(IntentKind.EXPLORE_CHUNKS, ""), true).isAccepted(),
+                "EXPLORE_CHUNKS should accept blank loaded-only defaults");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.EXPLORE_CHUNKS, "radius=64 steps=8"), true).isAccepted(),
+                "EXPLORE_CHUNKS should accept bounded key/value syntax");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.EXPLORE_CHUNKS, "clear"), true).isAccepted(),
+                "EXPLORE_CHUNKS should accept clear instruction");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.EXPLORE_CHUNKS, "north"), true),
+                "EXPLORE_CHUNKS requires blank, reset, clear, or instruction: radius=<blocks> steps=<count>");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.EXPLORE_CHUNKS, ""), false),
+                "World actions are disabled for this OpenPlayer character");
     }
 
     private static void validatesPhaseFourteenInteractionInstructions() {
@@ -404,8 +414,6 @@ public final class RuntimeIntentValidatorTest {
     private static void rejectsUnsupportedAdvancedInstructionsWithDeterministicReasons() {
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_STRUCTURE, "minecraft:village"), true),
                 "LOCATE_STRUCTURE is unsupported: vanilla runtime does not run long-range structure search or load chunks");
-        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.EXPLORE_CHUNKS, "north"), true),
-                "EXPLORE_CHUNKS is unsupported: vanilla runtime does not explore or load chunks automatically");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.USE_PORTAL, "nether"), true),
                 "USE_PORTAL is unsupported: portal construction/use needs a separate reviewed safe phase");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.TRAVEL_NETHER, ""), true),
@@ -467,7 +475,7 @@ public final class RuntimeIntentValidatorTest {
             case LOCATE_LOADED_ENTITY -> "minecraft:zombie";
             case FIND_LOADED_BIOME -> "minecraft:plains";
             case LOCATE_STRUCTURE -> "minecraft:village";
-            case EXPLORE_CHUNKS -> "north";
+            case EXPLORE_CHUNKS -> "";
             case USE_PORTAL -> "nether";
             case TRAVEL_NETHER,
                     LOCATE_STRONGHOLD,
@@ -501,7 +509,6 @@ public final class RuntimeIntentValidatorTest {
     private static EnumSet<IntentKind> plannedGatedKinds() {
         return EnumSet.of(
                 IntentKind.LOCATE_STRUCTURE,
-                IntentKind.EXPLORE_CHUNKS,
                 IntentKind.USE_PORTAL,
                 IntentKind.TRAVEL_NETHER,
                 IntentKind.LOCATE_STRONGHOLD,

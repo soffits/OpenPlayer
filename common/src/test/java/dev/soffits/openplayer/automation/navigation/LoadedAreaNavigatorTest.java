@@ -11,6 +11,7 @@ public final class LoadedAreaNavigatorTest {
         selectsNearestCandidateDeterministically();
         handlesEmptyCandidateList();
         boundsDiagnosticsSummary();
+        tracksLoadedChunkExplorationMemoryDeterministically();
     }
 
     private static void selectsNearestCandidateDeterministically() {
@@ -40,6 +41,24 @@ public final class LoadedAreaNavigatorTest {
         );
         require(invalid.summary().contains("radius=0 scanned=0 skippedUnloaded=0 matched=0 capped=false reason="),
                 "invalid diagnostics must include deterministic zero counts");
+    }
+
+    private static void tracksLoadedChunkExplorationMemoryDeterministically() {
+        LoadedChunkExplorationMemory memory = new LoadedChunkExplorationMemory();
+        memory.markVisited("minecraft:overworld", 0, 0);
+        memory.markVisited("minecraft:overworld", 1, 0);
+        require(memory.isVisited("minecraft:overworld", 0, 0), "Visited chunk should be tracked");
+        require(memory.recency("minecraft:overworld", 0, 0) == 0, "Older chunk should have lower recency index");
+        memory.markVisited("minecraft:overworld", 0, 0);
+        require(memory.recency("minecraft:overworld", 0, 0) == 1, "Remarked chunk should become most recent");
+        for (int index = 0; index < LoadedChunkExplorationMemory.MAX_VISITED_CHUNKS + 4; index++) {
+            memory.markVisited("minecraft:overworld", index + 10, 0);
+        }
+        require(memory.visitedCount() == LoadedChunkExplorationMemory.MAX_VISITED_CHUNKS,
+                "Visited chunk memory should be capped");
+        require(!memory.isVisited("minecraft:overworld", 1, 0), "Old entries should evict deterministically");
+        memory.clear();
+        require(memory.visitedCount() == 0, "Clear should reset visited chunk memory");
     }
 
     private static void require(boolean condition, String message) {

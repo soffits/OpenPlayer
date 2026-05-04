@@ -12,7 +12,6 @@ public final class AdvancedTaskPolicy {
         }
         return switch (kind) {
             case LOCATE_STRUCTURE,
-                    EXPLORE_CHUNKS,
                     USE_PORTAL,
                     TRAVEL_NETHER,
                     LOCATE_STRONGHOLD,
@@ -58,7 +57,8 @@ public final class AdvancedTaskPolicy {
                     BUILD_STRUCTURE,
                     LOCATE_LOADED_BLOCK,
                     LOCATE_LOADED_ENTITY,
-                    FIND_LOADED_BIOME -> false;
+                    FIND_LOADED_BIOME,
+                    EXPLORE_CHUNKS -> false;
         };
     }
 
@@ -68,7 +68,6 @@ public final class AdvancedTaskPolicy {
         }
         return switch (kind) {
             case LOCATE_STRUCTURE -> "LOCATE_STRUCTURE is unsupported: vanilla runtime does not run long-range structure search or load chunks";
-            case EXPLORE_CHUNKS -> "EXPLORE_CHUNKS is unsupported: vanilla runtime does not explore or load chunks automatically";
             case USE_PORTAL -> "USE_PORTAL is unsupported: portal construction/use needs a separate reviewed safe phase";
             case TRAVEL_NETHER -> "TRAVEL_NETHER is unsupported: Nether travel needs a separate reviewed safe phase";
             case LOCATE_STRONGHOLD -> "LOCATE_STRONGHOLD is unsupported: stronghold location needs a separate reviewed safe phase";
