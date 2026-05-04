@@ -10,6 +10,7 @@ import dev.soffits.openplayer.api.CommandSubmissionStatus;
 import dev.soffits.openplayer.intent.IntentKind;
 import dev.soffits.openplayer.network.OpenPlayerNetworking;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -17,6 +18,46 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
 public final class OpenPlayerCommands {
+    private static final List<IntentKind> QUEUE_SUGGESTED_INTENT_KINDS = List.of(
+            IntentKind.STOP,
+            IntentKind.MOVE,
+            IntentKind.LOOK,
+            IntentKind.FOLLOW_OWNER,
+            IntentKind.GUARD_OWNER,
+            IntentKind.PATROL,
+            IntentKind.COLLECT_ITEMS,
+            IntentKind.EQUIP_BEST_ITEM,
+            IntentKind.EQUIP_ARMOR,
+            IntentKind.USE_SELECTED_ITEM,
+            IntentKind.SWAP_TO_OFFHAND,
+            IntentKind.DROP_ITEM,
+            IntentKind.BREAK_BLOCK,
+            IntentKind.PLACE_BLOCK,
+            IntentKind.ATTACK_NEAREST,
+            IntentKind.REPORT_STATUS,
+            IntentKind.GOTO,
+            IntentKind.INVENTORY_QUERY,
+            IntentKind.EQUIP_ITEM,
+            IntentKind.GIVE_ITEM,
+            IntentKind.DEPOSIT_ITEM,
+            IntentKind.STASH_ITEM,
+            IntentKind.WITHDRAW_ITEM,
+            IntentKind.GET_ITEM,
+            IntentKind.SMELT_ITEM,
+            IntentKind.COLLECT_FOOD,
+            IntentKind.FARM_NEARBY,
+            IntentKind.FISH,
+            IntentKind.DEFEND_OWNER,
+            IntentKind.PAUSE,
+            IntentKind.UNPAUSE,
+            IntentKind.RESET_MEMORY,
+            IntentKind.BODY_LANGUAGE,
+            IntentKind.BUILD_STRUCTURE,
+            IntentKind.LOCATE_LOADED_BLOCK,
+            IntentKind.LOCATE_LOADED_ENTITY,
+            IntentKind.FIND_LOADED_BIOME
+    );
+
     private OpenPlayerCommands() {
     }
 
@@ -52,6 +93,23 @@ public final class OpenPlayerCommands {
                                         StringArgumentType.getString(context, "assignmentId"),
                                         IntentKind.STOP
                                 ))))
+                .then(Commands.literal("queue")
+                        .then(assignmentArgument()
+                                .then(Commands.argument("kind", StringArgumentType.word())
+                                        .suggests((context, builder) -> suggestQueueIntentKinds(builder))
+                                        .executes(context -> queueIntent(
+                                                context.getSource().getPlayerOrException(),
+                                                StringArgumentType.getString(context, "assignmentId"),
+                                                StringArgumentType.getString(context, "kind"),
+                                                ""
+                                        ))
+                                        .then(Commands.argument("instruction", StringArgumentType.greedyString())
+                                                .executes(context -> queueIntent(
+                                                        context.getSource().getPlayerOrException(),
+                                                        StringArgumentType.getString(context, "assignmentId"),
+                                                        StringArgumentType.getString(context, "kind"),
+                                                        StringArgumentType.getString(context, "instruction")
+                                                ))))))
                 .then(Commands.literal("spawn")
                         .then(assignmentArgument()
                                 .executes(context -> sendResult(
@@ -99,6 +157,29 @@ public final class OpenPlayerCommands {
         return builder.buildFuture();
     }
 
+    private static CompletableFuture<Suggestions> suggestQueueIntentKinds(SuggestionsBuilder builder) {
+        for (IntentKind kind : QUEUE_SUGGESTED_INTENT_KINDS) {
+            builder.suggest(kind.name().toLowerCase(Locale.ROOT));
+        }
+        return builder.buildFuture();
+    }
+
+    static IntentKind parseQueueIntentKind(String input) {
+        if (input == null || input.isBlank()) {
+            return null;
+        }
+        try {
+            IntentKind kind = IntentKind.valueOf(input.trim().toUpperCase(Locale.ROOT));
+            return QUEUE_SUGGESTED_INTENT_KINDS.contains(kind) ? kind : null;
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
+    }
+
+    static List<IntentKind> queueSuggestedIntentKinds() {
+        return QUEUE_SUGGESTED_INTENT_KINDS;
+    }
+
     private static int selectedUnavailable(ServerPlayer player) {
         player.sendSystemMessage(Component.translatable("commands.openplayer.ai.selected_unavailable"));
         return 0;
@@ -115,6 +196,20 @@ public final class OpenPlayerCommands {
 
     private static int intent(ServerPlayer player, String assignmentId, IntentKind intentKind) {
         return sendResult(player, OpenPlayerNetworking.submitAssignmentIntentResult(player, assignmentId, intentKind));
+    }
+
+    private static int queueIntent(ServerPlayer player, String assignmentId, String kindName, String instruction) {
+        IntentKind kind = parseQueueIntentKind(kindName);
+        if (kind == null) {
+            player.sendSystemMessage(Component.translatable("commands.openplayer.queue.invalid_kind", kindName));
+            return 0;
+        }
+        return sendResult(player, OpenPlayerNetworking.submitAssignmentQueuedIntentResult(
+                player,
+                assignmentId,
+                kind,
+                instruction == null ? "" : instruction
+        ));
     }
 
     private static int status(ServerPlayer player) {

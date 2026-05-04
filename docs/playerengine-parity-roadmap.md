@@ -30,7 +30,7 @@ OpenPlayer already has:
 - Provider-backed conversation with bounded history and strict JSON intent parsing.
 - Local provider configuration with secret-safe precedence and diagnostics.
 - Safe debug events and local-only raw traces.
-- Canonical `/openplayer` command tree plus `/ai` and `/aichat` aliases.
+- Canonical `/openplayer` command tree plus `/ai` and `/aichat` aliases, including `/openplayer queue <assignmentId> <kind> [instruction]` for explicit validated automation intent submission.
 - Vanilla server-side NPC actions for movement, follow, patrol, item pickup, block break/place, nearest attack, guard owner, equipment selection, item use, offhand swap, drop item, report status, and chat replies.
 - Alpha.8 context snapshots containing bounded world/agent context for conversation prompts.
 

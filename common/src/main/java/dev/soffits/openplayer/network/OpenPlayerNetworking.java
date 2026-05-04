@@ -457,7 +457,7 @@ public final class OpenPlayerNetworking {
     }
 
     public static CommandSubmissionResult submitAssignmentIntentResult(ServerPlayer sender, String assignmentId,
-                                                                      IntentKind intentKind) {
+                                                                       IntentKind intentKind) {
         if (sender == null || assignmentId == null || assignmentId.isBlank() || intentKind == null) {
             return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Unknown local assignment");
         }
@@ -466,6 +466,33 @@ public final class OpenPlayerNetworking {
                 assignmentId.trim(),
                 new AiPlayerNpcCommand(UUID.randomUUID(), shortcutIntent(intentKind))
         );
+        sendCharacterListResponse(sender);
+        sendStatusResponse(sender);
+        return result;
+    }
+
+    public static CommandSubmissionResult submitAssignmentQueuedIntentResult(ServerPlayer sender, String assignmentId,
+                                                                            IntentKind intentKind, String instruction) {
+        if (sender == null || assignmentId == null || assignmentId.isBlank() || intentKind == null) {
+            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Unknown local assignment");
+        }
+        String normalizedInstruction = instruction == null ? "" : instruction.trim();
+        if (normalizedInstruction.length() > MAX_COMMAND_TEXT_LENGTH) {
+            OpenPlayerDebugEvents.record("command_submission", "rejected", assignmentId, null, null,
+                    "kind=" + intentKind.name() + " instruction_too_long");
+            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Queued command instruction was too long");
+        }
+        CommandSubmissionResult result = COMPANION_LIFECYCLE_MANAGER.submitSelectedCommand(
+                sender.getUUID(),
+                assignmentId.trim(),
+                new AiPlayerNpcCommand(
+                        UUID.randomUUID(),
+                        new CommandIntent(intentKind, IntentPriority.HIGH, normalizedInstruction)
+                )
+        );
+        OpenPlayerDebugEvents.record("command_submission", result.status().name(), assignmentId.trim(), null, null,
+                "kind=" + intentKind.name() + " instructionLength=" + normalizedInstruction.length()
+                        + " message=" + result.message());
         sendCharacterListResponse(sender);
         sendStatusResponse(sender);
         return result;

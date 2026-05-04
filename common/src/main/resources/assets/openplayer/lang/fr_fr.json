@@ -6,6 +6,7 @@
   "commands.openplayer.ai.sent": "Message envoyé à %s.",
   "commands.openplayer.chat.reply": "%s: %s",
   "commands.openplayer.chat.sent": "Vous à %s : %s",
+  "commands.openplayer.queue.invalid_kind": "Type d'intention OpenPlayer inconnu : %s",
   "commands.openplayer.result": "OpenPlayer : %s",
   "commands.openplayer.status.empty": "Aucune affectation locale trouvée.",
   "commands.openplayer.status.header": "Affectations OpenPlayer :",

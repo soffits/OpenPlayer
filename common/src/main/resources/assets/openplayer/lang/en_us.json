@@ -6,6 +6,7 @@
   "commands.openplayer.ai.sent": "Sent message to %s.",
   "commands.openplayer.chat.reply": "%s: %s",
   "commands.openplayer.chat.sent": "You to %s: %s",
+  "commands.openplayer.queue.invalid_kind": "Unknown OpenPlayer intent kind: %s",
   "commands.openplayer.result": "OpenPlayer: %s",
   "commands.openplayer.status.empty": "No local assignments found.",
   "commands.openplayer.status.header": "OpenPlayer assignments:",
