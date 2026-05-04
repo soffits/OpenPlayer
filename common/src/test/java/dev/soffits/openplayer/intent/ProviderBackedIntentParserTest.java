@@ -1,5 +1,6 @@
 package dev.soffits.openplayer.intent;
 
+import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser;
 import java.util.List;
 
 public final class ProviderBackedIntentParserTest {
@@ -12,6 +13,9 @@ public final class ProviderBackedIntentParserTest {
         acceptsPathfinderGotoStructuredToolJson();
         acceptsCraftStructuredToolJson();
         preservesCraftingTableStructuredToolJson();
+        defaultsLoadedBlockSearchMaxDistance();
+        defaultsLoadedEntitySearchMaxDistance();
+        preservesExplicitLoadedSearchMaxDistance();
         rejectsFacadeOnlyStructuredToolJson();
         providerPromptExcludesFacadeOnlyTools();
         rejectsAdminStructuredToolJson();
@@ -66,6 +70,44 @@ public final class ProviderBackedIntentParserTest {
         require(intent.kind() == IntentKind.CRAFT, "craft tool JSON must bridge to craft intent");
         require("minecraft:iron_pickaxe 1 table 10 64 -2".equals(intent.instruction()),
                 "craftingTable args must be preserved in the runtime instruction");
+    }
+
+    private static void defaultsLoadedBlockSearchMaxDistance() throws Exception {
+        ProviderBackedIntentParser parser = new ProviderBackedIntentParser(
+                input -> ProviderIntent.structuredTool("NORMAL", "{\"tool\":\"find_loaded_blocks\",\"args\":{\"matching\":\"stone\"}}")
+        );
+        CommandIntent intent = parser.parse("ignored");
+        require(intent.kind() == IntentKind.LOCATE_LOADED_BLOCK,
+                "find_loaded_blocks tool JSON must bridge to loaded block reconnaissance");
+        require(("minecraft:stone " + (int) AdvancedTaskInstructionParser.DEFAULT_RADIUS).equals(intent.instruction()),
+                "missing maxDistance must default to a bounded loaded block search radius");
+    }
+
+    private static void defaultsLoadedEntitySearchMaxDistance() throws Exception {
+        ProviderBackedIntentParser parser = new ProviderBackedIntentParser(
+                input -> ProviderIntent.structuredTool("NORMAL", "{\"tool\":\"find_loaded_entities\",\"args\":{\"matching\":\"zombie\"}}")
+        );
+        CommandIntent intent = parser.parse("ignored");
+        require(intent.kind() == IntentKind.LOCATE_LOADED_ENTITY,
+                "find_loaded_entities tool JSON must bridge to loaded entity reconnaissance");
+        require(("minecraft:zombie " + (int) AdvancedTaskInstructionParser.DEFAULT_RADIUS).equals(intent.instruction()),
+                "missing maxDistance must default to a bounded loaded entity search radius");
+    }
+
+    private static void preservesExplicitLoadedSearchMaxDistance() throws Exception {
+        ProviderBackedIntentParser blockParser = new ProviderBackedIntentParser(
+                input -> ProviderIntent.structuredTool("NORMAL", "{\"tool\":\"find_loaded_blocks\",\"args\":{\"matching\":\"minecraft:oak_log\",\"maxDistance\":24}}")
+        );
+        CommandIntent blockIntent = blockParser.parse("ignored");
+        require("minecraft:oak_log 24".equals(blockIntent.instruction()),
+                "explicit loaded block maxDistance must be preserved");
+
+        ProviderBackedIntentParser entityParser = new ProviderBackedIntentParser(
+                input -> ProviderIntent.structuredTool("NORMAL", "{\"tool\":\"find_loaded_entities\",\"args\":{\"matching\":\"minecraft:skeleton\",\"maxDistance\":12}}")
+        );
+        CommandIntent entityIntent = entityParser.parse("ignored");
+        require("minecraft:skeleton 12".equals(entityIntent.instruction()),
+                "explicit loaded entity maxDistance must be preserved");
     }
 
     private static void rejectsFacadeOnlyStructuredToolJson() {

@@ -3,6 +3,7 @@ package dev.soffits.openplayer.aicore;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentKind;
 import dev.soffits.openplayer.intent.IntentPriority;
+import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser;
 import dev.soffits.openplayer.runtime.validation.RuntimeIntentValidationResult;
 import dev.soffits.openplayer.runtime.validation.RuntimeIntentValidator;
 import java.util.LinkedHashMap;
@@ -235,8 +236,7 @@ public final class MinecraftPrimitiveTools {
             return goalInstruction(values.get("goal"));
         }
         if (values.containsKey("matching")) {
-            String maxDistance = values.getOrDefault("maxDistance", "");
-            return (values.get("matching") + " " + maxDistance).trim();
+            return loadedSearchInstruction(values);
         }
         if (values.containsKey("item")) {
             return values.get("item");
@@ -258,6 +258,22 @@ public final class MinecraftPrimitiveTools {
             return values.get("maxDistance");
         }
         return "";
+    }
+
+    private static String loadedSearchInstruction(Map<String, String> values) {
+        String maxDistance = values.getOrDefault("maxDistance", "").trim();
+        if (maxDistance.isEmpty()) {
+            maxDistance = String.valueOf((int) AdvancedTaskInstructionParser.DEFAULT_RADIUS);
+        }
+        return namespacedMinecraftId(values.get("matching")) + " " + maxDistance;
+    }
+
+    private static String namespacedMinecraftId(String value) {
+        if (value == null) {
+            return "";
+        }
+        String trimmedValue = value.trim();
+        return trimmedValue.indexOf(':') >= 0 ? trimmedValue : "minecraft:" + trimmedValue;
     }
 
     private static boolean hasCoordinates(Map<String, String> values) {

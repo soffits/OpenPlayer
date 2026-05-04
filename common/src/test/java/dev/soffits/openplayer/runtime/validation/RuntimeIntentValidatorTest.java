@@ -256,14 +256,24 @@ public final class RuntimeIntentValidatorTest {
                 "LOCATE_LOADED_BLOCK should accept exact block id");
         require(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_LOADED_BLOCK, "minecraft:oak_log 32"), true).isAccepted(),
                 "LOCATE_LOADED_BLOCK should accept bounded radius");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_LOADED_BLOCK, "minecraft:stone 16"), true).isAccepted(),
+                "LOCATE_LOADED_BLOCK should accept provider-defaulted bounded radius");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_LOADED_BLOCK, "oak_log"), true),
+                "LOCATE_LOADED_BLOCK requires instruction: <block_or_item_id> [radius]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_LOADED_BLOCK, "minecraft:oak_log bad"), true),
                 "LOCATE_LOADED_BLOCK requires instruction: <block_or_item_id> [radius]");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_LOADED_BLOCK, "minecraft:oak_log"), false),
                 "World actions are disabled for this OpenPlayer character");
 
         require(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_LOADED_ENTITY, "minecraft:zombie"), true).isAccepted(),
                 "LOCATE_LOADED_ENTITY should accept exact entity id");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_LOADED_ENTITY, "minecraft:zombie 16"), true).isAccepted(),
+                "LOCATE_LOADED_ENTITY should accept provider-defaulted bounded radius");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_LOADED_ENTITY, "minecraft:skeleton 12"), true).isAccepted(),
+                "LOCATE_LOADED_ENTITY should accept explicit bounded radius");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_LOADED_ENTITY, "minecraft:zombie 0"), true),
+                "LOCATE_LOADED_ENTITY requires instruction: <entity_type_id> [radius]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_LOADED_ENTITY, "zombie 16"), true),
                 "LOCATE_LOADED_ENTITY requires instruction: <entity_type_id> [radius]");
 
         require(RuntimeIntentValidator.validate(intent(IntentKind.FIND_LOADED_BIOME, "minecraft:plains 16"), true).isAccepted(),
