@@ -33,7 +33,7 @@ public final class AICoreToolCatalog {
                 new CapabilityModule("minecraft-core", "Server-side Minecraft state, query, and primitive action surface.", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS),
                 new CapabilityModule("pathfinder", "Loaded-area navigation goal facade with truthful path diagnostics.", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS),
                 new CapabilityModule("inventory", "Inventory and equipment primitives with no-loss validation contracts.", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS),
-                new CapabilityModule("containers", "Window and workstation parity surface guarded by missing-adapter results.", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER),
+                new CapabilityModule("containers", "Loaded block-entity container and furnace sessions with no-loss transfer boundaries.", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS),
                 new CapabilityModule("crafting", "Datapack-aware recipe query surface without resource acquisition chains.", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS),
                 new CapabilityModule("combat", "Combat primitives gated by hostile-only default policy.", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS),
                 new CapabilityModule("events", "Bounded sanitized session event ring buffer.", CapabilityStatus.IMPLEMENTED),
@@ -74,10 +74,10 @@ public final class AICoreToolCatalog {
         add(defs, "wait_for_ticks", "movement_pathfinder", CapabilityStatus.IMPLEMENTED, false, "", "Return a bounded wait request for the runtime tick scheduler.", integer("ticks"));
         add(defs, "move_to", "movement_pathfinder", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Legacy explicit coordinate movement bridge.", integer("x"), integer("y"), integer("z"));
         add(defs, "pathfinder_goto", "movement_pathfinder", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Request loaded-area pathfinder movement to a structured goal.", object("goal"));
-        add(defs, "pathfinder_get_path_to", "movement_pathfinder", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, false, "unsupported_missing_pathfinder_adapter", "Compute a bounded path from current position to a goal.", object("goal"), integer("timeoutTicks"));
-        add(defs, "pathfinder_get_path_from_to", "movement_pathfinder", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, false, "unsupported_missing_pathfinder_adapter", "Compute a bounded path from a start position to a goal.", object("start"), object("goal"), integer("timeoutTicks"));
-        add(defs, "pathfinder_set_goal", "movement_pathfinder", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, "unsupported_missing_pathfinder_adapter", "Set the active pathfinder goal without claiming success.", object("goal"), bool("dynamic", false));
-        add(defs, "pathfinder_set_movements", "movement_pathfinder", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, false, "unsupported_missing_pathfinder_adapter", "Configure reviewed movement options.", object("movements"));
+        add(defs, "pathfinder_get_path_to", "movement_pathfinder", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Return bounded non-node loaded-area path diagnostics from current position to a goal.", object("goal"), integer("timeoutTicks"));
+        add(defs, "pathfinder_get_path_from_to", "movement_pathfinder", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Return bounded non-node loaded-area path diagnostics from a start position to a goal.", object("start"), object("goal"), integer("timeoutTicks"));
+        add(defs, "pathfinder_set_goal", "movement_pathfinder", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Set a non-dynamic loaded-area pathfinder goal through the reviewed goto bridge.", object("goal"), bool("dynamic", false));
+        add(defs, "pathfinder_set_movements", "movement_pathfinder", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, false, "unsupported_movement_profile_not_applied", "Reject movement profiles until they affect reviewed navigation.", object("movements"));
         add(defs, "pathfinder_stop", "movement_pathfinder", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Stop active pathfinder or bridged automation movement.");
 
         add(defs, "can_dig_block", "block_mutation", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Validate loaded block dig preconditions.", integer("x"), integer("y"), integer("z"));
@@ -131,11 +131,11 @@ public final class AICoreToolCatalog {
         add(defs, "click_window", "inventory_window", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, "unsupported_missing_window_adapter", "Click a validated window slot.", integer("slot"), integer("mouseButton"), integer("mode"));
         add(defs, "put_selected_item_range", "inventory_window", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, "unsupported_missing_window_adapter", "Put selected item into a validated slot range.", integer("start"), integer("end"), text("window"), integer("slot"));
         add(defs, "put_away", "inventory_window", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, "unsupported_missing_window_adapter", "Put away a slot with no-loss semantics.", integer("slot"));
-        add(defs, "close_window", "inventory_window", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, false, "unsupported_missing_window_adapter", "Close a validated window.", text("window"));
-        add(defs, "transfer", "inventory_window", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, "unsupported_missing_window_adapter", "Transfer items with no-loss transaction semantics.", object("options"));
-        add(defs, "open_block", "inventory_window", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, "unsupported_missing_window_adapter", "Open a block window after reach and type validation.", integer("x"), integer("y"), integer("z"));
+        add(defs, "close_window", "inventory_window", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Close the current bounded NPC-owned container session.", text("window", false));
+        add(defs, "transfer", "inventory_window", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Transfer items with no-loss transaction semantics.", object("options"));
+        add(defs, "open_block", "inventory_window", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Open a loaded reachable block-entity container session.", integer("x"), integer("y"), integer("z"));
         add(defs, "open_entity", "inventory_window", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, "unsupported_missing_window_adapter", "Open an entity window after reach and type validation.", text("entityId"));
-        add(defs, "move_slot_item", "inventory_window", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, "unsupported_missing_window_adapter", "Move an item between slots with no-loss checks.", integer("sourceSlot"), integer("destSlot"));
+        add(defs, "move_slot_item", "inventory_window", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Move an NPC inventory item between slots with no-loss checks.", integer("sourceSlot"), integer("destSlot"));
         add(defs, "update_held_item", "inventory_window", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Refresh held item snapshot from runtime state.");
         add(defs, "get_equipment_dest_slot", "inventory_window", CapabilityStatus.IMPLEMENTED, false, "", "Resolve a mineflayer equipment destination to a slot id.", text("destination"));
         add(defs, "pickup_items_nearby", "inventory_window", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Collect already dropped nearby items only.", text("matching", false), integer("maxDistance", false));
@@ -148,17 +148,20 @@ public final class AICoreToolCatalog {
 
         String windowReason = "unsupported_missing_container_session_adapter";
         String workstationReason = "unsupported_missing_workstation_adapter";
-        add(defs, "open_container", "containers_workstations", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, windowReason, "Open a generic container after validation.", object("target"));
-        add(defs, "open_chest", "containers_workstations", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, windowReason, "Open a chest or chest minecart after validation.", object("target"));
-        add(defs, "open_furnace", "containers_workstations", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, workstationReason, "Open a furnace block after validation.", integer("x"), integer("y"), integer("z"));
+        add(defs, "open_container", "containers_workstations", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Open a loaded reachable block-entity container session.", object("target"));
+        add(defs, "open_chest", "containers_workstations", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Open a loaded reachable chest container session.", object("target"));
+        add(defs, "open_furnace", "containers_workstations", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Open a loaded reachable furnace-like block session.", integer("x"), integer("y"), integer("z"));
         add(defs, "open_dispenser", "containers_workstations", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, workstationReason, "Open a dispenser block after validation.", integer("x"), integer("y"), integer("z"));
         add(defs, "open_enchantment_table", "containers_workstations", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, workstationReason, "Open an enchantment table after validation.", integer("x"), integer("y"), integer("z"));
         add(defs, "open_anvil", "containers_workstations", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, workstationReason, "Open an anvil after validation.", integer("x"), integer("y"), integer("z"));
         add(defs, "open_villager", "containers_workstations", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, workstationReason, "Open villager trade window after validation.", text("entityId"));
-        add(defs, "window_deposit", "containers_workstations", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, windowReason, "Deposit items into current window with no-loss semantics.", text("itemType"), text("metadata", false), integer("count"));
-        add(defs, "window_withdraw", "containers_workstations", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, windowReason, "Withdraw items from current window with no-loss semantics.", text("itemType"), text("metadata", false), integer("count"));
-        add(defs, "window_close", "containers_workstations", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, false, windowReason, "Close current window session.");
-        for (String name : List.of("furnace_take_input", "furnace_take_fuel", "furnace_take_output", "furnace_put_input", "furnace_put_fuel", "furnace_status", "enchantment_table_status", "enchant", "enchantment_take_target", "enchantment_put_target", "enchantment_put_lapis", "anvil_combine", "villager_trades", "villager_trade")) {
+        add(defs, "window_deposit", "containers_workstations", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Deposit items into current non-furnace block-entity container with no-loss semantics.", text("itemType"), text("metadata", false), integer("count"));
+        add(defs, "window_withdraw", "containers_workstations", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Withdraw items from current non-furnace block-entity container with no-loss semantics.", text("itemType"), text("metadata", false), integer("count"));
+        add(defs, "window_close", "containers_workstations", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Close current bounded container or furnace session.");
+        for (String name : List.of("furnace_take_input", "furnace_take_fuel", "furnace_take_output", "furnace_put_input", "furnace_put_fuel", "furnace_status")) {
+            add(defs, name, "containers_workstations", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, !name.equals("furnace_status"), "", "Furnace session slot transfer/status without fake smelting completion.", text("target", false), text("itemType", false), integer("count", false));
+        }
+        for (String name : List.of("enchantment_table_status", "enchant", "enchantment_take_target", "enchantment_put_target", "enchantment_put_lapis", "anvil_combine", "villager_trades", "villager_trade")) {
             add(defs, name, "containers_workstations", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, name.contains("status") || name.equals("villager_trades") ? false : true, workstationReason, "Workstation parity surface requiring a real session adapter.", text("target", false), integer("count", false));
         }
     }
@@ -172,7 +175,7 @@ public final class AICoreToolCatalog {
         }
 
         add(defs, "sleep", "bed_respawn_resource_pack", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, "unsupported_missing_sleep_adapter", "Sleep through a real bed interaction.", integer("x"), integer("y"), integer("z"));
-        add(defs, "is_bed", "bed_respawn_resource_pack", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, false, "unsupported_missing_block_query_adapter", "Return whether a loaded block is a bed.", integer("x"), integer("y"), integer("z"));
+        add(defs, "is_bed", "bed_respawn_resource_pack", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Return whether a loaded block is a bed.", integer("x"), integer("y"), integer("z"));
         add(defs, "wake", "bed_respawn_resource_pack", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, false, "unsupported_missing_sleep_adapter", "Wake from a real sleeping state.");
         add(defs, "respawn", "bed_respawn_resource_pack", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, false, "unsupported_missing_npc_respawn_adapter", "Map respawn to NPC lifecycle recovery when available.");
         add(defs, "accept_resource_pack", "bed_respawn_resource_pack", CapabilityStatus.NOT_APPLICABLE_SERVER_SIDE_NPC, false, "unsupported_server_side_npc_no_client_resource_pack_flow", "Resource pack client flow is not applicable to server-side NPCs.");
@@ -200,8 +203,8 @@ public final class AICoreToolCatalog {
         add(defs, "auto_eat_enable", "ecosystem_auto_eat_armor", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, false, "unsupported_missing_auto_eat_adapter", "Enable bounded visible auto-eat mode.");
         add(defs, "auto_eat_disable", "ecosystem_auto_eat_armor", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, false, "unsupported_missing_auto_eat_adapter", "Disable auto-eat mode.");
         add(defs, "auto_eat_status", "ecosystem_auto_eat_armor", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, false, "unsupported_missing_auto_eat_adapter", "Return auto-eat mode status.");
-        add(defs, "armor_manager_equip_best", "ecosystem_auto_eat_armor", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, "unsupported_missing_armor_manager_adapter", "Equip best armor with visible no-loss diagnostics.");
-        add(defs, "armor_manager_status", "ecosystem_auto_eat_armor", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, false, "unsupported_missing_armor_manager_adapter", "Return armor manager mode status.");
+        add(defs, "armor_manager_equip_best", "ecosystem_auto_eat_armor", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Equip best armor from NPC inventory with no-loss diagnostics.");
+        add(defs, "armor_manager_status", "ecosystem_auto_eat_armor", CapabilityStatus.IMPLEMENTED, false, "", "Return armor manager facade status.");
     }
 
     private static void add(List<AICoreToolDefinition> defs, String name, String group, CapabilityStatus status, boolean mutatesWorld, String reason, String description, ToolParameter... parameters) {

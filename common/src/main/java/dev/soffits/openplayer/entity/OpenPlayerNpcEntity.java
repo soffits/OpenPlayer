@@ -4,6 +4,7 @@ import dev.soffits.openplayer.api.AiPlayerNpcCommand;
 import dev.soffits.openplayer.api.CommandSubmissionResult;
 import dev.soffits.openplayer.api.NpcOwnerId;
 import dev.soffits.openplayer.automation.AutomationControllerSnapshot;
+import dev.soffits.openplayer.aicore.AICoreNpcSessionState;
 import dev.soffits.openplayer.automation.survival.SurvivalFoodPolicy;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -84,6 +85,7 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
     );
 
     private final RuntimeCommandExecutor runtimeCommandExecutor = new RuntimeCommandExecutor(this);
+    private final AICoreNpcSessionState aicoreSessionState = new AICoreNpcSessionState();
     private final NonNullList<ItemStack> internalInventory = NonNullList.withSize(INVENTORY_SIZE, ItemStack.EMPTY);
     private final Map<String, Boolean> aicoreControlStates = new LinkedHashMap<>();
     private UUID persistedOwnerId;
@@ -199,6 +201,10 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
 
     public CommandSubmissionResult submitRuntimeCommand(AiPlayerNpcCommand command) {
         return runtimeCommandExecutor.submit(command);
+    }
+
+    public AICoreNpcSessionState aicoreSessionState() {
+        return aicoreSessionState;
     }
 
     public void stopRuntimeCommands() {
@@ -341,6 +347,34 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
 
     public boolean withdrawInventoryItemFrom(List<ItemStack> containerStacks, Item item, int count) {
         return NpcInventoryTransfer.withdrawExactItem(internalInventory, containerStacks, item, count);
+    }
+
+    public boolean moveInventorySlotItemNoLoss(int sourceSlot, int destinationSlot) {
+        if (sourceSlot < 0 || sourceSlot >= internalInventory.size()
+                || destinationSlot < 0 || destinationSlot >= internalInventory.size()
+                || sourceSlot == destinationSlot) {
+            return false;
+        }
+        ItemStack sourceStack = internalInventory.get(sourceSlot);
+        if (sourceStack.isEmpty()) {
+            return false;
+        }
+        ItemStack destinationStack = internalInventory.get(destinationSlot);
+        if (destinationStack.isEmpty()) {
+            internalInventory.set(destinationSlot, sourceStack.copy());
+            internalInventory.set(sourceSlot, ItemStack.EMPTY);
+            return true;
+        }
+        if (!ItemStack.isSameItemSameTags(sourceStack, destinationStack)) {
+            return false;
+        }
+        int capacity = destinationStack.getMaxStackSize() - destinationStack.getCount();
+        if (capacity < sourceStack.getCount()) {
+            return false;
+        }
+        destinationStack.grow(sourceStack.getCount());
+        internalInventory.set(sourceSlot, ItemStack.EMPTY);
+        return true;
     }
 
     public boolean startFurnaceSmelt(List<ItemStack> furnaceStacks, Item inputItem, int inputCount,

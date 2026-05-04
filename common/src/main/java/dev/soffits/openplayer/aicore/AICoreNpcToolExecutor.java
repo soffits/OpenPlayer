@@ -7,6 +7,7 @@ import dev.soffits.openplayer.entity.OpenPlayerNpcEntity;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentPriority;
 import java.util.LinkedHashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -16,10 +17,18 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.Container;
+import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeType;
+import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.ChestBlock;
+import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
@@ -117,6 +126,46 @@ public final class AICoreNpcToolExecutor implements ToolExecutor {
         }
         if (tool.equals("recipes_for") || tool.equals("recipes_all")) {
             return recipes(call);
+        }
+        if (tool.equals("pathfinder_get_path_to") || tool.equals("pathfinder_get_path_from_to")) {
+            return pathfinderDiagnostics(call);
+        }
+        if (tool.equals("pathfinder_set_goal")) {
+            return pathfinderSetGoal(call);
+        }
+        if (tool.equals("open_block") || tool.equals("open_container") || tool.equals("open_chest")) {
+            return openContainer(call, tool.equals("open_chest"));
+        }
+        if (tool.equals("window_deposit")) {
+            return windowTransfer(call, true);
+        }
+        if (tool.equals("window_withdraw")) {
+            return windowTransfer(call, false);
+        }
+        if (tool.equals("window_close") || tool.equals("close_window")) {
+            entity.aicoreSessionState().clear();
+            return ToolResult.success("window_close accepted");
+        }
+        if (tool.equals("move_slot_item")) {
+            return moveSlotItem(call);
+        }
+        if (tool.equals("transfer")) {
+            return transfer(call);
+        }
+        if (tool.equals("open_furnace")) {
+            return openFurnace(call);
+        }
+        if (tool.startsWith("furnace_")) {
+            return furnace(call);
+        }
+        if (tool.equals("is_bed")) {
+            return isBed(call);
+        }
+        if (tool.equals("armor_manager_equip_best")) {
+            return entity.equipBestAvailableArmor() ? ToolResult.success("armor_manager_equip_best accepted") : ToolResult.rejected("no_armor_upgrade_available");
+        }
+        if (tool.equals("armor_manager_status")) {
+            return ToolResult.success("armor_manager_status idle", Map.of("mode", "manual", "active", "false"));
         }
         if (tool.equals("look")) {
             return look(call);
@@ -324,6 +373,231 @@ public final class AICoreNpcToolExecutor implements ToolExecutor {
         return ToolResult.success("recipes=" + count, Map.of("count", Integer.toString(count), "recipeIds", recipeIds.toString(), "itemType", itemId.toString()));
     }
 
+    private ToolResult pathfinderDiagnostics(ToolCall call) {
+        String instruction = call.name().value().equals("pathfinder_get_path_from_to")
+                ? goalInstruction(call.arguments().values().get("start")) + " -> " + goalInstruction(call.arguments().values().get("goal"))
+                : goalInstruction(call.arguments().values().get("goal"));
+        if (instruction.isBlank() || instruction.contains("unsupported")) {
+            return ToolResult.rejected("unsupported_goal_shape");
+        }
+        ServerLevel level = serverLevel();
+        if (level == null) {
+            return ToolResult.failed("server_level_unavailable");
+        }
+        BlockPos start = call.name().value().equals("pathfinder_get_path_from_to")
+                ? blockPosFromGoal(call.arguments().values().get("start"))
+                : entity.blockPosition();
+        BlockPos goal = blockPosFromGoal(call.arguments().values().get("goal"));
+        if (start == null || goal == null) {
+            return ToolResult.rejected("unsupported_goal_shape");
+        }
+        boolean loaded = level.hasChunkAt(start) && level.hasChunkAt(goal);
+        double distance = Math.sqrt(start.distSqr(goal));
+        boolean withinLoadedAreaBounds = loaded && distance <= 256.0D;
+        return ToolResult.success("pathfinder loaded-area diagnostic", Map.of(
+                "diagnostic", "loaded_area_goal_bounds",
+                "startChunkLoaded", Boolean.toString(level.hasChunkAt(start)),
+                "goalChunkLoaded", Boolean.toString(level.hasChunkAt(goal)),
+                "withinLoadedAreaBounds", Boolean.toString(withinLoadedAreaBounds),
+                "distance", Double.toString(distance),
+                "nodeListExposed", "false"
+        ));
+    }
+
+    private ToolResult pathfinderSetGoal(ToolCall call) {
+        if (Boolean.parseBoolean(call.arguments().values().getOrDefault("dynamic", "false"))) {
+            return ToolResult.failed("unsupported_missing_dynamic_goal_tick_adapter");
+        }
+        Optional<CommandIntent> commandIntent = MinecraftPrimitiveTools.toCommandIntent(
+                ToolCall.of("pathfinder_goto", new ToolArguments(Map.of("goal", call.arguments().values().get("goal")))),
+                IntentPriority.NORMAL
+        );
+        if (commandIntent.isEmpty()) {
+            return ToolResult.rejected("unsupported_goal_shape");
+        }
+        CommandSubmissionResult submission = commandSubmitter.apply(commandIntent.get());
+        return submission.status() == CommandSubmissionStatus.ACCEPTED
+                ? ToolResult.success(submission.message())
+                : ToolResult.rejected(submission.message());
+    }
+
+    private ToolResult openContainer(ToolCall call, boolean chestOnly) {
+        ServerLevel level = serverLevel();
+        if (level == null) {
+            return ToolResult.failed("server_level_unavailable");
+        }
+        BlockPos pos = blockPosFromValuesOrTarget(call.arguments().values());
+        if (pos == null) {
+            return ToolResult.rejected("target_coordinates_required");
+        }
+        Container container = containerAt(level, pos);
+        if (container == null) {
+            return ToolResult.failed("unsupported_missing_loaded_container_block_entity");
+        }
+        if (chestOnly && !(level.getBlockState(pos).getBlock() instanceof ChestBlock)) {
+            return ToolResult.failed("target_is_not_loaded_chest_block");
+        }
+        entity.aicoreSessionState().openContainer(pos, container instanceof AbstractFurnaceBlockEntity);
+        return ToolResult.success("container session opened", Map.of("x", Integer.toString(pos.getX()), "y", Integer.toString(pos.getY()), "z", Integer.toString(pos.getZ()), "slots", Integer.toString(container.getContainerSize())));
+    }
+
+    private ToolResult windowTransfer(ToolCall call, boolean deposit) {
+        ToolResult sessionRejection = genericWindowTransferSessionRejection(entity.aicoreSessionState());
+        if (sessionRejection != null) {
+            return sessionRejection;
+        }
+        ServerLevel level = serverLevel();
+        Container container = currentContainer(level);
+        if (container == null) {
+            return ToolResult.failed("no_current_loaded_container_session");
+        }
+        Item item = item(call.arguments().values().get("itemType"));
+        if (item == null) {
+            return ToolResult.rejected("unknown_item_type");
+        }
+        Integer count = boundedCountOrNull(call.arguments().values().get("count"));
+        if (count == null) {
+            return ToolResult.rejected("count must be between 1 and 256");
+        }
+        List<ItemStack> snapshot = containerSnapshot(container);
+        boolean transferred = deposit
+                ? entity.depositInventoryItemTo(snapshot, item, count)
+                : entity.withdrawInventoryItemFrom(snapshot, item, count);
+        if (!transferred) {
+            return ToolResult.rejected(deposit ? "deposit_would_not_fit_or_item_missing" : "withdraw_would_not_fit_or_item_missing");
+        }
+        restoreContainer(container, snapshot);
+        return ToolResult.success(deposit ? "window_deposit accepted" : "window_withdraw accepted", Map.of("itemType", BuiltInRegistries.ITEM.getKey(item).toString(), "count", Integer.toString(count)));
+    }
+
+    private ToolResult moveSlotItem(ToolCall call) {
+        int sourceSlot = Integer.parseInt(call.arguments().values().get("sourceSlot"));
+        int destinationSlot = Integer.parseInt(call.arguments().values().get("destSlot"));
+        return entity.moveInventorySlotItemNoLoss(sourceSlot, destinationSlot)
+                ? ToolResult.success("move_slot_item accepted")
+                : ToolResult.rejected("move_slot_item_requires_source_and_full_destination_capacity");
+    }
+
+    private ToolResult transfer(ToolCall call) {
+        String options = call.arguments().values().get("options");
+        String direction = jsonStringField(options, "direction");
+        String itemType = jsonStringField(options, "itemType");
+        String count = jsonNumberField(options, "count");
+        if (direction.isBlank() || itemType.isBlank() || count.isBlank()) {
+            return ToolResult.rejected("transfer_options_require_direction_itemType_count");
+        }
+        boolean deposit = direction.equals("deposit") || direction.equals("to_window");
+        boolean withdraw = direction.equals("withdraw") || direction.equals("from_window");
+        if (!deposit && !withdraw) {
+            return ToolResult.rejected("unsupported_transfer_direction");
+        }
+        return windowTransfer(ToolCall.of(deposit ? "window_deposit" : "window_withdraw", new ToolArguments(Map.of("itemType", itemType, "count", count))), deposit);
+    }
+
+    static ToolResult genericWindowTransferSessionRejection(AICoreNpcSessionState sessionState) {
+        if (sessionState != null && sessionState.hasFurnaceSession()) {
+            return ToolResult.rejected("use_furnace_specific_transfer_tools");
+        }
+        return null;
+    }
+
+    private ToolResult openFurnace(ToolCall call) {
+        ServerLevel level = serverLevel();
+        if (level == null) {
+            return ToolResult.failed("server_level_unavailable");
+        }
+        BlockPos pos = blockPos(call.arguments().values());
+        Container container = containerAt(level, pos);
+        if (!(container instanceof AbstractFurnaceBlockEntity)) {
+            return ToolResult.failed("target_is_not_loaded_furnace_block_entity");
+        }
+        entity.aicoreSessionState().openFurnace(pos);
+        return ToolResult.success("furnace session opened", Map.of("x", Integer.toString(pos.getX()), "y", Integer.toString(pos.getY()), "z", Integer.toString(pos.getZ())));
+    }
+
+    private ToolResult furnace(ToolCall call) {
+        ServerLevel level = serverLevel();
+        Container furnace = currentFurnace(level);
+        if (furnace == null) {
+            return ToolResult.failed("no_current_loaded_furnace_session");
+        }
+        String tool = call.name().value();
+        if (tool.equals("furnace_status")) {
+            return ToolResult.success("furnace_status", Map.of(
+                    "input", stackSummary(furnace.getItem(0)),
+                    "fuel", stackSummary(furnace.getItem(1)),
+                    "output", stackSummary(furnace.getItem(2))
+            ));
+        }
+        int slot = switch (tool) {
+            case "furnace_put_input", "furnace_take_input" -> 0;
+            case "furnace_put_fuel", "furnace_take_fuel" -> 1;
+            case "furnace_take_output" -> 2;
+            default -> -1;
+        };
+        if (slot < 0) {
+            return ToolResult.failed("unsupported_missing_workstation_adapter");
+        }
+        Item item = item(call.arguments().values().get("itemType"));
+        if (item == null) {
+            return ToolResult.rejected("unknown_item_type");
+        }
+        Integer count = boundedCountOrNull(call.arguments().values().getOrDefault("count", "1"));
+        if (count == null) {
+            return ToolResult.rejected("count must be between 1 and 256");
+        }
+        if (tool.equals("furnace_put_input") && !isSmeltableInput(level, item)) {
+            return ToolResult.rejected("furnace_input_item_is_not_smeltable");
+        }
+        if (tool.equals("furnace_put_fuel") && !AbstractFurnaceBlockEntity.isFuel(new ItemStack(item))) {
+            return ToolResult.rejected("furnace_fuel_item_is_not_fuel");
+        }
+        List<ItemStack> furnaceSnapshot = containerSnapshot(furnace);
+        List<ItemStack> npcSnapshot = entity.inventorySnapshot();
+        boolean transferred = tool.startsWith("furnace_put")
+                ? putFurnaceSlot(furnaceSnapshot, slot, item, count)
+                : takeFurnaceSlot(furnaceSnapshot, slot, item, count);
+        if (!transferred) {
+            return ToolResult.rejected("furnace_transfer_preconditions_failed");
+        }
+        restoreContainer(furnace, furnaceSnapshot);
+        if (npcSnapshot.size() != entity.inventorySnapshot().size()) {
+            return ToolResult.failed("inventory_snapshot_changed_unexpectedly");
+        }
+        return ToolResult.success(tool + " accepted", Map.of("itemType", BuiltInRegistries.ITEM.getKey(item).toString(), "count", Integer.toString(count)));
+    }
+
+    private boolean putFurnaceSlot(List<ItemStack> furnaceStacks, int slot, Item item, int count) {
+        List<ItemStack> singleSlot = new ArrayList<>(List.of(furnaceStacks.get(slot).copy()));
+        if (!entity.depositInventoryItemTo(singleSlot, item, count)) {
+            return false;
+        }
+        furnaceStacks.set(slot, singleSlot.get(0).copy());
+        return true;
+    }
+
+    private boolean takeFurnaceSlot(List<ItemStack> furnaceStacks, int slot, Item item, int count) {
+        List<ItemStack> singleSlot = new ArrayList<>(List.of(furnaceStacks.get(slot).copy()));
+        if (!entity.withdrawInventoryItemFrom(singleSlot, item, count)) {
+            return false;
+        }
+        furnaceStacks.set(slot, singleSlot.get(0).copy());
+        return true;
+    }
+
+    private ToolResult isBed(ToolCall call) {
+        ServerLevel level = serverLevel();
+        if (level == null) {
+            return ToolResult.failed("server_level_unavailable");
+        }
+        BlockPos pos = blockPos(call.arguments().values());
+        if (!level.hasChunkAt(pos)) {
+            return ToolResult.failed("target_chunk_unloaded");
+        }
+        boolean bed = level.getBlockState(pos).getBlock() instanceof BedBlock;
+        return ToolResult.success("is_bed=" + bed, Map.of("isBed", Boolean.toString(bed)));
+    }
+
     private ToolResult look(ToolCall call) {
         Map<String, String> values = call.arguments().values();
         float yaw = (float) Double.parseDouble(values.get("yaw"));
@@ -383,6 +657,162 @@ public final class AICoreNpcToolExecutor implements ToolExecutor {
 
     private static BlockPos blockPos(Map<String, String> values) {
         return new BlockPos(Integer.parseInt(values.get("x")), Integer.parseInt(values.get("y")), Integer.parseInt(values.get("z")));
+    }
+
+    private static BlockPos blockPosFromValuesOrTarget(Map<String, String> values) {
+        if (values.containsKey("x") && values.containsKey("y") && values.containsKey("z")) {
+            return blockPos(values);
+        }
+        String target = values.get("target");
+        if (target == null || target.isBlank()) {
+            return null;
+        }
+        String x = jsonNumberField(target, "x");
+        String y = jsonNumberField(target, "y");
+        String z = jsonNumberField(target, "z");
+        if (x.isBlank() || y.isBlank() || z.isBlank()) {
+            return null;
+        }
+        return new BlockPos(Integer.parseInt(x), Integer.parseInt(y), Integer.parseInt(z));
+    }
+
+    private Container containerAt(ServerLevel level, BlockPos pos) {
+        if (level == null || pos == null || !level.hasChunkAt(pos) || !withinInteractionDistance(pos)) {
+            return null;
+        }
+        BlockEntity blockEntity = level.getBlockEntity(pos);
+        return blockEntity instanceof Container container ? container : null;
+    }
+
+    private Container currentContainer(ServerLevel level) {
+        BlockPos pos = entity.aicoreSessionState().containerPos();
+        return pos == null ? null : containerAt(level, pos);
+    }
+
+    private Container currentFurnace(ServerLevel level) {
+        BlockPos pos = entity.aicoreSessionState().furnacePos();
+        Container container = pos == null ? null : containerAt(level, pos);
+        return container instanceof AbstractFurnaceBlockEntity ? container : null;
+    }
+
+    private boolean isSmeltableInput(ServerLevel level, Item item) {
+        if (level == null || item == null) {
+            return false;
+        }
+        return level.getRecipeManager().getRecipeFor(RecipeType.SMELTING, new SimpleContainer(new ItemStack(item)), level).isPresent();
+    }
+
+    private static List<ItemStack> containerSnapshot(Container container) {
+        ArrayList<ItemStack> stacks = new ArrayList<>(container.getContainerSize());
+        for (int slot = 0; slot < container.getContainerSize(); slot++) {
+            stacks.add(container.getItem(slot).copy());
+        }
+        return stacks;
+    }
+
+    private static void restoreContainer(Container container, List<ItemStack> snapshot) {
+        for (int slot = 0; slot < container.getContainerSize() && slot < snapshot.size(); slot++) {
+            container.setItem(slot, snapshot.get(slot).copy());
+        }
+        container.setChanged();
+    }
+
+    private static Item item(String itemType) {
+        ResourceLocation itemId = ResourceLocation.tryParse(itemType == null ? "" : itemType);
+        return itemId != null && BuiltInRegistries.ITEM.containsKey(itemId) ? BuiltInRegistries.ITEM.get(itemId) : null;
+    }
+
+    private static String stackSummary(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return "empty";
+        }
+        return BuiltInRegistries.ITEM.getKey(stack.getItem()) + " x" + stack.getCount();
+    }
+
+    private static String goalInstruction(String goalJson) {
+        if (goalJson == null || goalJson.isBlank()) {
+            return "unsupported_empty_goal";
+        }
+        String type = jsonStringField(goalJson, "type");
+        String x = jsonNumberField(goalJson, "x");
+        String y = jsonNumberField(goalJson, "y");
+        String z = jsonNumberField(goalJson, "z");
+        if ((type.equals("goal_block") || type.equals("goal_near") || type.equals("goal_get_to_block")
+                || type.equals("goal_look_at_block") || type.equals("goal_place_block"))
+                && !x.isBlank() && !y.isBlank() && !z.isBlank()) {
+            return x + " " + y + " " + z;
+        }
+        if ((type.equals("goal_xz") || type.equals("goal_near_xz")) && !x.isBlank() && !z.isBlank()) {
+            return x + " 0 " + z;
+        }
+        return "unsupported_goal_shape";
+    }
+
+    private static BlockPos blockPosFromGoal(String goalJson) {
+        String instruction = goalInstruction(goalJson);
+        if (instruction.isBlank() || instruction.contains("unsupported")) {
+            return null;
+        }
+        String[] parts = instruction.split(" ");
+        if (parts.length != 3) {
+            return null;
+        }
+        try {
+            return new BlockPos(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]), Integer.parseInt(parts[2]));
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
+    private static Integer boundedCountOrNull(String value) {
+        try {
+            int count = Integer.parseInt(value);
+            return count >= 1 && count <= 256 ? count : null;
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
+    private static String jsonStringField(String json, String fieldName) {
+        String quoted = "\"" + fieldName + "\"";
+        int fieldIndex = json == null ? -1 : json.indexOf(quoted);
+        if (fieldIndex < 0) {
+            return "";
+        }
+        int colonIndex = json.indexOf(':', fieldIndex + quoted.length());
+        int quoteStart = colonIndex < 0 ? -1 : json.indexOf('"', colonIndex + 1);
+        int quoteEnd = quoteStart < 0 ? -1 : json.indexOf('"', quoteStart + 1);
+        return quoteEnd > quoteStart ? json.substring(quoteStart + 1, quoteEnd) : "";
+    }
+
+    private static String jsonNumberField(String json, String fieldName) {
+        String quoted = "\"" + fieldName + "\"";
+        int fieldIndex = json == null ? -1 : json.indexOf(quoted);
+        if (fieldIndex < 0) {
+            return "";
+        }
+        int colonIndex = json.indexOf(':', fieldIndex + quoted.length());
+        if (colonIndex < 0) {
+            return "";
+        }
+        int index = colonIndex + 1;
+        while (index < json.length() && Character.isWhitespace(json.charAt(index))) {
+            index++;
+        }
+        if (index < json.length() && json.charAt(index) == '"') {
+            int quoteEnd = json.indexOf('"', index + 1);
+            return quoteEnd > index ? json.substring(index + 1, quoteEnd) : "";
+        }
+        int start = index;
+        while (index < json.length()) {
+            char character = json.charAt(index);
+            if ((character >= '0' && character <= '9') || character == '-' || character == '+') {
+                index++;
+            } else {
+                break;
+            }
+        }
+        return index > start ? json.substring(start, index) : "";
     }
 
     private static double maxDistance(ToolCall call, double defaultValue) {

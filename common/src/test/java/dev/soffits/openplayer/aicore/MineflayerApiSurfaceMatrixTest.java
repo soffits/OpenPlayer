@@ -19,5 +19,8 @@ public final class MineflayerApiSurfaceMatrixTest {
         AICoreTestSupport.requireStatus("can_dig_block", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS);
         AICoreTestSupport.requireStatus("dig_time", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS);
         AICoreTestSupport.requireStatus("deactivate_item", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS);
+        AICoreTestSupport.requireStatus("is_bed", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS);
+        AICoreTestSupport.requireStatus("armor_manager_equip_best", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS);
+        AICoreTestSupport.requireStatus("sleep", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER);
     }
 }

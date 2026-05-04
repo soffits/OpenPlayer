@@ -15,5 +15,13 @@ public final class AICoreNavigationGoalTest {
         AICoreTestSupport.require(setControl.status() == ToolResultStatus.SUCCESS, "set_control_state must validate as visible control state without fake motion");
         ToolResult wait = MinecraftPrimitiveTools.validate(ToolCall.of("wait_for_ticks", new ToolArguments(Map.of("ticks", "20"))), new ToolValidationContext(true));
         AICoreTestSupport.require(wait.status() == ToolResultStatus.SUCCESS, "wait_for_ticks must validate as a bounded tick wait request");
+        AICoreTestSupport.requireStatus("pathfinder_get_path_to", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS);
+        AICoreTestSupport.requireStatus("pathfinder_set_goal", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS);
+        AICoreToolDefinition pathDefinition = AICoreToolCatalog.definition(ToolName.of("pathfinder_get_path_to")).orElseThrow();
+        AICoreTestSupport.require(pathDefinition.schema().description().contains("non-node"), "path diagnostics must not claim mineflayer node-list parity");
+        ToolResult path = MinecraftPrimitiveTools.validate(ToolCall.of("pathfinder_get_path_to", new ToolArguments(Map.of("goal", "{\"type\":\"goal_block\",\"x\":1,\"y\":64,\"z\":2}", "timeoutTicks", "20"))), new ToolValidationContext(true));
+        AICoreTestSupport.require(path.status() == ToolResultStatus.SUCCESS, "pathfinder_get_path_to must validate as bounded diagnostics");
+        ToolResult movements = MinecraftPrimitiveTools.validate(ToolCall.of("pathfinder_set_movements", new ToolArguments(Map.of("movements", "{}"))), new ToolValidationContext(true));
+        AICoreTestSupport.requireFailed(movements, "unsupported_movement_profile_not_applied");
     }
 }

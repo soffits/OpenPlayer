@@ -92,6 +92,10 @@ public final class MinecraftPrimitiveTools {
         if (schemaValidation.isPresent()) {
             return schemaValidation.get();
         }
+        Optional<ToolResult> nestedValidation = validateNestedArguments(call);
+        if (nestedValidation.isPresent()) {
+            return nestedValidation.get();
+        }
         Optional<AICoreToolDefinition> definition = AICoreToolCatalog.definition(call.name());
         if (definition.isPresent()) {
             CapabilityStatus status = definition.get().capabilityStatus();
@@ -398,6 +402,40 @@ public final class MinecraftPrimitiveTools {
         if (slot.isPresent() && (slot.get() < 0 || slot.get() > 255)) {
             return Optional.of(ToolResult.rejected("slot must be between 0 and 255"));
         }
+        Optional<Integer> sourceSlot = integerArgument(call, "sourceSlot");
+        if (sourceSlot.isPresent() && (sourceSlot.get() < 0 || sourceSlot.get() > 35)) {
+            return Optional.of(ToolResult.rejected("sourceSlot must be between 0 and 35"));
+        }
+        Optional<Integer> destinationSlot = integerArgument(call, "destSlot");
+        if (destinationSlot.isPresent() && (destinationSlot.get() < 0 || destinationSlot.get() > 35)) {
+            return Optional.of(ToolResult.rejected("destSlot must be between 0 and 35"));
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<ToolResult> validateNestedArguments(ToolCall call) {
+        if (!call.name().value().equals("transfer")) {
+            return Optional.empty();
+        }
+        String options = call.arguments().values().get("options");
+        String direction = jsonStringField(options, "direction");
+        String itemType = jsonStringField(options, "itemType");
+        String countValue = jsonIntegerField(options, "count");
+        if (direction.isBlank() || itemType.isBlank() || countValue.isBlank()) {
+            return Optional.of(ToolResult.rejected("transfer_options_require_direction_itemType_count"));
+        }
+        if (!direction.equals("deposit") && !direction.equals("to_window")
+                && !direction.equals("withdraw") && !direction.equals("from_window")) {
+            return Optional.of(ToolResult.rejected("unsupported_transfer_direction"));
+        }
+        try {
+            int count = Integer.parseInt(countValue);
+            if (count < 1 || count > 256) {
+                return Optional.of(ToolResult.rejected("count must be between 1 and 256"));
+            }
+        } catch (NumberFormatException exception) {
+            return Optional.of(ToolResult.rejected("Argument has invalid integer value: count"));
+        }
         return Optional.empty();
     }
 
@@ -411,6 +449,43 @@ public final class MinecraftPrimitiveTools {
             return Optional.of(ToolResult.rejected("maxDistance must be finite and greater than 0 and at most 256"));
         }
         return Optional.empty();
+    }
+
+    private static String jsonIntegerField(String json, String fieldName) {
+        String quoted = "\"" + fieldName + "\"";
+        int fieldIndex = json == null ? -1 : json.indexOf(quoted);
+        if (fieldIndex < 0) {
+            return "";
+        }
+        int colonIndex = json.indexOf(':', fieldIndex + quoted.length());
+        if (colonIndex < 0) {
+            return "";
+        }
+        int index = colonIndex + 1;
+        while (index < json.length() && Character.isWhitespace(json.charAt(index))) {
+            index++;
+        }
+        if (index < json.length() && json.charAt(index) == '"') {
+            int quoteEnd = json.indexOf('"', index + 1);
+            return quoteEnd > index ? json.substring(index + 1, quoteEnd) : "";
+        }
+        int start = index;
+        if (index < json.length() && (json.charAt(index) == '-' || json.charAt(index) == '+')) {
+            index++;
+        }
+        while (index < json.length() && Character.isDigit(json.charAt(index))) {
+            index++;
+        }
+        if (index == start || (index == start + 1 && (json.charAt(start) == '-' || json.charAt(start) == '+'))) {
+            return "";
+        }
+        while (index < json.length() && Character.isWhitespace(json.charAt(index))) {
+            index++;
+        }
+        if (index < json.length() && json.charAt(index) != ',' && json.charAt(index) != '}') {
+            return "invalid";
+        }
+        return json.substring(start, index).trim();
     }
 
     private static Optional<Integer> integerArgument(ToolCall call, String name) {
