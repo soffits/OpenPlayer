@@ -3,9 +3,7 @@ package dev.soffits.openplayer.intent;
 import dev.soffits.openplayer.aicore.AICoreProviderJsonToolParser;
 import dev.soffits.openplayer.aicore.JsonToolParseResult;
 import dev.soffits.openplayer.aicore.MinecraftPrimitiveTools;
-import dev.soffits.openplayer.aicore.ToolArguments;
 import dev.soffits.openplayer.aicore.ToolCall;
-import dev.soffits.openplayer.aicore.ToolName;
 import dev.soffits.openplayer.aicore.ToolResult;
 import dev.soffits.openplayer.aicore.ToolResultStatus;
 import dev.soffits.openplayer.aicore.ToolValidationContext;
@@ -53,41 +51,32 @@ public final class ProviderBackedIntentParser implements IntentParser {
             IntentPriority priority = parsePriority(providerIntent.priority());
             CommandIntent commandIntent = parseCommandIntent(providerIntent, priority);
             OpenPlayerRawTrace.parseOutput("provider_backed_parser", null,
-                    "kind=" + providerIntent.kind() + " priority=" + providerIntent.priority()
-                            + " instruction=" + providerIntent.instruction());
+                    "type=" + providerIntent.type() + " priority=" + providerIntent.priority()
+                            + " message=" + providerIntent.message());
             return commandIntent;
         } catch (IntentParseException exception) {
             OpenPlayerRawTrace.parseRejection("provider_backed_parser", null,
-                    "kind=" + providerIntent.kind() + " priority=" + providerIntent.priority()
-                            + " instruction=" + providerIntent.instruction(), exception.getMessage());
+                    "type=" + providerIntent.type() + " priority=" + providerIntent.priority()
+                            + " message=" + providerIntent.message(), exception.getMessage());
             throw exception;
         }
     }
 
     private static CommandIntent parseCommandIntent(ProviderIntent providerIntent, IntentPriority priority)
             throws IntentParseException {
-        if (providerIntent.hasStructuredToolJson()) {
-            return parseStructuredToolCommandIntent(providerIntent, priority);
-        }
-        Optional<ToolName> toolName = MinecraftPrimitiveTools.toolNameForProviderKind(providerIntent.kind());
-        if (toolName.isPresent()) {
-            ToolCall call = new ToolCall(toolName.get(), ToolArguments.instruction(providerIntent.instruction()));
-            Optional<CommandIntent> commandIntent = MinecraftPrimitiveTools.toCommandIntent(call, priority);
-            if (commandIntent.isPresent()) {
-                return commandIntent.get();
-            }
-        }
-        IntentKind kind = parseKind(providerIntent.kind());
-        if (kind != IntentKind.CHAT && kind != IntentKind.UNAVAILABLE) {
-            throw new IntentParseException("intent provider returned an unsupported primitive tool");
-        }
-        return new CommandIntent(kind, priority, providerIntent.instruction());
+        return switch (providerIntent.type()) {
+            case TOOL -> parseStructuredToolCommandIntent(providerIntent, priority);
+            case PLAN -> throw new IntentParseException(
+                    "provider plans are parser-only and are not executable by this provider path");
+            case CHAT -> new CommandIntent(IntentKind.CHAT, priority, providerIntent.message());
+            case UNAVAILABLE -> new CommandIntent(IntentKind.UNAVAILABLE, priority, providerIntent.message());
+        };
     }
 
     private static CommandIntent parseStructuredToolCommandIntent(ProviderIntent providerIntent, IntentPriority priority)
             throws IntentParseException {
-        if (providerIntent.plan()) {
-            throw new IntentParseException("provider plans are parser-only and are not executable by this provider path");
+        if (!providerIntent.hasStructuredToolJson()) {
+            throw new IntentParseException("provider tool JSON is missing");
         }
         JsonToolParseResult parseResult = TOOL_JSON_PARSER.parse(providerIntent.toolJson());
         if (!parseResult.isAccepted()) {
@@ -107,15 +96,6 @@ public final class ProviderBackedIntentParser implements IntentParser {
             throw new IntentParseException("intent provider returned a non-executable primitive tool");
         }
         return commandIntent.get();
-    }
-
-    private static IntentKind parseKind(String value) throws IntentParseException {
-        String normalizedValue = normalizeEnumValue(value);
-        try {
-            return IntentKind.valueOf(normalizedValue);
-        } catch (IllegalArgumentException exception) {
-            throw new IntentParseException("intent provider returned an unknown kind", exception);
-        }
     }
 
     private static IntentPriority parsePriority(String value) throws IntentParseException {

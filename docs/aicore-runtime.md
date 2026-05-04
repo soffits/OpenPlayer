@@ -19,6 +19,8 @@ Every tool validates independently. Mutating tools are rejected when `allowWorld
 
 Unsupported mechanics are not faked. Examples include fishing without an NPC-owned hook adapter, elytra without server-side NPC physics, resource-pack client flows on a server-side NPC, workstation sessions without no-loss window adapters, and pathfinder calls before a reviewed path adapter is connected.
 
+Provider-backed parsing accepts only structured `tool`, `chat`, or `unavailable` output. The old internal generic provider shape using `kind` and `instruction` fields is not accepted, and provider plans remain rejected until reviewed queue semantics exist.
+
 ## Existing Primitive Bridge
 
 Existing OpenPlayer primitives still work through AICore where practical:

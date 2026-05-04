@@ -18,6 +18,9 @@ public final class OpenAiCompatibleIntentProviderTest {
         systemPromptRejectsMacroSurface();
         parsesStructuredToolProviderResponse();
         parsesStructuredPlanProviderResponseAsNonExecutablePlan();
+        parsesStructuredChatProviderResponse();
+        parsesStructuredUnavailableProviderResponse();
+        rejectsOldStyleProviderResponse();
     }
 
     private static void resolvesV1BaseEndpoint() throws Exception {
@@ -54,10 +57,13 @@ public final class OpenAiCompatibleIntentProviderTest {
 
     private static void systemPromptConstrainConversationReplies() {
         String prompt = OpenAiCompatibleIntentProvider.systemPrompt();
-        require(prompt.contains("For CHAT, instruction must be the selected character's concise conversational reply"),
-                "system prompt must make CHAT instruction an NPC reply");
-        require(prompt.contains("For UNAVAILABLE, instruction may be blank or a short safe reason"),
+        require(prompt.contains("The chat value must be the selected character's concise conversational reply"),
+                "system prompt must make chat an NPC reply");
+        require(prompt.contains("The unavailable value may be blank or a short safe reason"),
                 "system prompt must allow a short safe UNAVAILABLE reason");
+        require(prompt.contains("{\"chat\":\"message\""), "system prompt must document structured chat JSON");
+        require(prompt.contains("{\"unavailable\":\"reason\""),
+                "system prompt must document structured unavailable JSON");
         require(prompt.contains("For one executable primitive tool"),
                 "system prompt must document structured tool JSON");
         require(prompt.contains("if priority is omitted, OpenPlayer treats it as NORMAL"),
@@ -74,6 +80,8 @@ public final class OpenAiCompatibleIntentProviderTest {
         require(prompt.contains("break_block_at"), "system prompt must list break_block_at");
         require(prompt.contains("pickup_items_nearby"), "system prompt must list pickup_items_nearby");
         require(!prompt.contains("GIVE_ITEM"), "system prompt must not expose old non-tool enum names");
+        require(!prompt.contains("\"kind\""), "system prompt must not expose old kind field");
+        require(!prompt.contains("\"instruction\""), "system prompt must not expose old instruction field");
     }
 
     private static void systemPromptIncludesPlannedUnsupportedInstruction() {
@@ -144,6 +152,37 @@ public final class OpenAiCompatibleIntentProviderTest {
         ));
         require(intent.hasStructuredToolJson(), "provider response parser must preserve structured plan JSON");
         require(intent.plan(), "provider response parser must mark plan JSON as non-executable plan output");
+    }
+
+    private static void parsesStructuredChatProviderResponse() throws Exception {
+        ProviderIntent intent = OpenAiCompatibleIntentProvider.parseProviderResponse(responseWithContent(
+                "{\"chat\":\"I can help with that.\",\"priority\":\"LOW\"}"
+        ));
+        require(intent.type() == ProviderIntent.Type.CHAT, "provider response parser must preserve structured chat");
+        require("LOW".equals(intent.priority()), "structured chat priority must be preserved");
+        require("I can help with that.".equals(intent.message()), "structured chat message must be preserved");
+    }
+
+    private static void parsesStructuredUnavailableProviderResponse() throws Exception {
+        ProviderIntent intent = OpenAiCompatibleIntentProvider.parseProviderResponse(responseWithContent(
+                "{\"unavailable\":\"missing reviewed adapter\"}"
+        ));
+        require(intent.type() == ProviderIntent.Type.UNAVAILABLE,
+                "provider response parser must preserve structured unavailable");
+        require("NORMAL".equals(intent.priority()), "structured unavailable priority must default to NORMAL");
+        require("missing reviewed adapter".equals(intent.message()), "structured unavailable reason must be preserved");
+    }
+
+    private static void rejectsOldStyleProviderResponse() throws Exception {
+        try {
+            OpenAiCompatibleIntentProvider.parseProviderResponse(responseWithContent(
+                    "{\"kind\":\"move_to\",\"priority\":\"NORMAL\",\"instruction\":\"1 64 -2\"}"
+            ));
+            throw new AssertionError("provider response parser must reject old-style automation output");
+        } catch (IntentProviderException exception) {
+            require("provider intent JSON must contain exactly one of tool, plan, chat, or unavailable".equals(exception.getMessage()),
+                    "old-style provider response rejection must be deterministic");
+        }
     }
 
     private static String normalize(String value) throws Exception {

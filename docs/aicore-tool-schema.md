@@ -1,18 +1,24 @@
 # AICore Tool Schema
 
-Provider output is untrusted structured JSON. The production provider path accepts either legacy conversation/refusal JSON or exactly one structured tool call. The JSON parser also understands bounded plans, but plans are parser-only until OpenPlayer has explicit task queue semantics; provider plans are rejected and are not executed as fake multi-step success.
+Provider output is untrusted structured JSON. The production provider path accepts explicit conversation/refusal JSON or exactly one structured tool call. The JSON parser also understands bounded plans, but plans are parser-only until OpenPlayer has explicit task queue semantics; provider plans are rejected and are not executed as fake multi-step success.
 
-## Legacy Conversation Or Refusal
+## Conversation Or Refusal
 
 ```json
 {
-  "kind": "CHAT",
-  "priority": "NORMAL",
-  "instruction": "I can help with that."
+  "chat": "I can help with that.",
+  "priority": "NORMAL"
 }
 ```
 
-`kind` may be `CHAT` or `UNAVAILABLE` for non-tool output. Existing primitive-tool legacy output of the form `{"kind":"move_to","priority":"NORMAL","instruction":"1 64 -2"}` is still accepted for compatibility.
+```json
+{
+  "unavailable": "A reviewed adapter is missing.",
+  "priority": "NORMAL"
+}
+```
+
+`chat` is the selected character's concise conversational reply. `unavailable` is blank or a short truthful refusal reason. Old internal provider output using generic `kind` and `instruction` fields is rejected.
 
 ## Single Tool
 
@@ -46,7 +52,7 @@ Bounded plans are accepted by `AICoreProviderJsonToolParser` for schema-level pa
 
 ## Validation Rules
 
-- The JSON root must be an object containing either `tool` or `plan`.
+- The JSON root must be an object containing exactly one structured provider action: `tool`, `chat`, `unavailable`, or `plan`.
 - The production provider path executes only a root `tool` object, after schema, capability, policy, and runtime validation.
 - `priority` on structured tool JSON is optional and defaults to `NORMAL`; when present it must be `LOW`, `NORMAL`, or `HIGH`.
 - Tool names must be lower snake case and present in `AICoreToolCatalog`.
@@ -59,11 +65,11 @@ Bounded plans are accepted by `AICoreProviderJsonToolParser` for schema-level pa
 
 ## Provider-Facing Statuses
 
-- `SUCCESS`: validation accepted the tool or the existing OpenPlayer primitive accepted the bridged command.
+- `SUCCESS`: validation accepted the tool or the existing OpenPlayer primitive accepted the bridged structured command.
 - `REJECTED`: policy, schema, bounds, admin capability, or runtime validation rejected the request.
 - `FAILED`: the surface exists but a real adapter is missing or the mechanic is not applicable to a server-side NPC.
 - `RUNNING`: reserved for future asynchronous adapters.
 
 ## Removed Macro Names
 
-The provider-facing registry intentionally does not expose legacy hidden macro names such as `GET_ITEM`, `SMELT_ITEM`, `COLLECT_FOOD`, `FARM_NEARBY`, `FISH` as a fake macro, `BUILD_STRUCTURE`, or `TRAVEL_NETHER`. Future provider plans may combine transparent primitive tools only after queue semantics exist; today, provider-backed production parsing rejects plans.
+The provider-facing registry intentionally does not expose legacy hidden macro names such as `GET_ITEM`, `SMELT_ITEM`, `COLLECT_FOOD`, `FARM_NEARBY`, `FISH` as a fake macro, `BUILD_STRUCTURE`, or `TRAVEL_NETHER`. Future provider plans may combine transparent primitive tools only after queue semantics exist; today, provider-backed production parsing rejects plans. The removed internal generic primitive shape is not a compatibility surface.

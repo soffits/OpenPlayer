@@ -40,6 +40,7 @@ OpenPlayer is an AGPL-3.0-only Minecraft mod developed as a legally clean, local
 - Do not hardcode gameplay route planners in Java. Use generic primitives, capability adapters, validation, and truthful status; use local strategy/meta packs only as advisory goal-decomposition reference.
 - Normal player-like behavior should be attempted when reviewed adapters and policy allow it. A missing behavior is an adapter/interface gap or world-state/policy failure, not a permanent product-level prohibition.
 - While OpenPlayer runtime and intent surfaces are unreleased or unfinished, remove abandoned internal intent/API designs fully instead of keeping aliases. Do not preserve compatibility for provider/internal command names that were never a stable public contract; prefer clean generic primitives and capability adapters over old synonyms.
+- When replacing an internal runtime/provider/API design, delete the old-style code in the same change unless it is a real shipped external contract. Do not wait, leave dormant fallback paths, or keep legacy shims “just in case”; stale internal surfaces create misleading behavior and must be removed with their tests/docs/prompts.
 
 ## Code Style
 
@@ -47,6 +48,7 @@ OpenPlayer is an AGPL-3.0-only Minecraft mod developed as a legally clean, local
 - Use strict, explicit Java types.
 - Prefer self-documenting names over comments.
 - Do not add dead code, speculative abstractions, or compatibility shims without a concrete need.
+- When a new AICore/provider contract supersedes an old internal contract, delete the old parser/provider/runtime branches, tests, prompt language, and docs instead of supporting both shapes by default.
 - Avoid inline logic comments. Short file headers, API contracts, and security contracts are acceptable.
 - Keep pure Java seams separate from Minecraft runtime code when possible.
 

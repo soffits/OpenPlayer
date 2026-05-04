@@ -114,11 +114,11 @@ public final class OpenAiCompatibleIntentProvider implements IntentProvider {
     }
 
     static String systemPrompt() {
-        return "Parse the user command for an OpenPlayer NPC. Return only compact JSON. For conversation or refusal, use {\"kind\":\"CHAT\"|\"UNAVAILABLE\",\"priority\":\"LOW\"|\"NORMAL\"|\"HIGH\",\"instruction\":\"...\"}. "
+        return "Parse the user command for an OpenPlayer NPC. Return only compact JSON. For conversation, use {\"chat\":\"message\",\"priority\":\"LOW\"|\"NORMAL\"|\"HIGH\"}. For refusal, use {\"unavailable\":\"reason\",\"priority\":\"LOW\"|\"NORMAL\"|\"HIGH\"}. "
             + "For one executable primitive tool, use {\"tool\":\"tool_name\",\"priority\":\"LOW\"|\"NORMAL\"|\"HIGH\",\"args\":{...}}; if priority is omitted, OpenPlayer treats it as NORMAL. "
             + "tool must be one primitive tool name from: " + MinecraftPrimitiveTools.providerToolNames() + ". "
-            + "Do not return plan JSON; provider plans are parser-only in this runtime and are not executed as multi-step tasks. Keep instruction and args short and actionable. "
-            + "For CHAT, instruction must be the selected character's concise conversational reply, not a restatement of the player text. For UNAVAILABLE, instruction may be blank or a short safe reason. "
+            + "Do not return plan JSON; provider plans are parser-only in this runtime and are not executed as multi-step tasks. Keep chat, unavailable, and args short and actionable. "
+            + "The chat value must be the selected character's concise conversational reply, not a restatement of the player text. The unavailable value may be blank or a short safe reason. "
             + "Return JSON only, with no secrets, credentials, markdown, or explanatory text. "
             + "Primitive tool schemas: " + MinecraftPrimitiveTools.providerToolSchemaText() + ". "
             + "Use args x, y, z only for move_to, look_at, break_block_at, dig, place_block_at, and place_block. move_to is coordinate-only; do not use owner, block id, entity id, search, resource, route, or goal syntax for move_to. Use empty args for pickup_items_nearby, report_status, inventory_query, stop, pause, and unpause; use args maxDistance for attack_nearest when needed. "
@@ -137,6 +137,10 @@ public final class OpenAiCompatibleIntentProvider implements IntentProvider {
             String content = readStringField(responseBody, "content", "provider response content");
             OpenPlayerRawTrace.parseInput("provider_model_content", null, content);
             String intentJson = extractJsonObject(content);
+            int actionFieldCount = countProviderActionFields(intentJson);
+            if (actionFieldCount != 1) {
+                throw new IntentProviderException("provider intent JSON must contain exactly one of tool, plan, chat, or unavailable");
+            }
             if (containsJsonField(intentJson, "plan")) {
                 String priority = readOptionalStringField(intentJson, "priority").orElse("NORMAL");
                 OpenPlayerRawTrace.parseOutput("provider_intent_json", null, intentJson);
@@ -147,15 +151,40 @@ public final class OpenAiCompatibleIntentProvider implements IntentProvider {
                 OpenPlayerRawTrace.parseOutput("provider_intent_json", null, intentJson);
                 return ProviderIntent.structuredTool(priority, intentJson);
             }
-            String kind = readStringField(intentJson, "kind", "provider intent kind");
-            String priority = readStringField(intentJson, "priority", "provider intent priority");
-            String instruction = readStringField(intentJson, "instruction", "provider intent instruction");
-            OpenPlayerRawTrace.parseOutput("provider_intent_json", null, intentJson);
-            return new ProviderIntent(kind, priority, instruction);
+            if (containsJsonField(intentJson, "chat")) {
+                String priority = readOptionalStringField(intentJson, "priority").orElse("NORMAL");
+                String message = readStringField(intentJson, "chat", "provider intent chat");
+                OpenPlayerRawTrace.parseOutput("provider_intent_json", null, intentJson);
+                return ProviderIntent.chat(priority, message);
+            }
+            if (containsJsonField(intentJson, "unavailable")) {
+                String priority = readOptionalStringField(intentJson, "priority").orElse("NORMAL");
+                String reason = readStringField(intentJson, "unavailable", "provider intent unavailable");
+                OpenPlayerRawTrace.parseOutput("provider_intent_json", null, intentJson);
+                return ProviderIntent.unavailable(priority, reason);
+            }
+            throw new IntentProviderException("provider intent JSON must contain exactly one of tool, plan, chat, or unavailable");
         } catch (IntentProviderException exception) {
             OpenPlayerRawTrace.parseRejection("provider_response_body", null, responseBody, exception.getMessage());
             throw exception;
         }
+    }
+
+    private static int countProviderActionFields(String json) {
+        int count = 0;
+        if (containsJsonField(json, "tool")) {
+            count++;
+        }
+        if (containsJsonField(json, "plan")) {
+            count++;
+        }
+        if (containsJsonField(json, "chat")) {
+            count++;
+        }
+        if (containsJsonField(json, "unavailable")) {
+            count++;
+        }
+        return count;
     }
 
     private static String readStringField(String json, String fieldName, String description) throws IntentProviderException {
@@ -203,17 +232,35 @@ public final class OpenAiCompatibleIntentProvider implements IntentProvider {
             return false;
         }
         String quotedFieldName = "\"" + fieldName + "\"";
-        int searchIndex = 0;
-        while (searchIndex < json.length()) {
-            int fieldIndex = json.indexOf(quotedFieldName, searchIndex);
-            if (fieldIndex < 0) {
-                return false;
+        boolean inString = false;
+        boolean escaped = false;
+        int depth = 0;
+        for (int index = 0; index < json.length(); index++) {
+            char character = json.charAt(index);
+            if (escaped) {
+                escaped = false;
+                continue;
             }
-            int index = skipWhitespace(json, fieldIndex + quotedFieldName.length());
-            if (index < json.length() && json.charAt(index) == ':') {
-                return true;
+            if (inString && character == '\\') {
+                escaped = true;
+                continue;
             }
-            searchIndex = fieldIndex + 1;
+            if (character == '"') {
+                if (!inString && depth == 1 && json.startsWith(quotedFieldName, index)) {
+                    int fieldEndIndex = index + quotedFieldName.length();
+                    int separatorIndex = skipWhitespace(json, fieldEndIndex);
+                    if (separatorIndex < json.length() && json.charAt(separatorIndex) == ':') {
+                        return true;
+                    }
+                }
+                inString = !inString;
+                continue;
+            }
+            if (!inString && character == '{') {
+                depth++;
+            } else if (!inString && character == '}') {
+                depth--;
+            }
         }
         return false;
     }

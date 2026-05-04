@@ -63,10 +63,10 @@ public final class ConversationLoopTest {
         for (IntentKind kind : RuntimeIntentPolicies.localWorldOrInventoryActions()) {
             require(prompt.contains(kind.name()), "disabled-world-actions prompt must mention " + kind.name());
         }
-        require(prompt.contains("When kind is CHAT, instruction must be the selected character's concise conversational reply"),
-                "prompt must tell providers that CHAT instruction is the NPC reply");
-        require(prompt.contains("When kind is UNAVAILABLE, instruction may be blank or a short safe reason"),
-                "prompt must allow UNAVAILABLE to provide a short safe reason");
+        require(prompt.contains("For conversation, use a chat field whose value is the selected character's concise reply"),
+                "prompt must tell providers that chat is the NPC reply");
+        require(prompt.contains("For refusal, use an unavailable field whose value is blank or a short safe reason"),
+                "prompt must allow unavailable to provide a short safe reason");
         require(prompt.contains("Server context:"), "prompt must include a server context section when available");
         require(prompt.contains("nearbyBlocks: minecraft:oak_log x3"),
                 "prompt must include bounded nearby block context");
