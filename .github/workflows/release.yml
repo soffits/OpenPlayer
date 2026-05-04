@@ -3,11 +3,12 @@ name: Release
 on:
   push:
     tags:
-      - 'openplayer_*_*'
+      - '[0-9]*.[0-9]*.[0-9]*'
+      - 'v[0-9]*.[0-9]*.[0-9]*'
   workflow_dispatch:
     inputs:
       tag:
-        description: Version tag to release, for example openplayer_1.20.1_1-alpha.1
+        description: Version tag to release, for example 0.1.0-alpha.2+1.20.1 or v0.1.0-alpha.2+1.20.1
         required: true
         type: string
 
@@ -39,15 +40,13 @@ jobs:
       - name: Validate release tag version
         run: |
           VERSION_FROM_TAG="$RELEASE_TAG"
+          VERSION_FROM_TAG="${VERSION_FROM_TAG#v}"
           MOD_VERSION="$(grep '^mod_version=' gradle.properties | cut -d= -f2-)"
 
-          case "$RELEASE_TAG" in
-            openplayer_*_*) ;;
-            *)
-              echo "Release tag $RELEASE_TAG must use the openplayer_<minecraft>_<release> version family."
-              exit 1
-              ;;
-          esac
+          if ! [[ "$VERSION_FROM_TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?\+[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag $RELEASE_TAG must be a SemVer mod version with Minecraft build metadata, optionally prefixed with v."
+            exit 1
+          fi
 
           if [ "$VERSION_FROM_TAG" != "$MOD_VERSION" ]; then
             echo "Release tag $VERSION_FROM_TAG does not match gradle.properties mod_version $MOD_VERSION."
@@ -55,7 +54,7 @@ jobs:
           fi
 
           echo "VERSION_FROM_TAG=$VERSION_FROM_TAG" >> "$GITHUB_ENV"
-          echo "ARTIFACT_VERSION=${VERSION_FROM_TAG#openplayer_}" >> "$GITHUB_ENV"
+          echo "ARTIFACT_VERSION=$VERSION_FROM_TAG" >> "$GITHUB_ENV"
 
       - name: Build release notes
         id: build_release_notes
@@ -122,7 +121,7 @@ jobs:
               "tag_resolver": {
                 "method": "sort",
                 "filter": {
-                  "pattern": "^openplayer_.+",
+                  "pattern": "^v?[0-9]+\\.[0-9]+\\.[0-9]+.*",
                   "flags": "gu"
                 }
               }

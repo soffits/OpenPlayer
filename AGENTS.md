@@ -18,7 +18,7 @@ OpenPlayer is an AGPL-3.0-only Minecraft mod developed as a legally clean, local
 - Use short-lived purpose branches for work against the active line: `feat/<short-name>`, `fix/<short-name>`, `docs/<short-name>`, `ci/<short-name>`, or `refactor/<short-name>`.
 - Use `backport/mc-<minecraft-version>/<short-name>` style branches for backports from newer Minecraft lines into older maintained lines.
 - Merge short-lived branches back into the intended `mc/<version>` branch after local verification or CI, then delete the merged branch.
-- Release tags are independent of branch names and must keep the product-prefixed scheme.
+- Release tags are independent of branch names and must match `mod_version` SemVer, with an optional leading `v` that release automation strips before comparing.
 
 ## License And Provenance
 
