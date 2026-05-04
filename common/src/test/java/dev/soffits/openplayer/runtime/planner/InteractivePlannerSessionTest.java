@@ -15,9 +15,128 @@ public final class InteractivePlannerSessionTest {
 
     public static void main(String[] args) throws Exception {
         feedsToolObservationIntoSecondProviderIteration();
+        activePrimitiveBlocksNextProviderIteration();
+        pollBudgetBoundaryObservationKeepsWaitingWhenStillActive();
+        activePrimitiveStopsTruthfullyWhenToolWaitBudgetExhausts();
+        completedWaitingObservationAllowsNextProviderIteration();
         stopsWhenToolStepBudgetIsExhausted();
         rejectsRemovedToolBeforePlannerExecution();
         cancelsActiveSession();
+    }
+
+    private static void activePrimitiveBlocksNextProviderIteration() {
+        InteractivePlannerSession session = new InteractivePlannerSession(
+                UUID.randomUUID(),
+                "break a nearby block",
+                testConfig(4, 4, 4)
+        );
+        require(session.beforeProviderCall().status() == PlannerTurnStatus.CONTINUE,
+                "first provider call must be allowed");
+        PlannerTurnResult first = session.handleIntent(
+                new CommandIntent(IntentKind.BREAK_BLOCK, IntentPriority.NORMAL, "1 64 1"),
+                new FakeRuntime(true, PlannerObservation.of(
+                        PlannerObservationStatus.QUEUED,
+                        "kind=BREAK_BLOCK submission=accepted automation active=BREAK_BLOCK queued=0 monitor=active",
+                        true
+                ))
+        );
+        require(first.status() == PlannerTurnStatus.WAITING,
+                "active break_block submission must wait");
+        PlannerTurnResult secondProviderAttempt = session.beforeProviderCall();
+        require(secondProviderAttempt.status() == PlannerTurnStatus.WAITING,
+                "provider call must not be accepted while primitive is active or queued");
+    }
+
+    private static void pollBudgetBoundaryObservationKeepsWaitingWhenStillActive() {
+        InteractivePlannerSession session = new InteractivePlannerSession(
+                UUID.randomUUID(),
+                "break a nearby block",
+                testConfig(4, 4, 4)
+        );
+        require(session.beforeProviderCall().status() == PlannerTurnStatus.CONTINUE,
+                "first provider call must be allowed");
+        PlannerTurnResult first = session.handleIntent(
+                new CommandIntent(IntentKind.BREAK_BLOCK, IntentPriority.NORMAL, "1 64 1"),
+                new FakeRuntime(true, PlannerObservation.of(
+                        PlannerObservationStatus.QUEUED,
+                        "kind=BREAK_BLOCK submission=accepted automation active=BREAK_BLOCK queued=0 monitor=active",
+                        true
+                ))
+        );
+        require(first.status() == PlannerTurnStatus.WAITING,
+                "active break_block submission must wait");
+        PlannerTurnResult boundary = session.observeWaiting(PlannerObservation.of(
+                PlannerObservationStatus.ACTIVE,
+                "automation active=BREAK_BLOCK queued=0 monitor=active ticks=61/120",
+                true
+        ));
+        require(boundary.status() == PlannerTurnStatus.WAITING,
+                "poll budget boundary must keep waiting when snapshot is still active");
+        require(session.beforeProviderCall().status() == PlannerTurnStatus.WAITING,
+                "provider call must remain blocked after active boundary observation");
+    }
+
+    private static void completedWaitingObservationAllowsNextProviderIteration() {
+        InteractivePlannerSession session = new InteractivePlannerSession(
+                UUID.randomUUID(),
+                "break a nearby block",
+                testConfig(4, 4, 4)
+        );
+        require(session.beforeProviderCall().status() == PlannerTurnStatus.CONTINUE,
+                "first provider call must be allowed");
+        PlannerTurnResult first = session.handleIntent(
+                new CommandIntent(IntentKind.BREAK_BLOCK, IntentPriority.NORMAL, "1 64 1"),
+                new FakeRuntime(true, PlannerObservation.of(
+                        PlannerObservationStatus.QUEUED,
+                        "kind=BREAK_BLOCK submission=accepted automation active=BREAK_BLOCK queued=0 monitor=active",
+                        true
+                ))
+        );
+        require(first.status() == PlannerTurnStatus.WAITING,
+                "active break_block submission must wait");
+        PlannerTurnResult completed = session.observeWaiting(PlannerObservation.of(
+                PlannerObservationStatus.COMPLETED,
+                "automation active=idle queued=0 monitor=completed ticks=106/120",
+                false
+        ));
+        require(completed.status() == PlannerTurnStatus.CONTINUE,
+                "completed primitive observation must allow replanning");
+        require(session.beforeProviderCall().status() == PlannerTurnStatus.CONTINUE,
+                "provider call must be allowed after primitive completion");
+        String prompt = session.nextPrompt("refreshed context");
+        require(prompt.contains("monitor=completed"),
+                "next prompt must include completion observation");
+        require(prompt.contains("refreshed context"),
+                "next prompt must include refreshed runtime context");
+    }
+
+    private static void activePrimitiveStopsTruthfullyWhenToolWaitBudgetExhausts() {
+        InteractivePlannerSession session = new InteractivePlannerSession(
+                UUID.randomUUID(),
+                "break a nearby block",
+                testConfig(4, 4, 4)
+        );
+        require(session.beforeProviderCall().status() == PlannerTurnStatus.CONTINUE,
+                "first provider call must be allowed");
+        PlannerTurnResult first = session.handleIntent(
+                new CommandIntent(IntentKind.BREAK_BLOCK, IntentPriority.NORMAL, "1 64 1"),
+                new FakeRuntime(true, PlannerObservation.of(
+                        PlannerObservationStatus.QUEUED,
+                        "kind=BREAK_BLOCK submission=accepted automation active=BREAK_BLOCK queued=0 monitor=active",
+                        true
+                ))
+        );
+        require(first.status() == PlannerTurnStatus.WAITING,
+                "active break_block submission must wait");
+        PlannerTurnResult stopped = session.stopWaitingBudgetExhausted(PlannerObservation.of(
+                PlannerObservationStatus.ACTIVE,
+                "automation active=BREAK_BLOCK queued=0 monitor=active ticks=400/120",
+                true
+        ));
+        require(stopped.status() == PlannerTurnStatus.STOPPED,
+                "tool wait exhaustion must stop the planner instead of replanning");
+        require(stopped.message().contains("primitive remains active or queued"),
+                "tool wait exhaustion message must preserve active state truthfully");
     }
 
     private static void feedsToolObservationIntoSecondProviderIteration() {
@@ -104,7 +223,7 @@ public final class InteractivePlannerSessionTest {
 
     private static InteractivePlannerConfig testConfig(int maxIterations, int maxProviderCalls, int maxToolSteps) {
         return new InteractivePlannerConfig(maxIterations, maxProviderCalls, maxToolSteps, 1200, 4000, 1,
-                Duration.ofSeconds(10L), Duration.ofMillis(1L), 1);
+                Duration.ofSeconds(10L), Duration.ofMillis(1L), Duration.ofSeconds(2L), 1);
     }
 
     private static void require(boolean condition, String message) {

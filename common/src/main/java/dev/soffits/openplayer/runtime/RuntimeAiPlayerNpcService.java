@@ -320,6 +320,10 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService, Inte
     private void schedulePlannerProviderCall(NpcSessionId sessionId, InteractivePlannerSession plannerSession) {
         PlannerTurnResult budget = plannerSession.beforeProviderCall();
         if (budget.status() != PlannerTurnStatus.CONTINUE) {
+            if (budget.status() == PlannerTurnStatus.WAITING) {
+                continuePlanner(sessionId, plannerSession, budget, 0);
+                return;
+            }
             finishPlannerSession(sessionId, plannerSession, budget);
             return;
         }
@@ -417,19 +421,34 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService, Inte
             return;
         }
         if (result.status() == PlannerTurnStatus.WAITING) {
-            if (pollCount >= plannerSession.config().maxPollsPerTool()) {
-                PlannerTurnResult observed = plannerSession.observeWaiting(PlannerObservation.of(
-                        PlannerObservationStatus.TIMED_OUT,
-                        "queued or active primitive did not complete inside planner poll budget",
-                        false
-                ));
-                continuePlanner(sessionId, plannerSession, observed, 0);
+            if (toolWaitBudgetExhausted(plannerSession.config(), pollCount)) {
+                PlannerObservation observed = plannerObservation(sessionId);
+                if (observed.activeOrQueued()) {
+                    finishPlannerSession(sessionId, plannerSession,
+                            plannerSession.stopWaitingBudgetExhausted(observed));
+                    return;
+                }
+                continuePlanner(sessionId, plannerSession, plannerSession.observeWaiting(observed), pollCount);
                 return;
+            }
+            if (plannerSession.config().maxPollsPerTool() > 0
+                    && pollCount >= plannerSession.config().maxPollsPerTool()) {
+                PlannerObservation observed = plannerObservation(sessionId);
+                PlannerTurnResult observedResult = plannerSession.observeWaiting(observed);
+                if (observedResult.status() != PlannerTurnStatus.WAITING) {
+                    continuePlanner(sessionId, plannerSession, observedResult, pollCount);
+                    return;
+                }
             }
             schedulePlannerPoll(sessionId, plannerSession, pollCount + 1);
             return;
         }
         finishPlannerSession(sessionId, plannerSession, result);
+    }
+
+    private static boolean toolWaitBudgetExhausted(InteractivePlannerConfig config, int pollCount) {
+        long waitedMillis = Math.multiplyExact((long) pollCount, config.pollDelay().toMillis());
+        return waitedMillis >= config.maxToolWait().toMillis();
     }
 
     private void schedulePlannerPoll(NpcSessionId sessionId, InteractivePlannerSession plannerSession, int pollCount) {

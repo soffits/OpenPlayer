@@ -11,6 +11,7 @@ public record InteractivePlannerConfig(
         int maxNoProgressCount,
         Duration maxWallTime,
         Duration pollDelay,
+        Duration maxToolWait,
         int maxPollsPerTool
 ) {
     public InteractivePlannerConfig {
@@ -38,6 +39,9 @@ public record InteractivePlannerConfig(
         if (pollDelay == null || pollDelay.isNegative() || pollDelay.isZero()) {
             throw new IllegalArgumentException("pollDelay must be positive");
         }
+        if (maxToolWait == null || maxToolWait.isNegative() || maxToolWait.isZero()) {
+            throw new IllegalArgumentException("maxToolWait must be positive");
+        }
         if (maxPollsPerTool < 0) {
             throw new IllegalArgumentException("maxPollsPerTool must be non-negative");
         }
@@ -45,6 +49,6 @@ public record InteractivePlannerConfig(
 
     public static InteractivePlannerConfig defaults() {
         return new InteractivePlannerConfig(6, 6, 8, 1600, 12000, 2,
-                Duration.ofSeconds(45L), Duration.ofMillis(250L), 12);
+                Duration.ofSeconds(45L), Duration.ofMillis(250L), Duration.ofSeconds(20L), 12);
     }
 }

@@ -26,6 +26,7 @@ public final class InteractivePlannerSession {
     private int providerCalls;
     private int toolSteps;
     private int noProgressCount;
+    private boolean waitingForPrimitive;
     private boolean cancelled;
     private String cancelReason = "cancelled";
 
@@ -72,6 +73,9 @@ public final class InteractivePlannerSession {
         PlannerTurnResult stop = stopIfNeeded();
         if (stop.status() != PlannerTurnStatus.CONTINUE) {
             return stop;
+        }
+        if (waitingForPrimitive) {
+            return new PlannerTurnResult(PlannerTurnStatus.WAITING, "waiting for active or queued primitive");
         }
         providerCalls++;
         iterations++;
@@ -131,10 +135,33 @@ public final class InteractivePlannerSession {
             throw new IllegalArgumentException("observation cannot be null");
         }
         addObservation(observation.status(), observation.detail(), observation.activeOrQueued());
+        PlannerTurnResult stop = stopWaitingIfNeeded(observation.activeOrQueued());
+        if (stop.status() != PlannerTurnStatus.CONTINUE) {
+            return stop;
+        }
         if (observation.activeOrQueued()) {
+            waitingForPrimitive = true;
             return new PlannerTurnResult(PlannerTurnStatus.WAITING, observation.detail());
         }
+        waitingForPrimitive = false;
         return stopIfNeeded();
+    }
+
+    public PlannerTurnResult stopWaitingBudgetExhausted(PlannerObservation observation) {
+        if (observation == null) {
+            throw new IllegalArgumentException("observation cannot be null");
+        }
+        addObservation(observation.status(), observation.detail(), observation.activeOrQueued());
+        addObservation(PlannerObservationStatus.TIMED_OUT,
+                observation.activeOrQueued()
+                        ? "tool wait budget exhausted while primitive remains active or queued"
+                        : "tool wait budget exhausted after primitive became inactive",
+                observation.activeOrQueued());
+        waitingForPrimitive = observation.activeOrQueued();
+        return new PlannerTurnResult(PlannerTurnStatus.STOPPED,
+                observation.activeOrQueued()
+                        ? "Planner stopped: tool wait budget exhausted while primitive remains active or queued"
+                        : "Planner stopped: tool wait budget exhausted");
     }
 
     private PlannerTurnResult handleProviderPlan(CommandIntent intent, PlannerRuntime runtime) {
@@ -186,8 +213,10 @@ public final class InteractivePlannerSession {
         }
         noProgressCount = 0;
         if (submission.activeOrQueued()) {
+            waitingForPrimitive = true;
             return new PlannerTurnResult(PlannerTurnStatus.WAITING, submission.detail());
         }
+        waitingForPrimitive = false;
         return stopIfNeeded();
     }
 
@@ -201,21 +230,38 @@ public final class InteractivePlannerSession {
     }
 
     private PlannerTurnResult stopIfNeeded() {
+        return stopIfNeeded(false);
+    }
+
+    private PlannerTurnResult stopIfNeeded(boolean activeOrQueued) {
         if (cancelled) {
-            addObservation(PlannerObservationStatus.CANCELLED, cancelReason, false);
+            addObservation(PlannerObservationStatus.CANCELLED, cancelReason, activeOrQueued);
             return new PlannerTurnResult(PlannerTurnStatus.STOPPED, "Planner cancelled: " + cancelReason);
         }
         if (iterations >= config.maxIterations()) {
-            addObservation(PlannerObservationStatus.TIMED_OUT, "iteration budget exhausted", false);
+            addObservation(PlannerObservationStatus.TIMED_OUT, "iteration budget exhausted", activeOrQueued);
             return new PlannerTurnResult(PlannerTurnStatus.STOPPED, "Planner stopped: iteration budget exhausted");
         }
         if (providerCalls >= config.maxProviderCalls()) {
-            addObservation(PlannerObservationStatus.TIMED_OUT, "provider call budget exhausted", false);
+            addObservation(PlannerObservationStatus.TIMED_OUT, "provider call budget exhausted", activeOrQueued);
             return new PlannerTurnResult(PlannerTurnStatus.STOPPED, "Planner stopped: provider call budget exhausted");
         }
         long elapsedMillis = System.currentTimeMillis() - startedAtMillis;
         if (elapsedMillis > config.maxWallTime().toMillis()) {
-            addObservation(PlannerObservationStatus.TIMED_OUT, "wall time budget exhausted", false);
+            addObservation(PlannerObservationStatus.TIMED_OUT, "wall time budget exhausted", activeOrQueued);
+            return new PlannerTurnResult(PlannerTurnStatus.STOPPED, "Planner stopped: wall time budget exhausted");
+        }
+        return new PlannerTurnResult(PlannerTurnStatus.CONTINUE, "continue");
+    }
+
+    private PlannerTurnResult stopWaitingIfNeeded(boolean activeOrQueued) {
+        if (cancelled) {
+            addObservation(PlannerObservationStatus.CANCELLED, cancelReason, activeOrQueued);
+            return new PlannerTurnResult(PlannerTurnStatus.STOPPED, "Planner cancelled: " + cancelReason);
+        }
+        long elapsedMillis = System.currentTimeMillis() - startedAtMillis;
+        if (elapsedMillis > config.maxWallTime().toMillis()) {
+            addObservation(PlannerObservationStatus.TIMED_OUT, "wall time budget exhausted", activeOrQueued);
             return new PlannerTurnResult(PlannerTurnStatus.STOPPED, "Planner stopped: wall time budget exhausted");
         }
         return new PlannerTurnResult(PlannerTurnStatus.CONTINUE, "continue");
