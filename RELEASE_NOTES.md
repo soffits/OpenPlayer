@@ -8,6 +8,8 @@
 - Treats current and portal target dimensions as arbitrary ResourceLocation ids, while keeping vanilla Nether portal build/ignite as a clearly scoped adapter.
 - Adds docs-only local strategy/meta pack guidance and vanilla sample reference material for advisory LLM planning without Java route logic or runtime execution.
 - Hardens provider prompt and QA around generic reviewed primitives, missing-adapter truthfulness, local advisory strategy text, localization parity, and no OP/admin or fake-success status output.
+- Removes obsolete `/ai` and `/aichat` command aliases so the server command surface uses the canonical `/openplayer` tree only.
+- Removes the obsolete no-selection default network NPC path; UI and packets now require a selected local assignment for target actions.
 
 ## v0.1.0-alpha.8
 
@@ -25,7 +27,7 @@ Artifacts:
 
 - Reattaches valid persisted OpenPlayer NPC entities into runtime sessions on server start so UI and commands can control companions after re-entering a world without spawning duplicates.
 - Shows provider `CHAT` and valid `UNAVAILABLE` conversation responses as visible NPC replies instead of sending them through automation.
-- Adds the canonical `/openplayer` command tree with `chat`, `follow`, `stop`, `spawn`, `despawn`, and `status` subcommands while keeping `/ai` and `/aichat` as chat aliases.
+- Adds the canonical `/openplayer` command tree with `chat`, `follow`, `stop`, `spawn`, `despawn`, and `status` subcommands.
 - Adds assignment id suggestions for command arguments and includes assignment ids in `/openplayer status` output.
 
 Artifacts:
@@ -75,7 +77,7 @@ Artifacts:
 - Replaces ambiguous default follow/stop actions with selected-profile actions and a state-aware `Start Following` / `Stop Following` control.
 - Adds a Profiles page for creating, editing, duplicating, deleting, and configuring local AI profiles, including skin path, prompt/settings, and `allowWorldActions`.
 - Adds an Imports page that opens the local imports folder, lists safe `.properties` profile files, imports the selected file, and removes the import source only after a successful import.
-- Adds `/ai <profile-or-assignment> <message>` and `/aichat <profile-or-assignment> <message>` server commands for chat-first AI interaction.
+- Adds server-command support for chat-first AI interaction through the OpenPlayer command surface.
 - Adds English, Japanese, and French language resources for user-facing controls, with repository guidance requiring new UI strings to use language JSON files.
 - Gates profile file mutations behind singleplayer-owner or permission-level-2 access while keeping profile reads available.
 

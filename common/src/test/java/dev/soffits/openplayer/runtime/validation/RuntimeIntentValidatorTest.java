@@ -34,9 +34,6 @@ public final class RuntimeIntentValidatorTest {
         validatesPhaseFourteenTargetAttackInstructions();
         validatesAdvancedLoadedReconnaissanceInstructions();
         validatesPortalTravelInstructions();
-        rejectsPlannedIntentKinds();
-        gatesPlannedWorldActionKindsBeforeUnimplementedRejection();
-        rejectsPlannedNonGatedKindsAsUnimplemented();
         policyClassifiesEveryIntentKind();
     }
 
@@ -51,7 +48,7 @@ public final class RuntimeIntentValidatorTest {
             if (RuntimeIntentPolicies.isLocalWorldOrInventoryAction(kind)) {
                 requireRejected(result, "World actions are disabled for this OpenPlayer character");
             } else if (kind == IntentKind.CHAT
-                    || kind == IntentKind.UNAVAILABLE || kind == IntentKind.OBSERVE || plannedKinds().contains(kind)) {
+                    || kind == IntentKind.UNAVAILABLE || kind == IntentKind.OBSERVE) {
                 require(!result.isAccepted(), kind + " must not be accepted by automation");
             } else {
                 require(result.isAccepted(), kind + " should pass validation when world actions are disabled");
@@ -315,16 +312,6 @@ public final class RuntimeIntentValidatorTest {
                 "OBSERVE cannot be submitted to automation");
     }
 
-    private static void rejectsPlannedIntentKinds() {
-        for (IntentKind kind : plannedKinds()) {
-            String expectedMessage = switch (kind) {
-                case LOCATE_STRUCTURE -> "LOCATE_STRUCTURE is unsupported: vanilla runtime does not run long-range structure search or load chunks";
-                default -> kind.name() + " is not implemented by the vanilla runtime";
-            };
-            requireRejected(RuntimeIntentValidator.validate(validIntent(kind), true), expectedMessage);
-        }
-    }
-
     private static void validatesBuildStructureInstructions() {
         require(RuntimeIntentValidator.validate(intent(IntentKind.BUILD_STRUCTURE,
                         "primitive=floor origin=0,64,0 size=3,1,3 material=minecraft:cobblestone"), true).isAccepted(),
@@ -445,22 +432,6 @@ public final class RuntimeIntentValidatorTest {
                 "World actions are disabled for this OpenPlayer character");
     }
 
-    private static void gatesPlannedWorldActionKindsBeforeUnimplementedRejection() {
-        for (IntentKind kind : plannedGatedKinds()) {
-            requireRejected(RuntimeIntentValidator.validate(validIntent(kind), false),
-                    "World actions are disabled for this OpenPlayer character");
-        }
-    }
-
-    private static void rejectsPlannedNonGatedKindsAsUnimplemented() {
-        for (IntentKind kind : plannedNonGatedKinds()) {
-            require(!RuntimeIntentPolicies.isLocalWorldOrInventoryAction(kind),
-                    kind + " must not use the world-action gate");
-            requireRejected(RuntimeIntentValidator.validate(validIntent(kind), false),
-                    kind.name() + " is not implemented by the vanilla runtime");
-        }
-    }
-
     private static void policyClassifiesEveryIntentKind() {
         Set<IntentKind> classifiedKinds = EnumSet.noneOf(IntentKind.class);
         for (IntentKind kind : IntentKind.values()) {
@@ -513,20 +484,6 @@ public final class RuntimeIntentValidatorTest {
                     REPORT_STATUS -> "";
         };
         return intent(kind, instruction);
-    }
-
-    private static EnumSet<IntentKind> plannedKinds() {
-        EnumSet<IntentKind> kinds = plannedGatedKinds();
-        kinds.addAll(plannedNonGatedKinds());
-        return kinds;
-    }
-
-    private static EnumSet<IntentKind> plannedGatedKinds() {
-        return EnumSet.noneOf(IntentKind.class);
-    }
-
-    private static EnumSet<IntentKind> plannedNonGatedKinds() {
-        return EnumSet.noneOf(IntentKind.class);
     }
 
     private static CommandIntent intent(IntentKind kind, String instruction) {

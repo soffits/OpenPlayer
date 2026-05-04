@@ -66,8 +66,6 @@ public final class OpenPlayerCommands {
     public static void register() {
         CommandRegistrationEvent.EVENT.register((dispatcher, registry, selection) -> {
             dispatcher.register(openPlayerRoot("openplayer"));
-            dispatcher.register(chatAliasRoot("ai"));
-            dispatcher.register(chatAliasRoot("aichat"));
         });
     }
 
@@ -134,20 +132,6 @@ public final class OpenPlayerCommands {
                         .executes(context -> status(context.getSource().getPlayerOrException())));
     }
 
-    private static LiteralArgumentBuilder<CommandSourceStack> chatAliasRoot(String name) {
-        return Commands.literal(name)
-                .then(Commands.literal("selected")
-                        .then(Commands.argument("message", StringArgumentType.greedyString())
-                                .executes(context -> selectedUnavailable(context.getSource().getPlayerOrException()))))
-                .then(assignmentArgument()
-                        .then(Commands.argument("message", StringArgumentType.greedyString())
-                                .executes(context -> chat(
-                                        context.getSource().getPlayerOrException(),
-                                        StringArgumentType.getString(context, "assignmentId"),
-                                        StringArgumentType.getString(context, "message")
-                                ))));
-    }
-
     private static com.mojang.brigadier.builder.RequiredArgumentBuilder<CommandSourceStack, String> assignmentArgument() {
         return Commands.argument("assignmentId", StringArgumentType.word()).suggests((context, builder) -> suggestAssignments(builder));
     }
@@ -180,11 +164,6 @@ public final class OpenPlayerCommands {
 
     static List<IntentKind> queueSuggestedIntentKinds() {
         return QUEUE_SUGGESTED_INTENT_KINDS;
-    }
-
-    private static int selectedUnavailable(ServerPlayer player) {
-        player.sendSystemMessage(Component.translatable("commands.openplayer.ai.selected_unavailable"));
-        return 0;
     }
 
     private static int chat(ServerPlayer player, String assignmentId, String message) {

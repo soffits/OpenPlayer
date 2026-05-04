@@ -1,9 +1,6 @@
 {
   "key.categories.openplayer": "OpenPlayer",
   "key.openplayer.open_controls": "OpenPlayer コントロールを開く",
-  "commands.openplayer.ai.rejected": "OpenPlayer はそのメッセージを送信できませんでした。",
-  "commands.openplayer.ai.selected_unavailable": "選択中の AI チャットはまだサーバー側で利用できません。/openplayer chat <assignmentId> <message> を使用してください。",
-  "commands.openplayer.ai.sent": "%s にメッセージを送信しました。",
   "commands.openplayer.chat.reply": "%s: %s",
   "commands.openplayer.chat.sent": "%s へのあなたの発言: %s",
   "commands.openplayer.queue.invalid_kind": "不明な OpenPlayer インテント種別: %s",

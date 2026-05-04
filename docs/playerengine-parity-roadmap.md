@@ -32,7 +32,7 @@ OpenPlayer already has:
 - Provider-backed conversation with bounded history and strict JSON intent parsing.
 - Local provider configuration with secret-safe precedence and diagnostics.
 - Safe debug events and local-only raw traces.
-- Canonical `/openplayer` command tree plus `/ai` and `/aichat` aliases, including `/openplayer queue <assignmentId> <kind> [instruction]` for explicit validated automation intent submission.
+- Canonical `/openplayer` command tree, including `/openplayer queue <assignmentId> <kind> [instruction]` for explicit validated automation intent submission.
 - Vanilla server-side NPC actions for movement, follow, patrol, item pickup, block break/place, nearest attack, guard owner, equipment selection, item use, offhand swap, drop item, report status, and chat replies.
 - Alpha.8 context snapshots containing bounded world/agent context for conversation prompts.
 
@@ -127,7 +127,7 @@ OpenPlayer already has:
 **Acceptance Criteria:**
 
 - Unsupported complex actions return explicit `UNAVAILABLE`/rejected results.
-- Prompt schema documents every supported and planned kind.
+- Prompt schema documents supported kinds and truthful missing-adapter outcomes.
 - `/openplayer` exposes testable command paths where useful.
 - No unimplemented action pretends success.
 
@@ -135,7 +135,7 @@ OpenPlayer already has:
 
 ### Phase 5: Inventory, Equipment, and Item Transfer
 
-**Status:** Implemented for inventory query, exact-id equip, selected/exact-id drop, and owner-only give. Item/count give and drop are one-stack operations capped to the item's vanilla max stack. Containers, stash memory, crafting, resource planning, arbitrary nearby-player transfer, and fuzzy item names were deferred to later capability adapters.
+**Status:** Implemented for inventory query, exact-id equip, selected/exact-id drop, and owner-only give. Item/count give and drop are one-stack operations capped to the item's vanilla max stack. Containers, stash memory, crafting, and resource planning now use capability-backed phases below; arbitrary nearby-player transfer and fuzzy item names remain intentionally unsupported.
 
 **Objective:** Implement player-like inventory interaction parity before larger crafting/resource tasks.
 
@@ -158,7 +158,7 @@ OpenPlayer already has:
 
 ### Phase 6: Resource and Crafting Planner Foundation
 
-**Status:** Phase 6B implemented a bounded `GET_ITEM <item_id> [count]` one-stack local inventory/crafting foundation backed by the server `RecipeManager`, so supported simple datapack and mod crafting recipes present at execution time can be planned through the common recipe-query seam. It validates exact namespaced item ids, rejects over-stack requests, supports safe non-special exact shaped/shapeless recipes with finite expanded item alternatives including tag-backed ingredients, rejects NBT-bearing ingredients/results and crafting remainders, reports missing-adapter or unsupported-recipe reasons plus deterministic missing materials, and keeps world gathering, physical workstation menus, smelting, and visible resource execution for later adapters.
+**Status:** Phase 6B implemented a bounded `GET_ITEM <item_id> [count]` one-stack local inventory/crafting foundation backed by the server `RecipeManager`, so supported simple datapack and mod crafting recipes present at execution time can be planned through the common recipe-query seam. It validates exact namespaced item ids, rejects over-stack requests, supports safe non-special exact shaped/shapeless recipes with finite expanded item alternatives including tag-backed ingredients, rejects NBT-bearing ingredients/results and crafting remainders, reports missing-adapter or unsupported-recipe reasons plus deterministic missing materials, and relies on the later capability-backed phases for visible world gathering, workstation execution, and smelting.
 
 **Objective:** Implement clean-room `get <item> <count>` for simple local/offline tasks.
 
@@ -168,7 +168,7 @@ OpenPlayer already has:
 - Inventory crafting for 2x2-compatible safe shaped/shapeless recipes.
 - Crafting table recipe planning and atomic inventory mutation when a loaded nearby crafting table is available as a capability gate.
 - Material dependency planner.
-- Visible/reachable resource gathering is deferred until the bounded world-search and navigation phase.
+- Visible/reachable resource gathering is handled by bounded world-search and navigation capability phases.
 - Tool selection and progress status.
 
 **Acceptance Criteria:**
@@ -191,7 +191,7 @@ OpenPlayer already has:
 - Deposit all normal inventory or exact item/count atomically.
 - Withdraw exact item/count atomically.
 - Remember one local stash location on the NPC entity.
-- Smelt through the vanilla furnace workstation adapter with fuel checks and asynchronous output collection; smoker, blast furnace, campfire, and custom machine adapters remain deferred.
+- Smelt through the vanilla furnace workstation adapter with fuel checks and asynchronous output collection; smoker, blast furnace, campfire, and custom machine adapters remain missing adapters.
 - Use nearby loaded crafting table capability as a recipe planner gate.
 
 **Acceptance Criteria:**
@@ -222,13 +222,13 @@ OpenPlayer already has:
 
 - Phase 8 adds first-party navigation telemetry, replan, loaded-target checks, and bounded stuck recovery around the vanilla NPC navigation backend.
 - Phase 8 now includes first-party `GOTO` execution for deterministic `x y z`, `owner`, `block <block_or_item_id> [radius]`, and `entity <entity_type_id> [radius]` syntax. Block/entity targeting uses a capped loaded-area search helper that scans only server-visible loaded chunks, reports bounded diagnostics, and queues observable/cancellable navigation through the existing controller snapshot and monitor.
-- External pathfinder dependencies remain deferred pending license and provenance review; no Baritone, AltoClef, Automatone, PlayerEngine, or opaque jar dependency is included.
+- External pathfinder dependencies are not included; no Baritone, AltoClef, Automatone, PlayerEngine, or opaque jar dependency is included.
 
 ---
 
 ### Phase 9: Survival Automation Chains
 
-**Status:** Phase 9 implements explicit first-party survival commands plus an idle survival monitor. `COLLECT_FOOD` accepts blank or a bounded radius and searches only already-loaded nearby item entities for safe ordinary edible drops accepted by the NPC local food policy, excluding potion/stew/container-remainder items. `DEFEND_OWNER` accepts blank or a bounded radius, requires the owner in the same dimension, pre-equips carried armor/weapon when possible, and attacks only hostile danger entities near the owner using the existing attack target path. The idle monitor runs only when `allowWorldActions` is true and no command is active or queued, applies cooldown/backoff, reports fire/lava/projectile danger diagnostics, attempts only bounded loaded adjacent avoidance through vanilla navigation, eats safe carried food before combat at low health, queues conservative self-defense/owner-defense, and equips armor upgrades as a low-risk fallback. Sleep-through-night, hunger-specific behavior, water-specific avoidance, and broader pathfinder-grade hazard avoidance remain deferred until they have explicit safe semantics.
+**Status:** Phase 9 implements explicit first-party survival commands plus an idle survival monitor. `COLLECT_FOOD` accepts blank or a bounded radius and searches only already-loaded nearby item entities for safe ordinary edible drops accepted by the NPC local food policy, excluding potion/stew/container-remainder items. `DEFEND_OWNER` accepts blank or a bounded radius, requires the owner in the same dimension, pre-equips carried armor/weapon when possible, and attacks only hostile danger entities near the owner using the existing attack target path. The idle monitor runs only when `allowWorldActions` is true and no command is active or queued, applies cooldown/backoff, reports fire/lava/projectile danger diagnostics, attempts only bounded loaded adjacent avoidance through vanilla navigation, eats safe carried food before combat at low health, queues conservative self-defense/owner-defense, and equips armor upgrades as a low-risk safety action. Sleep-through-night, hunger-specific behavior, water-specific avoidance, and broader pathfinder-grade hazard avoidance remain missing adapters until they have explicit safe semantics.
 
 **Objective:** Add background PlayerEngine-style survival priorities.
 
@@ -312,7 +312,7 @@ The first twelve phases establish a bounded first-party runtime foundation, but 
 
 ### Phase 13: Control, Memory, and Expression Commands
 
-**Objective:** Implement the low-risk command families that are currently recognized but rejected: `PAUSE`, `UNPAUSE`, `RESET_MEMORY`, and `BODY_LANGUAGE`, plus cleanup of unreachable truthful-unsupported code paths.
+**Objective:** Keep low-risk control, memory, and expression command families reliable: `PAUSE`, `UNPAUSE`, `RESET_MEMORY`, and `BODY_LANGUAGE`, plus cleanup of unreachable truthful-unsupported code paths.
 
 **Capabilities:**
 
@@ -370,7 +370,7 @@ The first twelve phases establish a bounded first-party runtime foundation, but 
 
 ### Phase 16: Loaded Chunk Exploration and Search Tasks
 
-**Objective:** Upgrade `EXPLORE_CHUNKS` from deterministic unsupported to a bounded loaded/opt-in exploration task.
+**Objective:** Maintain `EXPLORE_CHUNKS` as a bounded loaded/opt-in exploration task.
 
 **Status:** Phase 16 implements a safe loaded-only subset. `EXPLORE_CHUNKS` accepts blank defaults, `radius=<blocks> steps=<count>`, and `reset`/`clear`; it is gated by `allowWorldActions`, scans only already-loaded chunks near the NPC, chooses bounded safe navigation targets near chunk centers, tracks capped per-controller visited-chunk memory, and reports active navigation through existing status snapshots. It does not generate chunks, call long-range locate APIs, teleport, mutate the world, or claim structure/Nether/End/speedrun support.
 
@@ -497,7 +497,7 @@ QA was hardened with broad capability-cluster checks for bounded viewer/world di
 
 - Visible status UI for current viewer/world capability diagnostics, recovery affordances, missing-adapter diagnostics, and selected-NPC runtime status through the selected runtime path.
 - Integration QA for generic primitives, portal/resource/status flows, and missing-adapter behavior across Fabric and Forge with clear fixture coverage and failure-mode checks.
-- Release hardening for prompts, validation, debug traces, localization, compatibility, and documentation.
+- Release hardening for prompts, validation, debug traces, localization, packet/version posture, and documentation.
 
 **Acceptance Criteria:**
 
@@ -519,7 +519,7 @@ JAVA_HOME=/opt/data/tools/jdk-17.0.19+10 PATH=/opt/data/tools/jdk-17.0.19+10/bin
 For UI/networking phases:
 
 - Language key parity across `en_us.json`, `ja_jp.json`, and `fr_fr.json`.
-- Append-only or backward-compatible packet evolution where possible.
+- Packet changes should stay small, explicit, and documented.
 - No hard-coded user-facing English UI strings outside language JSON.
 
 For action/runtime phases:

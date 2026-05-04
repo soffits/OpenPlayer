@@ -1,9 +1,6 @@
 {
   "key.categories.openplayer": "OpenPlayer",
   "key.openplayer.open_controls": "Ouvrir les contrôles OpenPlayer",
-  "commands.openplayer.ai.rejected": "OpenPlayer n'a pas pu envoyer ce message.",
-  "commands.openplayer.ai.selected_unavailable": "Le chat IA sélectionné n'est pas encore disponible côté serveur. Utilisez /openplayer chat <assignmentId> <message>.",
-  "commands.openplayer.ai.sent": "Message envoyé à %s.",
   "commands.openplayer.chat.reply": "%s: %s",
   "commands.openplayer.chat.sent": "Vous à %s : %s",
   "commands.openplayer.queue.invalid_kind": "Type d'intention OpenPlayer inconnu : %s",

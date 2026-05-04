@@ -5,14 +5,9 @@ import dev.soffits.openplayer.OpenPlayerConstants;
 import dev.soffits.openplayer.OpenPlayerIntentParserConfig;
 import dev.soffits.openplayer.OpenPlayerRuntimeStatus;
 import dev.soffits.openplayer.api.AiPlayerNpcCommand;
-import dev.soffits.openplayer.api.AiPlayerNpcService;
-import dev.soffits.openplayer.api.AiPlayerNpcSession;
-import dev.soffits.openplayer.api.AiPlayerNpcSpec;
 import dev.soffits.openplayer.api.CommandSubmissionResult;
 import dev.soffits.openplayer.api.CommandSubmissionStatus;
 import dev.soffits.openplayer.api.NpcOwnerId;
-import dev.soffits.openplayer.api.NpcProfileSpec;
-import dev.soffits.openplayer.api.NpcRoleId;
 import dev.soffits.openplayer.api.NpcSpawnLocation;
 import dev.soffits.openplayer.api.OpenPlayerApi;
 import dev.soffits.openplayer.automation.capability.RuntimeCapabilityRegistry;
@@ -124,55 +119,47 @@ public final class OpenPlayerNetworking {
     }
 
     private static void receiveSpawnRequest(FriendlyByteBuf buffer, NetworkManager.PacketContext context) {
-        String characterId = readOptionalCharacterId(buffer);
+        String assignmentId = readAssignmentId(buffer);
         context.queue(() -> {
             if (context.getPlayer() instanceof ServerPlayer player) {
-                handleSpawnRequest(player, characterId);
+                handleSpawnRequest(player, assignmentId);
             }
         });
     }
 
     private static void receiveDespawnRequest(FriendlyByteBuf buffer, NetworkManager.PacketContext context) {
-        String characterId = readOptionalCharacterId(buffer);
+        String assignmentId = readAssignmentId(buffer);
         context.queue(() -> {
             if (context.getPlayer() instanceof ServerPlayer player) {
-                handleDespawnRequest(player, characterId);
+                handleDespawnRequest(player, assignmentId);
             }
         });
     }
 
     private static void receiveFollowOwnerRequest(FriendlyByteBuf buffer, NetworkManager.PacketContext context) {
-        String characterId = readOptionalCharacterId(buffer);
+        String assignmentId = readAssignmentId(buffer);
         context.queue(() -> {
             if (context.getPlayer() instanceof ServerPlayer player) {
-                submitNetworkNpcCommand(player, characterId, IntentKind.FOLLOW_OWNER);
+                submitNetworkNpcCommand(player, assignmentId, IntentKind.FOLLOW_OWNER);
             }
         });
     }
 
     private static void receiveStopRequest(FriendlyByteBuf buffer, NetworkManager.PacketContext context) {
-        String characterId = readOptionalCharacterId(buffer);
+        String assignmentId = readAssignmentId(buffer);
         context.queue(() -> {
             if (context.getPlayer() instanceof ServerPlayer player) {
-                submitNetworkNpcCommand(player, characterId, IntentKind.STOP);
+                submitNetworkNpcCommand(player, assignmentId, IntentKind.STOP);
             }
         });
     }
 
     private static void receiveCommandTextRequest(FriendlyByteBuf buffer, NetworkManager.PacketContext context) {
-        String firstValue = buffer.readUtf(MAX_COMMAND_TEXT_LENGTH);
-        String characterId;
-        String commandText;
-        if (buffer.isReadable()) {
-            characterId = firstValue.trim().isEmpty() ? null : firstValue.trim();
-            commandText = buffer.readUtf(MAX_COMMAND_TEXT_LENGTH);
-        } else {
-            characterId = null;
-            commandText = firstValue;
-        }
+        String assignmentId = readAssignmentId(buffer);
+        String commandText = buffer.isReadable() ? buffer.readUtf(MAX_COMMAND_TEXT_LENGTH) : "";
         context.queue(() -> {
             if (context.getPlayer() instanceof ServerPlayer player) {
-                submitNetworkNpcCommandText(player, characterId, commandText);
+                submitNetworkNpcCommandText(player, assignmentId, commandText);
             }
         });
     }
@@ -291,98 +278,67 @@ public final class OpenPlayerNetworking {
         });
     }
 
-    private static void handleSpawnRequest(ServerPlayer sender, String characterId) {
+    private static void handleSpawnRequest(ServerPlayer sender, String assignmentId) {
         NpcSpawnLocation location = new NpcSpawnLocation(
                 sender.serverLevel().dimension().location().toString(),
                 sender.getX(),
                 sender.getY(),
                 sender.getZ()
         );
-        if (characterId != null && !characterId.isBlank()) {
-            COMPANION_LIFECYCLE_MANAGER.spawnSelected(
-                    new NpcOwnerId(sender.getUUID()),
-                    location,
-                    characterId
-            );
-            sendCharacterListResponse(sender);
-            return;
-        }
-        AiPlayerNpcSpec spec = new AiPlayerNpcSpec(
-                new NpcRoleId(OpenPlayerConstants.DEFAULT_NETWORK_NPC_ROLE_ID),
-                new NpcOwnerId(sender.getUUID()),
-                new NpcProfileSpec(sender.getGameProfile().getName() + OpenPlayerConstants.DEFAULT_NETWORK_NPC_PROFILE_SUFFIX),
-                location
-        );
-        OpenPlayerApi.npcService().spawn(spec);
-        sendCharacterListResponse(sender);
-    }
-
-    private static void handleDespawnRequest(ServerPlayer sender, String characterId) {
-        if (characterId != null && !characterId.isBlank()) {
-            COMPANION_LIFECYCLE_MANAGER.despawnSelected(sender.getUUID(), characterId);
-            sendCharacterListResponse(sender);
-            return;
-        }
-        AiPlayerNpcService service = OpenPlayerApi.npcService();
-        for (AiPlayerNpcSession session : service.listSessions()) {
-            if (isDefaultNetworkNpcSession(sender.getUUID(), sender.getGameProfile().getName(), session)) {
-                service.despawn(session.sessionId());
-            }
+        if (assignmentId == null || assignmentId.isBlank()) {
+            OpenPlayerDebugEvents.record("spawn", "rejected", null, null, null, "missing_assignment");
+        } else {
+            COMPANION_LIFECYCLE_MANAGER.spawnSelectedAssignment(new NpcOwnerId(sender.getUUID()), location, assignmentId);
         }
         sendCharacterListResponse(sender);
     }
 
-    private static void submitNetworkNpcCommand(ServerPlayer sender, String characterId, IntentKind intentKind) {
-        AiPlayerNpcService service = OpenPlayerApi.npcService();
+    private static void handleDespawnRequest(ServerPlayer sender, String assignmentId) {
+        if (assignmentId == null || assignmentId.isBlank()) {
+            OpenPlayerDebugEvents.record("despawn", "rejected", null, null, null, "missing_assignment");
+        } else {
+            COMPANION_LIFECYCLE_MANAGER.despawnSelectedAssignment(sender.getUUID(), assignmentId);
+        }
+        sendCharacterListResponse(sender);
+    }
+
+    private static void submitNetworkNpcCommand(ServerPlayer sender, String assignmentId, IntentKind intentKind) {
         AiPlayerNpcCommand command = new AiPlayerNpcCommand(
                 UUID.randomUUID(),
                 shortcutIntent(intentKind)
         );
-        if (characterId != null && !characterId.isBlank()) {
-            CommandSubmissionResult result = COMPANION_LIFECYCLE_MANAGER.submitSelectedCommand(sender.getUUID(), characterId, command);
-            OpenPlayerDebugEvents.record("command_submission", result.status().name(), characterId, null, null,
+        if (assignmentId == null || assignmentId.isBlank()) {
+            OpenPlayerDebugEvents.record("command_submission", "rejected", null, null, null, "missing_assignment");
+        } else {
+            CommandSubmissionResult result = COMPANION_LIFECYCLE_MANAGER.submitSelectedCommand(sender.getUUID(), assignmentId, command);
+            OpenPlayerDebugEvents.record("command_submission", result.status().name(), assignmentId, null, null,
                     "kind=" + intentKind.name() + " message=" + result.message());
-            sendCharacterListResponse(sender);
-            return;
-        }
-        for (AiPlayerNpcSession session : service.listSessions()) {
-            if (isDefaultNetworkNpcSession(sender.getUUID(), sender.getGameProfile().getName(), session)) {
-                service.submitCommand(session.sessionId(), command);
-            }
         }
         sendCharacterListResponse(sender);
     }
 
-    private static void submitNetworkNpcCommandText(ServerPlayer sender, String characterId, String commandText) {
+    private static void submitNetworkNpcCommandText(ServerPlayer sender, String assignmentId, String commandText) {
         if (commandText == null || commandText.isBlank() || commandText.length() > MAX_COMMAND_TEXT_LENGTH) {
-            OpenPlayerDebugEvents.record("command_text", "rejected", characterId, null, null, "invalid_length_or_blank");
+            OpenPlayerDebugEvents.record("command_text", "rejected", assignmentId, null, null, "invalid_length_or_blank");
             return;
         }
-        OpenPlayerDebugEvents.record("command_text", "received", characterId, null, null, "length=" + commandText.trim().length());
-        OpenPlayerRawTrace.commandText("network_character", sender.getUUID().toString(), characterId, null, commandText);
-        if (characterId != null && !characterId.isBlank()) {
-            sendCompanionChatEcho(sender, characterId.trim(), commandText.trim());
-            CommandSubmissionResult result = COMPANION_LIFECYCLE_MANAGER.submitSelectedCommandText(sender.getUUID(), characterId, commandText);
-            OpenPlayerDebugEvents.record("command_submission", result.status().name(), characterId, null, null, result.message());
-            sendSelectedCommandTextResultMessage(sender, characterId, result);
-            sendCharacterListResponse(sender);
-            sendStatusResponse(sender);
+        if (assignmentId == null || assignmentId.isBlank()) {
+            OpenPlayerDebugEvents.record("command_text", "rejected", null, null, null, "missing_assignment");
             return;
         }
-        AiPlayerNpcService service = OpenPlayerApi.npcService();
-        boolean submitted = false;
-        for (AiPlayerNpcSession session : service.listSessions()) {
-            if (isDefaultNetworkNpcSession(sender.getUUID(), sender.getGameProfile().getName(), session)) {
-                sendCompanionChatEcho(sender, session.spec().profile().name(), commandText.trim());
-                CommandSubmissionResult result = service.submitCommandText(session.sessionId(), commandText);
-                OpenPlayerDebugEvents.record("command_submission", result.status().name(), null, null,
-                        session.sessionId().value().toString(), result.message());
-                submitted = true;
-            }
-        }
-        if (!submitted) {
-            OpenPlayerDebugEvents.record("command_submission", "unknown_session", null, null, null, "No spawned companion matched request");
-        }
+        String trimmedAssignmentId = assignmentId.trim();
+        String trimmedCommandText = commandText.trim();
+        OpenPlayerDebugEvents.record("command_text", "received", trimmedAssignmentId, null, null,
+                "length=" + trimmedCommandText.length());
+        OpenPlayerRawTrace.commandText("network_assignment", sender.getUUID().toString(), trimmedAssignmentId, null,
+                trimmedCommandText);
+        sendCompanionChatEcho(sender, trimmedAssignmentId, trimmedCommandText);
+        CommandSubmissionResult result = COMPANION_LIFECYCLE_MANAGER.submitSelectedCommandText(
+                sender.getUUID(), trimmedAssignmentId, trimmedCommandText
+        );
+        OpenPlayerDebugEvents.record("command_submission", result.status().name(), trimmedAssignmentId, null, null,
+                result.message());
+        sendSelectedCommandTextResultMessage(sender, trimmedAssignmentId, result);
         sendCharacterListResponse(sender);
         sendStatusResponse(sender);
     }
@@ -810,21 +766,10 @@ public final class OpenPlayerNetworking {
         sendCharacterListResponse(player);
     }
 
-    static boolean isDefaultNetworkNpcSession(UUID ownerId, String ownerProfileName, AiPlayerNpcSession session) {
-        return session.spec().ownerId().value().equals(ownerId)
-                && session.spec().roleId().value().equals(OpenPlayerConstants.DEFAULT_NETWORK_NPC_ROLE_ID)
-                && session.spec().profile().name().equals(defaultNetworkNpcProfileName(ownerProfileName));
-    }
-
-    static String defaultNetworkNpcProfileName(String ownerProfileName) {
-        return ownerProfileName + OpenPlayerConstants.DEFAULT_NETWORK_NPC_PROFILE_SUFFIX;
-    }
-
-    private static String readOptionalCharacterId(FriendlyByteBuf buffer) {
+    private static String readAssignmentId(FriendlyByteBuf buffer) {
         if (!buffer.isReadable()) {
-            return null;
+            return "";
         }
-        String characterId = buffer.readUtf(64).trim();
-        return characterId.isEmpty() ? null : characterId;
+        return buffer.readUtf(64).trim();
     }
 }

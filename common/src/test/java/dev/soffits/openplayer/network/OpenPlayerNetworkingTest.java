@@ -1,34 +1,15 @@
 package dev.soffits.openplayer.network;
 
-import dev.soffits.openplayer.OpenPlayerConstants;
-import dev.soffits.openplayer.api.AiPlayerNpcCommand;
-import dev.soffits.openplayer.api.AiPlayerNpcSession;
-import dev.soffits.openplayer.api.AiPlayerNpcSpec;
-import dev.soffits.openplayer.api.CommandSubmissionResult;
-import dev.soffits.openplayer.api.CommandSubmissionStatus;
-import dev.soffits.openplayer.api.NpcOwnerId;
-import dev.soffits.openplayer.api.NpcProfileSpec;
-import dev.soffits.openplayer.api.NpcRoleId;
-import dev.soffits.openplayer.api.NpcSessionId;
-import dev.soffits.openplayer.api.NpcSessionStatus;
-import dev.soffits.openplayer.api.NpcSpawnLocation;
 import dev.soffits.openplayer.intent.IntentParseException;
 import dev.soffits.openplayer.intent.IntentKind;
 import dev.soffits.openplayer.intent.IntentProviderException;
 import dev.soffits.openplayer.runtime.validation.RuntimeIntentValidator;
-import java.util.UUID;
 
 public final class OpenPlayerNetworkingTest {
-    private static final UUID OWNER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
-    private static final UUID OTHER_OWNER_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
-
     private OpenPlayerNetworkingTest() {
     }
 
     public static void main(String[] args) {
-        matchesDefaultNetworkNpc();
-        rejectsCharacterSessionUsingDefaultRole();
-        rejectsOtherOwnerDefaultNetworkNpc();
         acceptsSingleplayerOwnerProviderConfigSave();
         acceptsPermittedProviderConfigSave();
         rejectsUnauthorizedProviderConfigSave();
@@ -38,30 +19,6 @@ public final class OpenPlayerNetworkingTest {
         classifiesProviderHttpFailure();
         buildsBlankShortcutInstructions();
         reportsGenericCapabilityStatusLines();
-    }
-
-    private static void matchesDefaultNetworkNpc() {
-        require(OpenPlayerNetworking.isDefaultNetworkNpcSession(
-                OWNER_ID,
-                "Alex",
-                session(OWNER_ID, OpenPlayerConstants.DEFAULT_NETWORK_NPC_ROLE_ID, "Alex OpenPlayer NPC")
-        ), "absent character id must target the default network NPC");
-    }
-
-    private static void rejectsCharacterSessionUsingDefaultRole() {
-        require(!OpenPlayerNetworking.isDefaultNetworkNpcSession(
-                OWNER_ID,
-                "Alex",
-                session(OWNER_ID, OpenPlayerConstants.DEFAULT_NETWORK_NPC_ROLE_ID, "Alex Helper")
-        ), "absent character id must not target a local character session using the default role");
-    }
-
-    private static void rejectsOtherOwnerDefaultNetworkNpc() {
-        require(!OpenPlayerNetworking.isDefaultNetworkNpcSession(
-                OWNER_ID,
-                "Alex",
-                session(OTHER_OWNER_ID, OpenPlayerConstants.DEFAULT_NETWORK_NPC_ROLE_ID, "Alex OpenPlayer NPC")
-        ), "absent character id must not target another player's default network NPC");
     }
 
     private static void acceptsSingleplayerOwnerProviderConfigSave() {
@@ -119,45 +76,9 @@ public final class OpenPlayerNetworkingTest {
         require(joined.contains("capability_report"), "status must include capability registry report");
     }
 
-    private static AiPlayerNpcSession session(UUID ownerId, String roleId, String profileName) {
-        return new TestSession(new AiPlayerNpcSpec(
-                new NpcRoleId(roleId),
-                new NpcOwnerId(ownerId),
-                new NpcProfileSpec(profileName),
-                new NpcSpawnLocation("minecraft:overworld", 0.0D, 64.0D, 0.0D)
-        ));
-    }
-
     private static void require(boolean condition, String message) {
         if (!condition) {
             throw new AssertionError(message);
-        }
-    }
-
-    private record TestSession(AiPlayerNpcSpec spec) implements AiPlayerNpcSession {
-        @Override
-        public NpcSessionId sessionId() {
-            return new NpcSessionId(UUID.fromString("00000000-0000-0000-0000-000000000010"));
-        }
-
-        @Override
-        public NpcSessionStatus status() {
-            return NpcSessionStatus.ACTIVE;
-        }
-
-        @Override
-        public CommandSubmissionResult submitCommand(AiPlayerNpcCommand command) {
-            return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED, "accepted");
-        }
-
-        @Override
-        public CommandSubmissionResult submitCommandText(String input) {
-            return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED, "accepted");
-        }
-
-        @Override
-        public boolean despawn() {
-            return true;
         }
     }
 }
