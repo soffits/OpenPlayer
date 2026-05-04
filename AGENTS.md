@@ -59,8 +59,9 @@ Run the strongest available check before reporting completion:
 
 ## OpenCode Delegation
 
-- Build context before editing.
-- Make the smallest correct change for the requested phase.
+- Build context before editing, then give OpenCode a broad enough mandate to inspect, design, and edit within the requested capability or cleanup cluster.
+- Do not micromanage OpenCode with one-alias, one-method, or one-file follow-up prompts when the user asked for a broad phase/full-repo cleanup. Use narrow follow-up prompts only for concrete review blockers, safety regressions, build failures, or user-visible overclaims.
+- Prefer coherent capability clusters over artificial tiny phases. For PlayerEngine-style parity work, the durable boundaries are no OP/admin/cheat operations, no permission bypass, no arbitrary provider-origin execution, no opaque bot/runtime dependency, and no fake success.
 - Preserve unrelated user or agent work in the git worktree.
 - Do not commit unless the user explicitly requests it.
 - Report verification results and any environment limitation.
