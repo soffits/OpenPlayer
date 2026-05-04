@@ -25,6 +25,10 @@ public record ToolResult(ToolResultStatus status, String reason, String summary,
         return new ToolResult(ToolResultStatus.SUCCESS, "", summary, Map.of());
     }
 
+    public static ToolResult success(String summary, Map<String, String> details) {
+        return new ToolResult(ToolResultStatus.SUCCESS, "", summary, details);
+    }
+
     public static ToolResult rejected(String reason) {
         return new ToolResult(ToolResultStatus.REJECTED, reason, reason, Map.of());
     }

@@ -44,7 +44,7 @@ Bounded plans are accepted by `AICoreProviderJsonToolParser` for schema-level pa
 {
   "plan": [
     {"tool": "find_blocks", "args": {"matching": "minecraft:oak_log", "maxDistance": 24, "count": 8}},
-    {"tool": "pathfinder_goto", "args": {"goal": {"type": "goal_look_at_block", "x": 10, "y": 64, "z": -3}}},
+    {"tool": "pathfinder_goto", "args": {"goal": {"type": "goal_block", "x": 10, "y": 64, "z": -3}}},
     {"tool": "dig", "args": {"x": 10, "y": 64, "z": -3}}
   ]
 }
@@ -61,6 +61,7 @@ Bounded plans are accepted by `AICoreProviderJsonToolParser` for schema-level pa
 - Required arguments are enforced by `ToolSchema`.
 - Numeric bounds are enforced for common safety fields such as `maxDistance`, `count`, `ticks`, `timeoutTicks`, and `slot`.
 - Mutating tools require `allowWorldActions`.
+- `pathfinder_goto` accepts only coordinate goal objects that can be bridged to bounded loaded-area vanilla navigation; unsupported goal shapes fail validation or runtime preconditions instead of becoming hidden planners.
 - Provider output never loads plugins, executes JavaScript, runs commands, bypasses policy, or claims unsupported mechanics succeeded.
 
 ## Provider-Facing Statuses

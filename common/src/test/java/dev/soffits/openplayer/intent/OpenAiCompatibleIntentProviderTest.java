@@ -79,6 +79,13 @@ public final class OpenAiCompatibleIntentProviderTest {
         require(prompt.contains("move_to"), "system prompt must list move_to");
         require(prompt.contains("break_block_at"), "system prompt must list break_block_at");
         require(prompt.contains("pickup_items_nearby"), "system prompt must list pickup_items_nearby");
+        require(prompt.contains("report_status"), "system prompt must list provider-executable report_status");
+        require(prompt.contains("dig"), "system prompt must list provider-executable dig");
+        require(prompt.contains("pathfinder_goto"), "system prompt must list provider-executable pathfinder_goto");
+        require(prompt.contains("inventory"), "system prompt may list provider-executable inventory alias");
+        require(!prompt.contains("swing_arm"), "system prompt must not expose facade-only swing_arm");
+        require(!prompt.contains("and inventory, must not be returned as provider tools"),
+                "system prompt must not contradict provider-executable inventory alias");
         require(!prompt.contains("GIVE_ITEM"), "system prompt must not expose old non-tool enum names");
         require(!prompt.contains("\"kind\""), "system prompt must not expose old kind field");
         require(!prompt.contains("\"instruction\""), "system prompt must not expose old instruction field");

@@ -13,6 +13,7 @@ public final class AutomationRecoveryPathTest {
     public static void main(String[] args) throws IOException {
         pauseSuspendsNavigationWithoutCompletingRuntime();
         resetMemoryDoesNotClearExplorationMemory();
+        primitiveToolSubmitUsesLiveNpcExecutorWithoutRuntimeRecursion();
     }
 
     private static void pauseSuspendsNavigationWithoutCompletingRuntime() throws IOException {
@@ -49,6 +50,22 @@ public final class AutomationRecoveryPathTest {
                 "RESET_MEMORY must not clear automation-local loaded chunk exploration memory");
         require(resetSource.contains("no automation-local memory was cleared"),
                 "RESET_MEMORY must report that automation-local memory was not cleared");
+    }
+
+    private static void primitiveToolSubmitUsesLiveNpcExecutorWithoutRuntimeRecursion() throws IOException {
+        String source = Files.readString(sourcePath());
+        int submitStart = source.indexOf("public AutomationCommandResult submit(CommandIntent intent)");
+        require(submitStart >= 0, "submit branch must exist");
+        int submitEnd = source.indexOf("private AutomationCommandResult submitPrimitiveIntent", submitStart);
+        require(submitEnd > submitStart, "submit branch boundary must be detectable");
+        String submitSource = source.substring(submitStart, submitEnd);
+
+        require(submitSource.contains("new AICoreNpcToolExecutor(entity, aicoreEventBus,"),
+                "primitive tool submit must route through the reviewed live NPC executor");
+        require(submitSource.contains("submitPrimitiveIntent(primitiveIntent)"),
+                "live NPC executor command fallback must submit directly to primitive intent handling");
+        require(!submitSource.contains("new MinecraftPrimitiveToolExecutor"),
+                "primitive tool submit must not use the facade-only primitive executor in the live backend");
     }
 
     private static Path sourcePath() {

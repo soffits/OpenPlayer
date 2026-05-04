@@ -117,9 +117,34 @@ public final class MinecraftPrimitiveTools {
         return REGISTRY.toolNamesCsv();
     }
 
-    public static String providerToolSchemaText() {
+    public static String providerExecutableToolNames() {
         StringBuilder builder = new StringBuilder();
         for (ToolSchema schema : REGISTRY.schemas()) {
+            if (!TOOL_TO_INTENT.containsKey(schema.name())) {
+                continue;
+            }
+            if (builder.length() > 0) {
+                builder.append(", ");
+            }
+            builder.append(schema.name().value());
+        }
+        return builder.toString();
+    }
+
+    public static String providerToolSchemaText() {
+        return providerToolSchemaText(false);
+    }
+
+    public static String providerExecutableToolSchemaText() {
+        return providerToolSchemaText(true);
+    }
+
+    private static String providerToolSchemaText(boolean executableOnly) {
+        StringBuilder builder = new StringBuilder();
+        for (ToolSchema schema : REGISTRY.schemas()) {
+            if (executableOnly && !TOOL_TO_INTENT.containsKey(schema.name())) {
+                continue;
+            }
             if (builder.length() > 0) {
                 builder.append("; ");
             }
@@ -143,6 +168,7 @@ public final class MinecraftPrimitiveTools {
         map.put(FIND_LOADED_ENTITIES, IntentKind.LOCATE_LOADED_ENTITY);
         map.put(PICKUP_ITEMS_NEARBY, IntentKind.COLLECT_ITEMS);
         map.put(MOVE_TO, IntentKind.GOTO);
+        map.put(ToolName.of("pathfinder_goto"), IntentKind.GOTO);
         map.put(LOOK_AT, IntentKind.LOOK);
         map.put(ToolName.of("pathfinder_stop"), IntentKind.STOP);
         map.put(BREAK_BLOCK_AT, IntentKind.BREAK_BLOCK);
@@ -157,6 +183,11 @@ public final class MinecraftPrimitiveTools {
         map.put(ToolName.of("toss"), IntentKind.DROP_ITEM);
         map.put(INTERACT, IntentKind.INTERACT);
         map.put(ToolName.of("activate_block"), IntentKind.INTERACT);
+        map.put(ToolName.of("activate_entity"), IntentKind.INTERACT);
+        map.put(ToolName.of("activate_entity_at"), IntentKind.INTERACT);
+        map.put(ToolName.of("use_on_entity"), IntentKind.INTERACT);
+        map.put(ToolName.of("activate_item"), IntentKind.USE_SELECTED_ITEM);
+        map.put(ToolName.of("consume"), IntentKind.USE_SELECTED_ITEM);
         map.put(ATTACK_NEAREST, IntentKind.ATTACK_NEAREST);
         map.put(ATTACK_TARGET, IntentKind.ATTACK_TARGET);
         map.put(ToolName.of("attack"), IntentKind.ATTACK_TARGET);
@@ -190,7 +221,13 @@ public final class MinecraftPrimitiveTools {
         }
         Map<String, String> values = call.arguments().values();
         if (hasCoordinates(values)) {
+            if (call.name().value().equals("activate_block")) {
+                return "block " + values.get("x") + " " + values.get("y") + " " + values.get("z");
+            }
             return values.get("x") + " " + values.get("y") + " " + values.get("z");
+        }
+        if (values.containsKey("goal")) {
+            return goalInstruction(values.get("goal"));
         }
         if (values.containsKey("matching")) {
             String maxDistance = values.getOrDefault("maxDistance", "");
@@ -203,6 +240,10 @@ public final class MinecraftPrimitiveTools {
             return (values.get("itemType") + " " + values.getOrDefault("count", "")).trim();
         }
         if (values.containsKey("entityId")) {
+            if (call.name().value().equals("activate_entity") || call.name().value().equals("activate_entity_at")
+                    || call.name().value().equals("use_on_entity")) {
+                return "entity " + values.get("entityId") + " " + values.getOrDefault("maxDistance", "4");
+            }
             return values.get("entityId");
         }
         if (values.containsKey("maxDistance")) {
@@ -213,6 +254,76 @@ public final class MinecraftPrimitiveTools {
 
     private static boolean hasCoordinates(Map<String, String> values) {
         return values.containsKey("x") && values.containsKey("y") && values.containsKey("z");
+    }
+
+    private static String goalInstruction(String goalJson) {
+        if (goalJson == null || goalJson.isBlank()) {
+            return "";
+        }
+        String type = jsonStringField(goalJson, "type");
+        String x = jsonNumberField(goalJson, "x");
+        String y = jsonNumberField(goalJson, "y");
+        String z = jsonNumberField(goalJson, "z");
+        if ((type.equals("goal_block") || type.equals("goal_near") || type.equals("goal_get_to_block")
+                || type.equals("goal_look_at_block") || type.equals("goal_place_block"))
+                && !x.isBlank() && !y.isBlank() && !z.isBlank()) {
+            return x + " " + y + " " + z;
+        }
+        if ((type.equals("goal_xz") || type.equals("goal_near_xz")) && !x.isBlank() && !z.isBlank()) {
+            return x + " 0 " + z;
+        }
+        return "";
+    }
+
+    private static String jsonStringField(String json, String fieldName) {
+        String quoted = "\"" + fieldName + "\"";
+        int fieldIndex = json.indexOf(quoted);
+        if (fieldIndex < 0) {
+            return "";
+        }
+        int colonIndex = json.indexOf(':', fieldIndex + quoted.length());
+        if (colonIndex < 0) {
+            return "";
+        }
+        int quoteStart = json.indexOf('"', colonIndex + 1);
+        if (quoteStart < 0) {
+            return "";
+        }
+        int quoteEnd = json.indexOf('"', quoteStart + 1);
+        if (quoteEnd < 0) {
+            return "";
+        }
+        return json.substring(quoteStart + 1, quoteEnd);
+    }
+
+    private static String jsonNumberField(String json, String fieldName) {
+        String quoted = "\"" + fieldName + "\"";
+        int fieldIndex = json.indexOf(quoted);
+        if (fieldIndex < 0) {
+            return "";
+        }
+        int colonIndex = json.indexOf(':', fieldIndex + quoted.length());
+        if (colonIndex < 0) {
+            return "";
+        }
+        int index = colonIndex + 1;
+        while (index < json.length() && Character.isWhitespace(json.charAt(index))) {
+            index++;
+        }
+        if (index < json.length() && json.charAt(index) == '"') {
+            int quoteEnd = json.indexOf('"', index + 1);
+            return quoteEnd > index ? json.substring(index + 1, quoteEnd) : "";
+        }
+        int start = index;
+        while (index < json.length()) {
+            char character = json.charAt(index);
+            if ((character >= '0' && character <= '9') || character == '-' || character == '+') {
+                index++;
+            } else {
+                break;
+            }
+        }
+        return index > start ? json.substring(start, index) : "";
     }
 
     private static Optional<ToolResult> validateSchema(ToolCall call, ToolSchema schema) {
@@ -271,6 +382,9 @@ public final class MinecraftPrimitiveTools {
             return Optional.of(ToolResult.rejected("timeoutTicks must be between 0 and 1200"));
         }
         Optional<Integer> slot = integerArgument(call, "slot");
+        if (slot.isPresent() && call.name().value().equals("set_quick_bar_slot") && (slot.get() < 0 || slot.get() > 8)) {
+            return Optional.of(ToolResult.rejected("slot must be between 0 and 8"));
+        }
         if (slot.isPresent() && (slot.get() < 0 || slot.get() > 255)) {
             return Optional.of(ToolResult.rejected("slot must be between 0 and 255"));
         }

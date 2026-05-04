@@ -1,7 +1,10 @@
 package dev.soffits.openplayer.automation;
 
+import dev.soffits.openplayer.api.CommandSubmissionResult;
+import dev.soffits.openplayer.api.CommandSubmissionStatus;
 import dev.soffits.openplayer.api.NpcOwnerId;
-import dev.soffits.openplayer.aicore.MinecraftPrimitiveToolExecutor;
+import dev.soffits.openplayer.aicore.AICoreEventBus;
+import dev.soffits.openplayer.aicore.AICoreNpcToolExecutor;
 import dev.soffits.openplayer.aicore.MinecraftPrimitiveTools;
 import dev.soffits.openplayer.aicore.ToolCall;
 import dev.soffits.openplayer.aicore.ToolResult;
@@ -154,6 +157,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private final NavigationRuntime navigationRuntime = new NavigationRuntime(NAVIGATION_MAX_RECOVERIES);
         private final WorkstationLocator workstationLocator = new WorkstationLocator();
         private final LoadedAreaNavigator loadedAreaNavigator = new LoadedAreaNavigator();
+        private final AICoreEventBus aicoreEventBus = new AICoreEventBus(128);
         private QueuedCommand activeCommand;
         private AutomationControllerMonitor activeMonitor;
         private NpcOwnerId ownerId;
@@ -184,7 +188,14 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (toolCall == null) {
                 return submitPrimitiveIntent(intent);
             }
-            MinecraftPrimitiveToolExecutor executor = new MinecraftPrimitiveToolExecutor(this::submitPrimitiveIntent);
+            AICoreNpcToolExecutor executor = new AICoreNpcToolExecutor(entity, aicoreEventBus,
+                    primitiveIntent -> {
+                        AutomationCommandResult primitiveResult = submitPrimitiveIntent(primitiveIntent);
+                        CommandSubmissionStatus status = primitiveResult.status() == AutomationCommandStatus.ACCEPTED
+                                ? CommandSubmissionStatus.ACCEPTED
+                                : CommandSubmissionStatus.REJECTED;
+                        return new CommandSubmissionResult(status, primitiveResult.message());
+                    });
             ToolResult result = executor.execute(toolCall, new ToolValidationContext(entity.allowWorldActions()));
             if (result.status() == ToolResultStatus.SUCCESS || result.status() == ToolResultStatus.RUNNING) {
                 return accepted(result.summary());

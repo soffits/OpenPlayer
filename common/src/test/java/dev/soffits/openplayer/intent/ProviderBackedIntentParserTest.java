@@ -7,7 +7,9 @@ public final class ProviderBackedIntentParserTest {
     public static void main(String[] args) throws Exception {
         acceptsStructuredToolJsonWithArguments();
         defaultsStructuredToolJsonPriorityToNormal();
-        rejectsUnsupportedAdapterStructuredToolJson();
+        acceptsPathfinderGotoStructuredToolJson();
+        rejectsFacadeOnlyStructuredToolJson();
+        providerPromptExcludesFacadeOnlyTools();
         rejectsAdminStructuredToolJson();
         rejectsStructuredPlanJson();
         acceptsStructuredChat();
@@ -32,12 +34,29 @@ public final class ProviderBackedIntentParserTest {
         require(intent.priority() == IntentPriority.NORMAL, "missing structured tool priority must default to NORMAL");
     }
 
-    private static void rejectsUnsupportedAdapterStructuredToolJson() {
+    private static void acceptsPathfinderGotoStructuredToolJson() throws Exception {
         ProviderBackedIntentParser parser = new ProviderBackedIntentParser(
                 input -> ProviderIntent.structuredTool("NORMAL", "{\"tool\":\"pathfinder_goto\",\"args\":{\"goal\":{\"type\":\"goal_block\",\"x\":1,\"y\":64,\"z\":2}}}")
         );
-        requireRejected(parser, "unsupported_missing_pathfinder_adapter",
-                "unsupported adapter tool JSON must not become executable");
+        CommandIntent intent = parser.parse("ignored");
+        require(intent.kind() == IntentKind.GOTO, "pathfinder_goto goal_block must bridge to bounded GOTO intent");
+        require("1 64 2".equals(intent.instruction()), "pathfinder_goto goal coordinates must become runtime instruction");
+    }
+
+    private static void rejectsFacadeOnlyStructuredToolJson() {
+        ProviderBackedIntentParser parser = new ProviderBackedIntentParser(
+                input -> ProviderIntent.structuredTool("NORMAL", "{\"tool\":\"set_quick_bar_slot\",\"args\":{\"slot\":1}}")
+        );
+        requireRejected(parser, "intent provider returned a non-executable primitive tool",
+                "provider parser must reject facade-only tools without a CommandIntent route");
+    }
+
+    private static void providerPromptExcludesFacadeOnlyTools() {
+        String prompt = OpenAiCompatibleIntentProvider.systemPrompt();
+        require(!prompt.contains("set_quick_bar_slot: Select hotbar slot"),
+                "provider prompt schemas must not advertise facade-only hotbar selection as executable");
+        require(prompt.contains("report_status: Report active OpenPlayer automation status"),
+                "provider prompt schemas must retain executable command-bridged tools");
     }
 
     private static void rejectsAdminStructuredToolJson() {
