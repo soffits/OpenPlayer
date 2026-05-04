@@ -397,16 +397,19 @@ public final class RuntimeIntentValidatorTest {
         require(RuntimeIntentValidator.validate(
                 intent(IntentKind.USE_PORTAL, "radius=12 target=minecraft:the_nether build=true"), true
         ).isAccepted(), "USE_PORTAL should accept strict portal key/value syntax");
+        require(RuntimeIntentValidator.validate(
+                intent(IntentKind.USE_PORTAL, "radius=12 target=example:moon build=false"), true
+        ).isAccepted(), "USE_PORTAL should accept arbitrary ResourceLocation target dimensions");
         require(RuntimeIntentValidator.validate(intent(IntentKind.TRAVEL_NETHER, ""), true).isAccepted(),
                 "TRAVEL_NETHER should accept blank instruction");
         require(RuntimeIntentValidator.validate(intent(IntentKind.TRAVEL_NETHER, "radius=24 build=false"), true).isAccepted(),
                 "TRAVEL_NETHER should accept bounded radius/build syntax");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.USE_PORTAL, "nether"), true),
-                "USE_PORTAL requires blank or instruction: radius=<blocks> target=<minecraft:the_nether|minecraft:overworld> build=<true|false>");
+                "USE_PORTAL requires blank or instruction: radius=<blocks> target=<dimension_id> build=<true|false>");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.USE_PORTAL, "radius=128"), true),
-                "USE_PORTAL requires blank or instruction: radius=<blocks> target=<minecraft:the_nether|minecraft:overworld> build=<true|false>");
-        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.USE_PORTAL, "target=minecraft:the_end"), true),
-                "USE_PORTAL requires blank or instruction: radius=<blocks> target=<minecraft:the_nether|minecraft:overworld> build=<true|false>");
+                "USE_PORTAL requires blank or instruction: radius=<blocks> target=<dimension_id> build=<true|false>");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.USE_PORTAL, "target=not_a_resource_location"), true),
+                "USE_PORTAL requires blank or instruction: radius=<blocks> target=<dimension_id> build=<true|false>");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.TRAVEL_NETHER, "target=minecraft:overworld"), true),
                 "TRAVEL_NETHER requires blank or instruction: radius=<blocks> build=<true|false>");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.TRAVEL_NETHER, ""), false),
@@ -459,6 +462,12 @@ public final class RuntimeIntentValidatorTest {
                 "LOCATE_STRONGHOLD requires blank or instruction: source=diagnostic");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.END_GAME_TASK, "speedrun"), true),
                 "END_GAME_TASK requires blank or instruction: plan, prepare, stronghold, portal, travel, dragon, or recovery");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.END_GAME_TASK, "phase=dragon"), true),
+                "END_GAME_TASK requires blank or instruction: plan, prepare, stronghold, portal, travel, dragon, or recovery");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.END_GAME_TASK, "dragon now"), true),
+                "END_GAME_TASK requires blank or instruction: plan, prepare, stronghold, portal, travel, dragon, or recovery");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_STRONGHOLD, "source=diagnostic /locate"), true),
+                "LOCATE_STRONGHOLD requires blank or instruction: source=diagnostic");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_STRONGHOLD, ""), false),
                 "World actions are disabled for this OpenPlayer character");
     }

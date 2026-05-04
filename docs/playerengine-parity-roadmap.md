@@ -426,14 +426,14 @@ The first twelve phases establish a bounded first-party runtime foundation, but 
 
 ### Phase 19: Portal and Dimension Travel
 
-**Status:** Phase 19 plus the broad player-like capability expansion implements a player-like MVP for `USE_PORTAL` and `TRAVEL_NETHER`. Instructions are strict key/value syntax with bounded radius and supported dimensions only. The runtime scans only already-loaded nearby blocks for existing Nether portal blocks, navigates to/into a loaded portal, and completes only after observing the NPC dimension change. If requested or inventory-afforded for `TRAVEL_NETHER`, the runtime can build a simple 4x5 obsidian frame from NPC-carried obsidian in loaded air-only space with collision checks and real inventory consumption after each successful placement, then attempts flint-and-steel ignition through a reviewed first-party player-like capability adapter and waits for an observed transition. The phase does not use commands, teleportation, locate APIs, creative placement, bucket-flow portal construction, container materials, hidden services, PlayerEngine/Baritone/AltoClef dependencies, or forced dimension changes.
+**Status:** Phase 19 plus the broad player-like capability expansion implements a player-like MVP for `USE_PORTAL` and `TRAVEL_NETHER`. Instructions are strict key/value syntax with bounded radius. `USE_PORTAL` may name an arbitrary ResourceLocation target for existing loaded portal travel, or no target for any observed changed dimension; completion still requires observing the NPC dimension change. The runtime scans only already-loaded nearby blocks for existing portal evidence and navigates to/into a loaded portal. If requested or inventory-afforded for `TRAVEL_NETHER`, the runtime can build a simple 4x5 obsidian frame as a vanilla Nether portal build adapter from NPC-carried obsidian in loaded air-only space with collision checks and real inventory consumption after each successful placement, then attempts flint-and-steel ignition through a reviewed first-party player-like capability adapter and waits for an observed transition. The phase does not use commands, teleportation, locate APIs, creative placement, bucket-flow portal construction, container materials, hidden services, PlayerEngine/Baritone/AltoClef dependencies, or forced dimension changes.
 
 **Objective:** Implement `USE_PORTAL` and `TRAVEL_NETHER` through reviewed portal/dimension safety semantics.
 
 **Capabilities:**
 
 - Detect nearby loaded existing portals and use them when pathable and safe.
-- Optionally build and ignite simple portals only from carried/available obsidian and flint_and_steel through reviewed first-party player-like capability adapters; bucket-flow construction remains a missing adapter.
+- Optionally build and ignite simple vanilla Nether portals only from carried/available obsidian and flint_and_steel through reviewed first-party player-like capability adapters; bucket-flow and custom portal construction remain missing adapters.
 - Track dimension transition, timeout, owner relation, return path, and hazard recovery.
 
 **Acceptance Criteria:**
@@ -444,20 +444,20 @@ The first twelve phases establish a bounded first-party runtime foundation, but 
 
 ### Phase 20: Nether Survival, Travel Recovery, and Resource Chain
 
-**Status:** Phase 20 implements a broad truthful foundation for Nether/resource recovery without adding opaque automation. Portal travel diagnostics now carry origin dimension, target dimension, source, portal/frame positions, observed transition, failure/timeout state, and return affordance through active status and failure summaries. Resource diagnostics include current dimension and Nether recovery constraints, and endgame preparation hints for blaze rods, blaze powder, ender pearls, eyes of ender, and food/safety items point planners toward visible primitives such as `TRAVEL_NETHER`, `USE_PORTAL`, `REPORT_STATUS`, `GET_ITEM`, `ATTACK_TARGET`, `COLLECT_FOOD`, and `SMELT_ITEM` while naming missing primitives. This phase does not add fortress search, barter/trading, stronghold search, End travel, dragon tactics, forced teleportation, fake hostile-drop collection, or opaque bot dependencies.
+**Status:** Phase 20 implements a broad truthful foundation for current-dimension and vanilla Nether/resource recovery without adding opaque automation. Portal travel diagnostics now carry origin dimension, target dimension, source, portal/frame positions, observed transition, failure/timeout state, and return affordance through active status and failure summaries. Resource diagnostics include the current arbitrary ResourceLocation dimension id, observed loaded-world recovery affordances, and vanilla Nether constraints where applicable. Endgame preparation hints for blaze rods, blaze powder, ender pearls, eyes of ender, and food/safety items point planners toward visible primitives such as `TRAVEL_NETHER`, `USE_PORTAL`, `REPORT_STATUS`, `GET_ITEM`, `ATTACK_TARGET`, `COLLECT_FOOD`, and `SMELT_ITEM` while naming missing primitives. This phase does not add fortress search, barter/trading, stronghold search, End travel, dragon tactics, forced teleportation, fake hostile-drop collection, or opaque bot dependencies.
 
 **Objective:** Make Nether travel and endgame-resource preparation recoverable and diagnosable as ordinary player-like actions over existing reviewed primitives.
 
 **Capabilities:**
 
 - Report portal origin/target dimensions, portal or frame location, build/use source, observed transitions, timeout/failure reasons, partial frame progress, and return-travel affordance.
-- Surface Nether-aware survival/resource diagnostics including current dimension and obvious recovery constraints such as lava/fire/cliffs and unusable water buckets.
+- Surface current-dimension survival/resource diagnostics over observed loaded world state, including vanilla Nether-aware constraints such as lava/fire/cliffs and unusable water buckets where applicable.
 - Expose endgame preparation as a visible primitive chain for blaze resources, pearl/eye resources, and food/safety preparation rather than a fake monolithic speedrun command.
 - Identify available primitives and missing primitives so the planner can ask for player-like follow-up actions or truthfully stop.
 
 **Acceptance Criteria:**
 
-- Nether/portal status gives enough state for a planner or user to request return travel without teleporting or pretending recovery succeeded.
+- Portal/current-dimension status gives enough state for a planner or user to request loaded portal use, exploration, owner-follow in the same dimension, STOP/cancel, or vanilla Nether return travel without teleporting or pretending recovery succeeded.
 - Resource preparation diagnostics distinguish available carried/visible/craftable actions from missing search, barter, trade, or task-tree orchestration.
 - No OP/admin/cheat commands, permission bypass, arbitrary provider-origin code execution, PlayerEngine/Baritone/AltoClef dependency, forced dimension change, or fake success.
 
@@ -477,7 +477,7 @@ The first twelve phases establish a bounded first-party runtime foundation, but 
 - Partial progress, missing materials, unsafe dimension state, and recovery options are reported truthfully.
 - No speedrun or dragon-completion claim unless the complete dependency chain exists and local integration QA covers it.
 
-**Status:** Phase 21 now provides a deterministic task-tree diagnostic foundation for endgame preparation. `REPORT_STATUS` includes an `endgame_task_tree` summary with resource preparation, Nether/blaze resources, pearl/eye resources, stronghold estimation/search, End portal preparation, End travel, dragon-fight primitive, and recovery nodes. `LOCATE_STRONGHOLD` accepts blank or `source=diagnostic` and returns a rich missing-adapter diagnostic instead of using `/locate`, hidden server stronghold APIs, chunk generation, or fake triangulation. `END_GAME_TASK` accepts blank or a reviewed diagnostic phase (`plan`, `prepare`, `stronghold`, `portal`, `travel`, `dragon`, `recovery`) and returns the same visible plan rather than claiming End travel, dragon completion, or speedrun success. Implemented nodes distinguish available reviewed primitives such as `TRAVEL_NETHER`, `USE_PORTAL`, `GET_ITEM`, `SMELT_ITEM`, `COLLECT_FOOD`, and `ATTACK_TARGET` from missing adapters such as fortress search, eye-of-ender observation/triangulation, End portal room/frame interaction, End travel orchestration, crystal handling, dragon combat positioning, bed/pearl tactics, and End recovery.
+**Status:** Phase 21 now provides a deterministic task-tree diagnostic foundation for vanilla endgame preparation plus generic current-dimension recovery. `REPORT_STATUS` includes an `endgame_task_tree` summary with resource preparation, vanilla Nether/blaze resources, pearl/eye resources, stronghold estimation/search, End portal preparation, End travel, dragon-fight primitive, and current-dimension recovery nodes. `LOCATE_STRONGHOLD` accepts blank or `source=diagnostic` and returns a rich vanilla missing-adapter diagnostic instead of using `/locate`, hidden server stronghold APIs, chunk generation, or fake triangulation. `END_GAME_TASK` accepts blank or a reviewed diagnostic phase (`plan`, `prepare`, `stronghold`, `portal`, `travel`, `dragon`, `recovery`) and returns the same visible plan rather than claiming End travel, dragon completion, or speedrun success. Implemented nodes distinguish available reviewed primitives such as `TRAVEL_NETHER`, `USE_PORTAL`, `GET_ITEM`, `SMELT_ITEM`, `COLLECT_FOOD`, `EXPLORE_CHUNKS`, `FOLLOW_OWNER`, and `ATTACK_TARGET` from missing vanilla adapters such as fortress search, eye-of-ender observation/triangulation, End portal room/frame interaction, End travel orchestration, crystal handling, dragon combat positioning, and bed/pearl tactics.
 
 This phase does not add stronghold location execution, eye-of-ender throwing, End portal activation, forced dimension changes, dragon-fight execution, opaque bot dependencies, command APIs, or any speedrun/dragon success claim.
 
@@ -485,9 +485,15 @@ This phase does not add stronghold location execution, eye-of-ender throwing, En
 
 **Objective:** Make advanced automation observable, cancellable, and release-ready.
 
+**Status:** Phase 22 now exposes vanilla endgame and generic current-dimension viewer/world diagnostics on the existing OpenPlayer Controls Status tab through an append-only status packet extension. The status packet does not carry a selected assignment or NPC id, so these lines are not selected-NPC inventory, selected-NPC task state, or hidden queued execution. The visible lines are bounded, structured, and labelled as `diagnostic_snapshot` plus `not_queued`; material-count lines are labelled `source=viewer_inventory`, and current-dimension lines are labelled `source=current_viewer_dimension`. STOP/cancel semantics remain truthful: STOP clears real active or queued runtime tasks, while these diagnostics are snapshots rather than a hidden executor. The status surface shows representative diagnostic subtask statuses, arbitrary current dimension ids, missing primitives, deterministic truncation, and recovery/truth wording without exposing provider output or credentials.
+
+The implementation remains diagnostic-only for vanilla stronghold, End travel, dragon fight, and speedrun flows. Unknown or modded dimensions are not globally unsupported; diagnostics report `current_dimension=<id>`, observed loaded-world recovery affordances, and player-like options such as loaded portal evidence, loaded exploration, owner-follow when in the same dimension, STOP/cancel, and inventory/safety prep. Missing vanilla primitives are still named honestly, including fortress search, eye-of-ender observation/triangulation, loaded stronghold evidence, End portal room/frame interaction, End travel orchestration, crystal handling, dragon combat positioning, and bed/pearl/block tactics. It does not use OP/admin commands, hidden server locate services, teleportation, forced dimension changes, chunk generation/loading, opaque bot dependencies, or copied PlayerEngine/Player2NPC implementation.
+
+QA was hardened with broad capability-cluster checks for bounded viewer/world diagnostic lines, source labels for ServerPlayer-derived inventory and dimension state, no selected-NPC execution claims, no stronghold/End/dragon/speedrun success overclaims, language-key and placeholder parity across English/Japanese/French UI resources, truthful provider prompt wording, unsafe advanced instruction rejection, and avoiding admin command vocabulary in the new status lines.
+
 **Capabilities:**
 
-- Visible task tree/status UI for active and queued advanced tasks, including subtask progress, cancellation, recovery affordances, and missing primitive diagnostics.
+- Visible status UI for current viewer/world diagnostics, recovery affordances, and missing primitive diagnostics; selected-NPC active or queued task UI remains future work until the packet carries a reliable selected runtime identity.
 - Integration QA for Nether/resource/stronghold/End flows across Fabric and Forge with clear fixture coverage and failure-mode checks.
 - Release hardening for prompts, validation, debug traces, localization, compatibility, and documentation.
 

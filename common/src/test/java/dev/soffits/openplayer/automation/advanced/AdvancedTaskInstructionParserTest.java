@@ -136,6 +136,14 @@ public final class AdvancedTaskInstructionParserTest {
         require(Boolean.TRUE.equals(explicitUse.build()) && explicitUse.explicitBuild(),
                 "USE_PORTAL should preserve explicit build=true");
 
+        AdvancedTaskInstructionParser.PortalTravelInstruction moddedUse =
+                AdvancedTaskInstructionParser.parseUsePortalOrNull(
+                        "radius=12 target=example:moon build=false"
+                );
+        require(moddedUse != null, "USE_PORTAL should accept arbitrary ResourceLocation target dimensions");
+        require(moddedUse.targetDimensionId().equals("example:moon") && moddedUse.explicitTarget(),
+                "USE_PORTAL should preserve modded target dimension ids for observed portal travel");
+
         AdvancedTaskInstructionParser.PortalTravelInstruction blankTravel =
                 AdvancedTaskInstructionParser.parseTravelNetherOrNull(" ");
         require(blankTravel != null, "TRAVEL_NETHER should accept blank instruction");
@@ -158,8 +166,8 @@ public final class AdvancedTaskInstructionParserTest {
                 "USE_PORTAL should reject huge radius instead of capping");
         require(AdvancedTaskInstructionParser.parseUsePortalOrNull("radius=-1") == null,
                 "USE_PORTAL should reject negative radius");
-        require(AdvancedTaskInstructionParser.parseUsePortalOrNull("target=minecraft:the_end") == null,
-                "USE_PORTAL should reject unsupported dimensions");
+        require(AdvancedTaskInstructionParser.parseUsePortalOrNull("target=not_a_resource_location") == null,
+                "USE_PORTAL should reject invalid dimension ids");
         require(AdvancedTaskInstructionParser.parseUsePortalOrNull("build=yes") == null,
                 "USE_PORTAL should reject non-boolean build");
         require(AdvancedTaskInstructionParser.parseUsePortalOrNull("radius=12 speed=fast") == null,

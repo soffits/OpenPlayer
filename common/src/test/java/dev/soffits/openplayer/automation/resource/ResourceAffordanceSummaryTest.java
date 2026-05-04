@@ -22,6 +22,7 @@ public final class ResourceAffordanceSummaryTest {
         droppedItemsAreSortedDeterministically();
         diagnosticsAreBoundedAndTruthful();
         diagnosticsIncludeNetherRecoveryConstraints();
+        diagnosticsIncludeGenericDimensionRecovery();
     }
 
     private static void exactInventoryCapacityUsesNormalInventoryOnly() {
@@ -132,10 +133,27 @@ public final class ResourceAffordanceSummaryTest {
 
         String diagnostics = summary.boundedDiagnostics(false, "minecraft:the_nether");
 
-        require(diagnostics.contains("dimension=minecraft:the_nether"),
+        require(diagnostics.contains("current_dimension=minecraft:the_nether"),
                 "diagnostics must include current dimension");
         require(diagnostics.contains("nether_recovery=water_bucket_unusable"),
                 "Nether diagnostics must include obvious recovery constraints");
+    }
+
+    private static void diagnosticsIncludeGenericDimensionRecovery() {
+        ResourceAffordanceSummary summary = new ResourceAffordanceSummary(
+                "minecraft:stick", Items.STICK, 1, 0, 64, 0, 0, 8, false,
+                List.of(), List.of(),
+                new ResourceAffordanceSummary.BlockSourceAffordance(false, 0, true, "not_a_block_item")
+        );
+
+        String diagnostics = summary.boundedDiagnostics(false, "example:moon");
+
+        require(diagnostics.contains("current_dimension=example:moon"),
+                "diagnostics must preserve arbitrary dimension ids");
+        require(diagnostics.contains("environment=observed_loaded_world"),
+                "diagnostics must describe observed loaded world state");
+        require(diagnostics.contains("generic_dimension_recovery=loaded_portal_or_explore_or_owner_path_if_available"),
+                "diagnostics must expose generic player-like recovery options");
     }
 
     private static NonNullList<ItemStack> emptyInventory() {

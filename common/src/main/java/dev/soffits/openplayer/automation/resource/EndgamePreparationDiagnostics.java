@@ -37,9 +37,10 @@ public final class EndgamePreparationDiagnostics {
                 )
         );
         EndgameTaskNode netherPrep = new EndgameTaskNode(
-                "nether_prep",
+                "vanilla_nether_prep",
                 normalizedDimension.equals("minecraft:the_nether") ? EndgameTaskStatus.READY : EndgameTaskStatus.AVAILABLE_PRIMITIVE,
-                "current_dimension=" + normalizedDimension + " primitive=TRAVEL_NETHER_OR_USE_PORTAL",
+                "current_dimension=" + normalizedDimension
+                        + " vanilla_adapter=TRAVEL_NETHER_OR_USE_PORTAL vanilla_nether_portal_build_adapter",
                 List.of(
                         EndgameTaskNode.leaf("fortress_or_blaze_search", EndgameTaskStatus.MISSING_PRIMITIVE,
                                 "no_fortress_search_adapter_no_hidden_locate_api"),
@@ -90,15 +91,17 @@ public final class EndgamePreparationDiagnostics {
                 )
         );
         EndgameTaskNode recovery = EndgameTaskNode.leaf(
-                "recovery",
+                "current_dimension_recovery",
                 recoveryStatus(normalizedDimension, inventoryCounts),
-                "dimension=" + normalizedDimension + " food=" + inventoryCounts.food()
-                        + " blocks=" + inventoryCounts.blocks() + " no_fake_return_or_respawn_claim"
+                "current_dimension=" + normalizedDimension + " environment=observed_loaded_world food="
+                        + inventoryCounts.food() + " blocks=" + inventoryCounts.blocks()
+                        + " generic_dimension_recovery=loaded_portal_or_explore_or_owner_path_if_available"
+                        + " stop_cancel_available inventory_safety_prep no_fake_return_or_respawn_claim"
         );
         EndgameTaskNode root = new EndgameTaskNode(
                 "endgame_phase21",
                 EndgameTaskStatus.UNSAFE_OR_UNKNOWN,
-                "diagnostic_task_tree_only no_speedrun_completion_claim dimension=" + normalizedDimension,
+                "vanilla_endgame_diagnostic_task_tree_only no_speedrun_completion_claim dimension=" + normalizedDimension,
                 List.of(resourcePrep, netherPrep, stronghold, portalPrep, endTravel, dragon, recovery)
         );
         return new EndgameTaskTree(root);
@@ -106,6 +109,14 @@ public final class EndgamePreparationDiagnostics {
 
     public static String summary(String dimensionId, InventoryCounts inventoryCounts) {
         return taskTree(dimensionId, inventoryCounts).boundedSummary();
+    }
+
+    public static List<String> visibleStatusLines(String dimensionId, InventoryCounts inventoryCounts) {
+        return EndgameTaskTreeStatusFormatter.visibleLines(taskTree(dimensionId, inventoryCounts));
+    }
+
+    public static List<String> visibleViewerStatusLines(String dimensionId, InventoryCounts inventoryCounts) {
+        return EndgameTaskTreeStatusFormatter.visibleViewerDiagnosticLines(taskTree(dimensionId, inventoryCounts));
     }
 
     public static String hintForItem(String itemId, String dimensionId) {
@@ -172,7 +183,7 @@ public final class EndgamePreparationDiagnostics {
     }
 
     private static EndgameTaskStatus recoveryStatus(String dimensionId, InventoryCounts counts) {
-        if (!dimensionId.equals("minecraft:the_end") && counts.food() > 0 && counts.blocks() > 0) {
+        if (counts.food() > 0 && counts.blocks() > 0) {
             return EndgameTaskStatus.AVAILABLE_PRIMITIVE;
         }
         return EndgameTaskStatus.UNSAFE_OR_UNKNOWN;

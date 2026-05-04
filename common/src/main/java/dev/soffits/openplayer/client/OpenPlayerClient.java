@@ -75,6 +75,11 @@ public final class OpenPlayerClient {
         for (int index = 0; index < debugEventCount; index++) {
             debugEvents.add(buffer.readUtf(192));
         }
+        int taskTreeLineCount = buffer.isReadable() ? buffer.readVarInt() : 0;
+        List<String> taskTreeStatusLines = new ArrayList<>();
+        for (int index = 0; index < taskTreeLineCount; index++) {
+            taskTreeStatusLines.add(buffer.readUtf(128));
+        }
         context.queue(() -> OpenPlayerClientStatus.update(
                 parserAvailable,
                 endpoint,
@@ -85,7 +90,8 @@ public final class OpenPlayerClient {
                 apiKeySource,
                 automationName,
                 automationState,
-                debugEvents
+                debugEvents,
+                taskTreeStatusLines
         ));
     }
 

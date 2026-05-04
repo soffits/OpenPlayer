@@ -428,26 +428,36 @@ public final class OpenPlayerControlScreen extends Screen {
         drawFitted(graphics, tr("screen.openplayer.controls.status_api_key", OpenPlayerClientStatus.apiKeyStatus()), left, top + 56, width, 0xC0C0C0);
         drawFitted(graphics, tr("screen.openplayer.controls.provider_test_status", OpenPlayerClientStatus.providerTestStatus()), left, top + 70, width, 0xC0C0C0);
         drawFitted(graphics, tr("screen.openplayer.controls.status_character_files", OpenPlayerClientStatus.characterFileOperationStatus()), left, top + 84, width, 0xC0C0C0);
-        drawFitted(graphics, tr("screen.openplayer.controls.debug_events"), left, top + 106, width, 0xFFFFFF);
+        drawFitted(graphics, tr("screen.openplayer.controls.task_tree_status"), left, top + 106, width, 0xFFFFFF);
+        List<String> taskTreeLines = OpenPlayerClientStatus.taskTreeStatusLines();
+        int taskTreeTop = top + 120;
+        if (taskTreeLines.isEmpty()) {
+            drawFitted(graphics, tr("screen.openplayer.controls.no_task_tree_status"), left, taskTreeTop, width, 0xA0A0A0);
+        } else {
+            for (int index = 0; index < Math.min(taskTreeLines.size(), 5); index++) {
+                drawFitted(graphics, taskTreeLines.get(index), left, taskTreeTop + index * 10, width, 0xA0A0A0);
+            }
+        }
+        drawFitted(graphics, tr("screen.openplayer.controls.debug_events"), left, top + 178, width, 0xFFFFFF);
         List<String> debugEvents = OpenPlayerClientStatus.debugEvents();
-        int debugTop = top + 120;
+        int debugTop = top + 192;
         if (debugEvents.isEmpty()) {
             drawFitted(graphics, tr("screen.openplayer.controls.no_debug_events"), left, debugTop, width, 0xA0A0A0);
         } else {
-            int firstIndex = Math.max(0, debugEvents.size() - 4);
+            int firstIndex = Math.max(0, debugEvents.size() - 3);
             for (int index = firstIndex; index < debugEvents.size(); index++) {
                 drawFitted(graphics, debugEvents.get(index), left, debugTop + (index - firstIndex) * 12, width, 0xA0A0A0);
             }
         }
         LocalCharacterListEntry selected = selectedCharacter();
         if (selected == null) {
-            drawFitted(graphics, tr("screen.openplayer.controls.no_selected_assignment"), left, top + 174, width, 0xFFFFFF);
+            drawFitted(graphics, tr("screen.openplayer.controls.no_selected_assignment"), left, top + 234, width, 0xFFFFFF);
             return;
         }
-        drawFitted(graphics, tr("screen.openplayer.controls.selected_value", selected.displayName()), left, top + 174, width, lifecycleColor(selected.lifecycleStatus()));
-        drawFitted(graphics, tr("screen.openplayer.controls.description_value", selected.description().isEmpty() ? tr("screen.openplayer.controls.none") : selected.description()), left, top + 188, width, 0xC0C0C0);
-        drawFitted(graphics, tr("screen.openplayer.controls.skin_value", selected.skinStatus()), left, top + 202, width, 0xC0C0C0);
-        int eventTop = top + 216;
+        drawFitted(graphics, tr("screen.openplayer.controls.selected_value", selected.displayName()), left, top + 234, width, lifecycleColor(selected.lifecycleStatus()));
+        drawFitted(graphics, tr("screen.openplayer.controls.description_value", selected.description().isEmpty() ? tr("screen.openplayer.controls.none") : selected.description()), left, top + 248, width, 0xC0C0C0);
+        drawFitted(graphics, tr("screen.openplayer.controls.skin_value", selected.skinStatus()), left, top + 262, width, 0xC0C0C0);
+        int eventTop = top + 276;
         if (selected.conversationEvents().isEmpty()) {
             drawFitted(graphics, tr("screen.openplayer.controls.no_spoken_status"), left, eventTop, width, 0xA0A0A0);
             return;

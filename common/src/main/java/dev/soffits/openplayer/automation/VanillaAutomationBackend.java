@@ -888,7 +888,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (!currentDimension.equals(OVERWORLD_DIMENSION_ID) || !targetDimensionSummary(targetDimension).equals(NETHER_DIMENSION_ID)) {
                 return rejected("portal_travel failed: mode=build_portal target_dimension="
                         + targetDimensionSummary(targetDimension) + " current_dimension=" + currentDimension
-                        + " failure=portal_build_supported_only_overworld_to_nether " + searchResult.diagnostics());
+                        + " failure=vanilla_nether_portal_build_adapter_requires_current_minecraft:overworld_target_minecraft:the_nether "
+                        + searchResult.diagnostics());
             }
             int carriedObsidian = untaggedNormalInventoryCount(entity.inventorySnapshot(), Items.OBSIDIAN);
             boolean hasFlintAndSteel = entity.normalInventoryCount(Items.FLINT_AND_STEEL) > 0;
@@ -3093,9 +3094,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return "use_portal_target_minecraft:overworld_or_travel_nether_loaded_player_like_portal";
             }
             if (OVERWORLD_DIMENSION_ID.equals(currentDimension)) {
-                return "travel_nether_loaded_or_player_like_portal";
+                return "travel_nether_loaded_or_vanilla_nether_portal_build_adapter";
             }
-            return "unsupported_dimension_report_status_only";
+            return "generic_dimension_recovery=loaded_portal_or_explore_or_owner_path_if_available";
         }
 
         private void notePortalProgress(QueuedCommand command, String currentDimension, String reason) {

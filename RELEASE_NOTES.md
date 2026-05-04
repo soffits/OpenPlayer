@@ -1,5 +1,13 @@
 # Release Notes
 
+## Unreleased
+
+- Adds bounded endgame viewer/world diagnostics to the OpenPlayer Controls Status tab, labelled as diagnostic snapshots rather than selected-NPC state or hidden queued execution.
+- Labels material-count diagnostics as `source=viewer_inventory` and current-dimension diagnostics as `source=current_viewer_dimension` because the status packet has no selected assignment/NPC id.
+- Keeps stronghold, End travel, dragon fight, and speedrun flows truthful by surfacing missing primitives and recovery state instead of claiming unsupported completion.
+- Treats the current dimension as an arbitrary ResourceLocation in portal/status diagnostics, with unknown or modded dimensions reported as observed loaded-world state and player-like recovery/exploration options rather than globally unsupported.
+- Hardens release-candidate QA around task-tree status bounds, localization parity, prompt truthfulness, unsafe advanced syntax rejection, and secret/admin-safe status output.
+
 ## v0.1.0-alpha.8
 
 - Adds Gradle dependency caching to build and release GitHub Actions workflows to reduce Minecraft mod build time without changing release semantics.

@@ -15,6 +15,7 @@ import dev.soffits.openplayer.api.NpcProfileSpec;
 import dev.soffits.openplayer.api.NpcRoleId;
 import dev.soffits.openplayer.api.NpcSpawnLocation;
 import dev.soffits.openplayer.api.OpenPlayerApi;
+import dev.soffits.openplayer.automation.resource.EndgamePreparationDiagnostics;
 import dev.soffits.openplayer.character.LocalCharacterListEntry;
 import dev.soffits.openplayer.character.LocalCharacterListView;
 import dev.soffits.openplayer.character.LocalCharacterFileOperationResult;
@@ -41,6 +42,7 @@ import java.util.UUID;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.Items;
 
 public final class OpenPlayerNetworking {
     private static final int MAX_COMMAND_TEXT_LENGTH = 512;
@@ -664,7 +666,27 @@ public final class OpenPlayerNetworking {
         for (OpenPlayerDebugEvent debugEvent : debugEvents) {
             buffer.writeUtf(debugEvent.compactLine(), OpenPlayerDebugEvents.MAX_NETWORK_LINE_LENGTH);
         }
+        List<String> taskTreeStatusLines = endgameTaskTreeStatusLines(player);
+        buffer.writeVarInt(taskTreeStatusLines.size());
+        for (String line : taskTreeStatusLines) {
+            buffer.writeUtf(line, 128);
+        }
         NetworkManager.sendToPlayer(player, OpenPlayerConstants.STATUS_RESPONSE_PACKET_ID, buffer);
+    }
+
+    private static List<String> endgameTaskTreeStatusLines(ServerPlayer player) {
+        return EndgamePreparationDiagnostics.visibleViewerStatusLines(
+                player.serverLevel().dimension().location().toString(),
+                new EndgamePreparationDiagnostics.InventoryCounts(
+                        player.getInventory().countItem(Items.ENDER_EYE),
+                        player.getInventory().countItem(Items.BLAZE_POWDER),
+                        player.getInventory().countItem(Items.BLAZE_ROD),
+                        player.getInventory().countItem(Items.ENDER_PEARL),
+                        0,
+                        0,
+                        0
+                )
+        );
     }
 
     private static void sendCharacterListResponse(ServerPlayer player) {

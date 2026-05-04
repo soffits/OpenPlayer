@@ -189,8 +189,12 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must document LOCATE_STRUCTURE safety boundaries");
         require(prompt.contains("USE_PORTAL and TRAVEL_NETHER are player-like portal tasks"),
                 "system prompt must document portal tasks as player-like actions");
-        require(prompt.contains("radius=<blocks> target=<minecraft:the_nether|minecraft:overworld> build=<true|false>"),
+        require(prompt.contains("radius=<blocks> target=<dimension_id> build=<true|false>"),
                 "system prompt must document USE_PORTAL strict syntax");
+        require(prompt.contains("any declared ResourceLocation target"),
+                "system prompt must allow observed portal targets in arbitrary dimensions");
+        require(prompt.contains("vanilla_nether_portal_build_adapter"),
+                "system prompt must describe obsidian-frame building as a vanilla Nether adapter");
         require(prompt.contains("NPC-carried obsidian plus flint_and_steel"),
                 "system prompt must document carried portal materials");
         require(prompt.contains("must not use OP/admin commands, teleport, /locate, /give, forced dimension changes"),
@@ -203,16 +207,22 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must prevent fake stronghold triangulation");
         require(prompt.contains("END_GAME_TASK instruction must be blank or one of plan, prepare, stronghold, portal, travel, dragon, or recovery"),
                 "system prompt must document endgame task tree diagnostic syntax");
-        require(prompt.contains("returns the visible task-tree diagnostic instead of monolithic speedrun success"),
+        require(prompt.contains("returns the visible vanilla endgame task-tree diagnostic plus current-dimension recovery instead of monolithic speedrun success"),
                 "system prompt must prevent monolithic speedrun success claims");
+        require(prompt.contains("returns a vanilla stronghold task-tree diagnostic only"),
+                "system prompt must keep stronghold output diagnostic-only");
         require(prompt.contains("REPORT_STATUS exposes portal origin dimension, target dimension, portal/frame position"),
                 "system prompt must document portal recovery state");
-        require(prompt.contains("Nether return travel should be requested through USE_PORTAL target=minecraft:overworld or TRAVEL_NETHER rather than teleport"),
+        require(prompt.contains("Unknown or modded dimensions should use observation/status/exploration"),
+                "system prompt must not assume vanilla dimensions are exhaustive");
+        require(prompt.contains("Vanilla Nether return travel may be requested through USE_PORTAL target=minecraft:overworld or TRAVEL_NETHER rather than teleport"),
                 "system prompt must document player-like return travel affordance");
-        require(prompt.contains("Endgame preparation is a task tree over visible primitives"),
+        require(prompt.contains("Endgame preparation is a vanilla task tree over visible primitives"),
                 "system prompt must document endgame preparation as task-tree primitives");
         require(prompt.contains("report missing primitives such as fortress search, barter/trade, or End orchestration instead of claiming success"),
                 "system prompt must prevent overclaiming missing endgame primitives");
+        require(!prompt.contains("speedrun_success") && !prompt.contains("dragon_success"),
+                "system prompt must not encode speedrun or dragon success states");
         require(!prompt.contains("recognized only to return deterministic unsupported status"),
                 "system prompt must not describe endgame diagnostics as flat unsupported status");
         require(prompt.contains("never generates chunks, never teleports"),

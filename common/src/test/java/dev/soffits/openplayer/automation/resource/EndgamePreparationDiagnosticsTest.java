@@ -11,6 +11,9 @@ public final class EndgamePreparationDiagnosticsTest {
         unrelatedItemsHaveNoEndgameHint();
         taskTreeReportsMaterialsAndMissingStrongholdAdapters();
         taskTreeDoesNotClaimEndOrDragonSuccessWhenPrepared();
+        taskTreeReportsGenericRecoveryForModdedDimensions();
+        taskTreeStatusLinesAreBoundedReadableAndTruthful();
+        viewerStatusLinesLabelServerPlayerSources();
     }
 
     private static void blazeHintsNameAvailableAndMissingPrimitives() {
@@ -77,6 +80,75 @@ public final class EndgamePreparationDiagnosticsTest {
                 "task tree must not claim dragon execution");
         require(!summary.toLowerCase().contains("speedrun_success"),
                 "task tree must not claim speedrun success");
+    }
+
+    private static void taskTreeReportsGenericRecoveryForModdedDimensions() {
+        EndgamePreparationDiagnostics.InventoryCounts counts = new EndgamePreparationDiagnostics.InventoryCounts(
+                0, 0, 0, 0, 4, 0, 16
+        );
+        String summary = EndgamePreparationDiagnostics.summary("example:moon", counts);
+
+        require(summary.contains("current_dimension=example:moon"),
+                "task tree must preserve arbitrary current dimension ids");
+        require(summary.contains("environment=observed_loaded_world"),
+                "task tree must frame unknown dimensions as observed loaded world state");
+        require(summary.contains("generic_dimension_recovery=loaded_portal_or_explore_or_owner_path_if_available"),
+                "task tree must expose generic player-like recovery affordances");
+        require(!summary.contains("unsupported_dimension_" + "report_status_only"),
+                "task tree must not mark modded dimensions globally unsupported");
+    }
+
+    private static void taskTreeStatusLinesAreBoundedReadableAndTruthful() {
+        EndgamePreparationDiagnostics.InventoryCounts counts = new EndgamePreparationDiagnostics.InventoryCounts(
+                12, 2, 0, 4, 16, 2, 64
+        );
+        java.util.List<String> lines = EndgamePreparationDiagnostics.visibleStatusLines("minecraft:overworld", counts);
+
+        require(lines.size() <= EndgameTaskTreeStatusFormatter.DEFAULT_MAX_LINES,
+                "task-tree UI status must cap line count");
+        require(lines.get(0).contains("active_task=diagnostic_snapshot"),
+                "task-tree UI status must identify snapshots as diagnostics");
+        require(lines.get(0).contains("status=not_queued"),
+                "task-tree UI status must not pretend diagnostic snapshots are queued execution");
+        boolean namesMissingPrimitive = false;
+        boolean namesRecovery = false;
+        for (String line : lines) {
+            require(line.length() <= EndgameTaskTreeStatusFormatter.DEFAULT_MAX_LINE_LENGTH,
+                    "task-tree UI status lines must be length-bounded");
+            require(line.contains("=") && !line.contains(";"),
+                    "task-tree UI status lines must be parseable key/value text");
+            String lower = line.toLowerCase(java.util.Locale.ROOT);
+            require(!lower.contains("speedrun_success") && !lower.contains("dragon_success")
+                            && !lower.contains("completed_dragon"),
+                    "task-tree UI status must not overclaim speedrun, End, or dragon success");
+            require(!lower.contains("/locate") && !lower.contains("/tp") && !lower.contains("/give")
+                            && !lower.contains("gamerule") && !lower.contains("teleport"),
+                    "task-tree UI status must not introduce admin command vocabulary");
+            namesMissingPrimitive = namesMissingPrimitive || line.contains("MISSING_PRIMITIVE");
+            namesRecovery = namesRecovery || line.contains("recovery") || line.contains("truncated=true");
+        }
+        require(namesMissingPrimitive, "task-tree UI status must expose missing primitives");
+        require(namesRecovery, "task-tree UI status must expose recovery state or bounded truncation");
+    }
+
+    private static void viewerStatusLinesLabelServerPlayerSources() {
+        EndgamePreparationDiagnostics.InventoryCounts counts = new EndgamePreparationDiagnostics.InventoryCounts(
+                12, 2, 0, 4, 16, 2, 64
+        );
+        java.util.List<String> lines = EndgamePreparationDiagnostics.visibleViewerStatusLines("example:moon", counts);
+
+        boolean namesViewerInventory = false;
+        boolean namesCurrentViewerDimension = false;
+        for (String line : lines) {
+            String lower = line.toLowerCase(java.util.Locale.ROOT);
+            namesViewerInventory = namesViewerInventory || line.contains("source=viewer_inventory");
+            namesCurrentViewerDimension = namesCurrentViewerDimension || line.contains("source=current_viewer_dimension");
+            require(!lower.contains("selected_npc") && !lower.contains("npc_inventory")
+                            && !lower.contains("queued_execution") && !lower.contains("active_npc"),
+                    "viewer status lines must not claim selected NPC inventory or execution state");
+        }
+        require(namesViewerInventory, "viewer material counts must be labeled source=viewer_inventory");
+        require(namesCurrentViewerDimension, "viewer dimensions must be labeled source=current_viewer_dimension");
     }
 
     private static void require(boolean condition, String message) {

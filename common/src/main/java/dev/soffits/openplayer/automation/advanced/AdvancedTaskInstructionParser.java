@@ -14,7 +14,7 @@ public final class AdvancedTaskInstructionParser {
     public static final String EXPLORE_CHUNKS_USAGE =
             "EXPLORE_CHUNKS requires blank, reset, clear, or instruction: radius=<blocks> steps=<count>";
     public static final String USE_PORTAL_USAGE =
-            "USE_PORTAL requires blank or instruction: radius=<blocks> target=<minecraft:the_nether|minecraft:overworld> build=<true|false>";
+            "USE_PORTAL requires blank or instruction: radius=<blocks> target=<dimension_id> build=<true|false>";
     public static final String TRAVEL_NETHER_USAGE =
             "TRAVEL_NETHER requires blank or instruction: radius=<blocks> build=<true|false>";
     public static final String LOCATE_STRONGHOLD_USAGE =
@@ -185,7 +185,7 @@ public final class AdvancedTaskInstructionParser {
                     }
                     radiusSeen = true;
                 } else if (key.equals("target") && !travelNether) {
-                    if (targetSeen || !isSupportedPortalDimension(value)) {
+                    if (targetSeen || !AutomationInstructionParser.isValidResourceId(value)) {
                         return null;
                     }
                     targetDimensionId = value;
@@ -205,10 +205,6 @@ public final class AdvancedTaskInstructionParser {
             }
         }
         return new PortalTravelInstruction(radius, targetDimensionId, targetSeen, build, buildSeen, travelNether);
-    }
-
-    private static boolean isSupportedPortalDimension(String value) {
-        return value.equals("minecraft:the_nether") || value.equals("minecraft:overworld");
     }
 
     private static Boolean parseBooleanOrNull(String value) {
@@ -298,8 +294,8 @@ public final class AdvancedTaskInstructionParser {
             if (!Double.isFinite(radius) || radius <= 0.0D || radius > PORTAL_MAX_RADIUS) {
                 throw new IllegalArgumentException("radius must be finite and within portal travel bounds");
             }
-            if (targetDimensionId != null && !isSupportedPortalDimension(targetDimensionId)) {
-                throw new IllegalArgumentException("targetDimensionId must be a supported portal dimension");
+            if (targetDimensionId != null && !AutomationInstructionParser.isValidResourceId(targetDimensionId)) {
+                throw new IllegalArgumentException("targetDimensionId must be a valid dimension id");
             }
         }
     }
