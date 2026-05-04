@@ -3,6 +3,7 @@ package dev.soffits.openplayer.aicore;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentKind;
 import dev.soffits.openplayer.intent.IntentPriority;
+import dev.soffits.openplayer.automation.CollectItemsInstructionParser;
 import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser;
 import dev.soffits.openplayer.runtime.validation.RuntimeIntentValidationResult;
 import dev.soffits.openplayer.runtime.validation.RuntimeIntentValidator;
@@ -93,6 +94,10 @@ public final class MinecraftPrimitiveTools {
         Optional<ToolResult> schemaValidation = validateSchema(call, toolSchema);
         if (schemaValidation.isPresent()) {
             return schemaValidation.get();
+        }
+        Optional<ToolResult> toolSpecificValidation = validateToolSpecificArguments(call);
+        if (toolSpecificValidation.isPresent()) {
+            return toolSpecificValidation.get();
         }
         Optional<ToolResult> nestedValidation = validateNestedArguments(call);
         if (nestedValidation.isPresent()) {
@@ -234,6 +239,9 @@ public final class MinecraftPrimitiveTools {
         }
         if (values.containsKey("goal")) {
             return goalInstruction(values.get("goal"));
+        }
+        if (call.name().equals(PICKUP_ITEMS_NEARBY)) {
+            return CollectItemsInstructionParser.canonicalInstruction(values.get("matching"), values.get("maxDistance"));
         }
         if (values.containsKey("matching")) {
             return loadedSearchInstruction(values);
@@ -396,6 +404,19 @@ public final class MinecraftPrimitiveTools {
             }
         } catch (NumberFormatException exception) {
             return Optional.of(ToolResult.rejected("Argument has invalid " + parameter.type() + " value: " + parameter.name()));
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<ToolResult> validateToolSpecificArguments(ToolCall call) {
+        if (!call.name().equals(PICKUP_ITEMS_NEARBY)) {
+            return Optional.empty();
+        }
+        Map<String, String> values = call.arguments().values();
+        String matching = values.get("matching");
+        String maxDistance = values.get("maxDistance");
+        if ((matching == null || matching.isBlank()) && maxDistance != null && !maxDistance.isBlank()) {
+            return Optional.of(ToolResult.rejected("pickup_items_nearby maxDistance requires matching"));
         }
         return Optional.empty();
     }

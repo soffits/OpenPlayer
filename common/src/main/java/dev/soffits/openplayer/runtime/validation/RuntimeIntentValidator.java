@@ -2,6 +2,7 @@ package dev.soffits.openplayer.runtime.validation;
 
 import dev.soffits.openplayer.automation.AutomationInstructionParser;
 import dev.soffits.openplayer.automation.BodyLanguageInstructionParser;
+import dev.soffits.openplayer.automation.CollectItemsInstructionParser;
 import dev.soffits.openplayer.automation.CraftInstructionParser;
 import dev.soffits.openplayer.automation.InteractionInstruction;
 import dev.soffits.openplayer.automation.InteractionInstructionParser;
@@ -37,7 +38,7 @@ public final class RuntimeIntentValidator {
             case LOOK -> requireCoordinateInstruction(intent, "LOOK");
             case PATROL -> requireCoordinateInstruction(intent, "PATROL");
             case FOLLOW_OWNER -> requireBlankInstruction(intent, "FOLLOW_OWNER");
-            case COLLECT_ITEMS -> requireBlankInstruction(intent, "COLLECT_ITEMS");
+            case COLLECT_ITEMS -> requireCollectItemsInstruction(intent);
             case SWAP_TO_OFFHAND -> requireBlankInstruction(intent, "SWAP_TO_OFFHAND");
             case DROP_ITEM -> requireBlankOrItemCountInstruction(intent, "DROP_ITEM");
             case BREAK_BLOCK -> requireCoordinateInstruction(intent, "BREAK_BLOCK");
@@ -180,6 +181,13 @@ public final class RuntimeIntentValidator {
     private static RuntimeIntentValidationResult requireLoadedSearchInstruction(CommandIntent intent, String usage) {
         if (AdvancedTaskInstructionParser.parseLoadedSearchOrNull(intent.instruction()) == null) {
             return RuntimeIntentValidationResult.rejected(usage);
+        }
+        return RuntimeIntentValidationResult.accepted();
+    }
+
+    private static RuntimeIntentValidationResult requireCollectItemsInstruction(CommandIntent intent) {
+        if (CollectItemsInstructionParser.parseOrNull(intent.instruction()) == null) {
+            return RuntimeIntentValidationResult.rejected(CollectItemsInstructionParser.USAGE);
         }
         return RuntimeIntentValidationResult.accepted();
     }

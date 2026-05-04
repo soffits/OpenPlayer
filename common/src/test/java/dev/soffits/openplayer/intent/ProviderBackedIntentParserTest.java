@@ -2,12 +2,16 @@ package dev.soffits.openplayer.intent;
 
 import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser;
 import java.util.List;
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
 
 public final class ProviderBackedIntentParserTest {
     private ProviderBackedIntentParserTest() {
     }
 
     public static void main(String[] args) throws Exception {
+        SharedConstants.tryDetectVersion();
+        Bootstrap.bootStrap();
         acceptsStructuredToolJsonWithArguments();
         defaultsStructuredToolJsonPriorityToNormal();
         acceptsPathfinderGotoStructuredToolJson();
@@ -16,6 +20,9 @@ public final class ProviderBackedIntentParserTest {
         defaultsLoadedBlockSearchMaxDistance();
         defaultsLoadedEntitySearchMaxDistance();
         preservesExplicitLoadedSearchMaxDistance();
+        acceptsPickupItemsNearbyMatchingOnlyFromLogs();
+        acceptsPickupItemsNearbyMatchingAndExplicitMaxDistance();
+        rejectsPickupItemsNearbyMaxDistanceWithoutMatching();
         rejectsFacadeOnlyStructuredToolJson();
         providerPromptExcludesFacadeOnlyTools();
         rejectsAdminStructuredToolJson();
@@ -108,6 +115,36 @@ public final class ProviderBackedIntentParserTest {
         CommandIntent entityIntent = entityParser.parse("ignored");
         require("minecraft:skeleton 12".equals(entityIntent.instruction()),
                 "explicit loaded entity maxDistance must be preserved");
+    }
+
+    private static void acceptsPickupItemsNearbyMatchingOnlyFromLogs() throws Exception {
+        ProviderBackedIntentParser parser = new ProviderBackedIntentParser(
+                input -> ProviderIntent.structuredTool("NORMAL", "{\"tool\":\"pickup_items_nearby\",\"args\":{\"matching\":\"minecraft:spruce_log\"}}")
+        );
+        CommandIntent intent = parser.parse("ignored");
+        require(intent.kind() == IntentKind.COLLECT_ITEMS,
+                "pickup_items_nearby tool JSON must bridge to collect items intent");
+        require("minecraft:spruce_log".equals(intent.instruction()),
+                "matching-only pickup_items_nearby must preserve exact item filter");
+    }
+
+    private static void acceptsPickupItemsNearbyMatchingAndExplicitMaxDistance() throws Exception {
+        ProviderBackedIntentParser parser = new ProviderBackedIntentParser(
+                input -> ProviderIntent.structuredTool("NORMAL", "{\"tool\":\"pickup_items_nearby\",\"args\":{\"matching\":\"spruce_log\",\"maxDistance\":8}}")
+        );
+        CommandIntent intent = parser.parse("ignored");
+        require(intent.kind() == IntentKind.COLLECT_ITEMS,
+                "pickup_items_nearby with radius must bridge to collect items intent");
+        require("minecraft:spruce_log 8".equals(intent.instruction()),
+                "pickup_items_nearby must canonicalize bare provider item ids and preserve bounded radius");
+    }
+
+    private static void rejectsPickupItemsNearbyMaxDistanceWithoutMatching() {
+        ProviderBackedIntentParser parser = new ProviderBackedIntentParser(
+                input -> ProviderIntent.structuredTool("NORMAL", "{\"tool\":\"pickup_items_nearby\",\"args\":{\"maxDistance\":8}}")
+        );
+        requireRejected(parser, "pickup_items_nearby maxDistance requires matching",
+                "provider parser must reject pickup_items_nearby maxDistance without matching");
     }
 
     private static void rejectsFacadeOnlyStructuredToolJson() {

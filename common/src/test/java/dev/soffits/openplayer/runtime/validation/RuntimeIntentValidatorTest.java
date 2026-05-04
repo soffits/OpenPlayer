@@ -23,6 +23,7 @@ public final class RuntimeIntentValidatorTest {
         validatesPhaseThirteenControlAndExpressionInstructions();
         validatesPhaseFiveInventoryInstructions();
         validatesContainerTransferInstructions();
+        validatesCollectItemsInstructions();
         validatesCraftInstructions();
         validatesCoordinateInstructions();
         validatesGotoInstructions();
@@ -60,7 +61,6 @@ public final class RuntimeIntentValidatorTest {
                 IntentKind.STOP,
                 IntentKind.REPORT_STATUS,
                 IntentKind.FOLLOW_OWNER,
-                IntentKind.COLLECT_ITEMS,
                 IntentKind.SWAP_TO_OFFHAND,
                 IntentKind.PAUSE,
                 IntentKind.UNPAUSE,
@@ -153,6 +153,25 @@ public final class RuntimeIntentValidatorTest {
                 "WITHDRAW_ITEM requires instruction: <item_id> [count]");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.WITHDRAW_ITEM, "minecraft:bread 1"), false),
                 "World actions are disabled for this OpenPlayer character");
+    }
+
+    private static void validatesCollectItemsInstructions() {
+        require(RuntimeIntentValidator.validate(intent(IntentKind.COLLECT_ITEMS, ""), true).isAccepted(),
+                "COLLECT_ITEMS should preserve blank collect-any syntax");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.COLLECT_ITEMS, "  \t  "), true).isAccepted(),
+                "COLLECT_ITEMS should preserve whitespace collect-any syntax");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.COLLECT_ITEMS, "minecraft:spruce_log"), true).isAccepted(),
+                "COLLECT_ITEMS should accept exact item id syntax");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.COLLECT_ITEMS, "minecraft:spruce_log 8"), true).isAccepted(),
+                "COLLECT_ITEMS should accept exact item id and bounded radius syntax");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.COLLECT_ITEMS, "spruce_log"), true),
+                "COLLECT_ITEMS requires blank or instruction: <item_id> [radius]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.COLLECT_ITEMS, "minecraft:spruce_log 0"), true),
+                "COLLECT_ITEMS requires blank or instruction: <item_id> [radius]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.COLLECT_ITEMS, "minecraft:spruce_log NaN"), true),
+                "COLLECT_ITEMS requires blank or instruction: <item_id> [radius]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.COLLECT_ITEMS, "minecraft:spruce_log 8 extra"), true),
+                "COLLECT_ITEMS requires blank or instruction: <item_id> [radius]");
     }
 
     private static void validatesCraftInstructions() {

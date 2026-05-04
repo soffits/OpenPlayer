@@ -3,15 +3,21 @@ package dev.soffits.openplayer.aicore;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentKind;
 import dev.soffits.openplayer.intent.IntentPriority;
+import java.util.Map;
 import java.util.Optional;
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
 
 public final class MinecraftPrimitiveToolsTest {
     private MinecraftPrimitiveToolsTest() {
     }
 
     public static void main(String[] args) {
+        SharedConstants.tryDetectVersion();
+        Bootstrap.bootStrap();
         registryExposesPrimitiveToolsOnly();
         mapsProviderToolsToRuntimePrimitives();
+        mapsPickupItemsNearbyArgumentsToCollectInstruction();
         validatesMoveToCoordinateOnly();
         rejectsUnknownAndMalformedTools();
         worldPolicyGatesMutatingTools();
@@ -47,6 +53,37 @@ public final class MinecraftPrimitiveToolsTest {
         );
         require(toolCall.isPresent(), "runtime primitive must map back to tool call");
         require("break_block_at".equals(toolCall.get().name().value()), "BREAK_BLOCK must map to break_block_at");
+    }
+
+    private static void mapsPickupItemsNearbyArgumentsToCollectInstruction() {
+        Optional<CommandIntent> legacyCollect = MinecraftPrimitiveTools.toCommandIntent(
+                ToolCall.of("pickup_items_nearby", ToolArguments.empty()), IntentPriority.NORMAL
+        );
+        require(legacyCollect.isPresent(), "pickup_items_nearby must map to runtime command");
+        require(legacyCollect.get().kind() == IntentKind.COLLECT_ITEMS,
+                "pickup_items_nearby must bridge to COLLECT_ITEMS");
+        require("".equals(legacyCollect.get().instruction()),
+                "empty pickup_items_nearby args must preserve collect-any behavior");
+
+        Optional<CommandIntent> filteredCollect = MinecraftPrimitiveTools.toCommandIntent(
+                ToolCall.of("pickup_items_nearby", new ToolArguments(Map.of("matching", "spruce_log", "maxDistance", "8"))),
+                IntentPriority.NORMAL
+        );
+        require(filteredCollect.isPresent(), "filtered pickup_items_nearby must map to runtime command");
+        require("minecraft:spruce_log 8".equals(filteredCollect.get().instruction()),
+                "pickup_items_nearby matching/maxDistance must become collect item/radius instruction");
+
+        ToolCall radiusOnlyCollect = ToolCall.of(
+                "pickup_items_nearby", new ToolArguments(Map.of("maxDistance", "8"))
+        );
+        requireRejected(MinecraftPrimitiveTools.validate(radiusOnlyCollect, new ToolValidationContext(true)),
+                "pickup_items_nearby maxDistance requires matching");
+        Optional<CommandIntent> radiusOnlyIntent = MinecraftPrimitiveTools.toCommandIntent(
+                radiusOnlyCollect, IntentPriority.NORMAL
+        );
+        require(radiusOnlyIntent.isPresent(), "pickup_items_nearby maxDistance-only bridge must remain deterministic");
+        require("8".equals(radiusOnlyIntent.get().instruction()),
+                "pickup_items_nearby maxDistance-only bridge must not widen to collect-any");
     }
 
     private static void validatesMoveToCoordinateOnly() {

@@ -11,6 +11,7 @@ import dev.soffits.openplayer.aicore.ToolResult;
 import dev.soffits.openplayer.aicore.ToolResultStatus;
 import dev.soffits.openplayer.aicore.ToolValidationContext;
 import dev.soffits.openplayer.automation.AutomationInstructionParser.Coordinate;
+import dev.soffits.openplayer.automation.CollectItemsInstructionParser.CollectItemsInstruction;
 import dev.soffits.openplayer.automation.InventoryActionInstructionParser.ParsedItemInstruction;
 import dev.soffits.openplayer.automation.InteractionInstruction.InteractionTargetKind;
 import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser;
@@ -300,7 +301,11 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return rejected("World actions are disabled for this OpenPlayer character");
             }
             if (kind == IntentKind.COLLECT_ITEMS) {
-                queuedCommands.add(QueuedCommand.collectItems());
+                CollectItemsInstruction collectInstruction = CollectItemsInstructionParser.parseOrNull(intent.instruction());
+                if (collectInstruction == null) {
+                    return rejected(CollectItemsInstructionParser.USAGE);
+                }
+                queuedCommands.add(QueuedCommand.collectItems(collectInstruction.item(), collectInstruction.radius()));
                 return accepted("COLLECT_ITEMS accepted");
             }
             if (kind == IntentKind.SWAP_TO_OFFHAND) {
@@ -996,7 +1001,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 failActiveCommand("server_level_unavailable");
                 return;
             }
-            if (!isWithinStartDistance(command, entity.position(), COLLECT_RADIUS)) {
+            if (!isWithinStartDistance(command, entity.position(), command.radius())) {
                 failActiveCommand("outside_collect_radius");
                 return;
             }
@@ -1024,12 +1029,13 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private ItemEntity nearestItem(ServerLevel serverLevel, QueuedCommand command) {
             List<ItemEntity> itemEntities = serverLevel.getEntitiesOfClass(
                     ItemEntity.class,
-                    entity.getBoundingBox().inflate(COLLECT_RADIUS),
+                    entity.getBoundingBox().inflate(command.radius()),
                     itemEntity -> itemEntity.isAlive()
                             && !itemEntity.hasPickUpDelay()
                             && !itemEntity.getItem().isEmpty()
+                            && (command.collectItem() == null || itemEntity.getItem().is(command.collectItem()))
                             && entity.hasLineOfSight(itemEntity)
-                            && isWithinStartDistance(command, itemEntity.position(), COLLECT_RADIUS)
+                            && isWithinStartDistance(command, itemEntity.position(), command.radius())
             );
             return itemEntities.stream()
                     .min(Comparator.comparingDouble(itemEntity -> entity.distanceToSqr(itemEntity)))
@@ -2109,6 +2115,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             private final double radius;
             private final BlockPos blockTarget;
             private final Entity entityTarget;
+            private final Item collectItem;
             private final int maxTicks;
             private final boolean survivalOnly;
             private final int repeatRemaining;
@@ -2117,17 +2124,18 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             private boolean patrolReturn;
 
             private QueuedCommand(IntentKind kind, Coordinate coordinate, double radius) {
-                this(kind, coordinate, radius, null, null, 0, false, 1);
+                this(kind, coordinate, radius, null, null, null, 0, false, 1);
             }
 
             private QueuedCommand(IntentKind kind, Coordinate coordinate, double radius, BlockPos blockTarget,
-                                    Entity entityTarget, int maxTicks, boolean survivalOnly,
+                                    Entity entityTarget, Item collectItem, int maxTicks, boolean survivalOnly,
                                     int repeatRemaining) {
                 this.kind = kind;
                 this.coordinate = coordinate;
                 this.radius = radius;
                 this.blockTarget = blockTarget;
                 this.entityTarget = entityTarget;
+                this.collectItem = collectItem;
                 this.maxTicks = maxTicks;
                 this.survivalOnly = survivalOnly;
                 this.repeatRemaining = repeatRemaining;
@@ -2149,8 +2157,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return new QueuedCommand(IntentKind.FOLLOW_OWNER, null, 0.0D);
             }
 
-            private static QueuedCommand collectItems() {
-                return new QueuedCommand(IntentKind.COLLECT_ITEMS, null, 0.0D);
+            private static QueuedCommand collectItems(Item collectItem, double radius) {
+                return new QueuedCommand(IntentKind.COLLECT_ITEMS, null, radius, null, null, collectItem, 0, false, 1);
             }
 
             private static QueuedCommand breakBlock(Coordinate coordinate) {
@@ -2163,13 +2171,13 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
             private static QueuedCommand interactBlock(BlockPos blockPos) {
                 return new QueuedCommand(
-                        IntentKind.INTERACT, null, 0.0D, blockPos.immutable(), null, 0, false, 1
+                        IntentKind.INTERACT, null, 0.0D, blockPos.immutable(), null, null, 0, false, 1
                 );
             }
 
             private static QueuedCommand interactEntity(Entity target, double radius) {
                 return new QueuedCommand(
-                        IntentKind.INTERACT, null, radius, null, target, 0, false, 1
+                        IntentKind.INTERACT, null, radius, null, target, null, 0, false, 1
                 );
             }
 
@@ -2178,12 +2186,12 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
 
             private static QueuedCommand attackTarget(Entity target, double radius) {
-                return new QueuedCommand(IntentKind.ATTACK_TARGET, null, radius, null, target, 0, false, 1);
+                return new QueuedCommand(IntentKind.ATTACK_TARGET, null, radius, null, target, null, 0, false, 1);
             }
 
             private static QueuedCommand selfDefense(double radius) {
                 return new QueuedCommand(
-                        IntentKind.ATTACK_NEAREST, null, radius, null, null, 0, true, 1
+                        IntentKind.ATTACK_NEAREST, null, radius, null, null, null, 0, true, 1
                 );
             }
 
@@ -2196,7 +2204,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
 
             private QueuedCommand nextRepeat() {
-                return new QueuedCommand(kind, coordinate, radius, blockTarget, entityTarget, maxTicks, survivalOnly,
+                return new QueuedCommand(kind, coordinate, radius, blockTarget, entityTarget, collectItem, maxTicks, survivalOnly,
                         repeatRemaining - 1);
             }
 
@@ -2218,6 +2226,10 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
             private Entity entityTarget() {
                 return entityTarget;
+            }
+
+            private Item collectItem() {
+                return collectItem;
             }
 
             private int maxTicks() {
