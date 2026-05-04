@@ -48,7 +48,7 @@ public record InteractivePlannerConfig(
     }
 
     public static InteractivePlannerConfig defaults() {
-        return new InteractivePlannerConfig(6, 6, 8, 1600, 12000, 2,
-                Duration.ofSeconds(45L), Duration.ofMillis(250L), Duration.ofSeconds(20L), 12);
+        return new InteractivePlannerConfig(18, 12, 16, 1600, 12000, 2,
+                Duration.ofMinutes(10L), Duration.ofMillis(250L), Duration.ofSeconds(20L), 12);
     }
 }

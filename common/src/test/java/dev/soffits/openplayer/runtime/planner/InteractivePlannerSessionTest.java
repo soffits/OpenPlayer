@@ -19,6 +19,8 @@ public final class InteractivePlannerSessionTest {
         pollBudgetBoundaryObservationKeepsWaitingWhenStillActive();
         activePrimitiveStopsTruthfullyWhenToolWaitBudgetExhausts();
         completedWaitingObservationAllowsNextProviderIteration();
+        defaultBudgetsAllowSlowMultiTurnPlanning();
+        tinyWallTimeBudgetStopsSession();
         stopsWhenToolStepBudgetIsExhausted();
         rejectsRemovedToolBeforePlannerExecution();
         cancelsActiveSession();
@@ -194,6 +196,40 @@ public final class InteractivePlannerSessionTest {
         require(second.status() == PlannerTurnStatus.STOPPED,
                 "second tool step must stop after step budget is exhausted");
         require(second.message().contains("tool step budget"), "budget stop message must be truthful");
+    }
+
+    private static void defaultBudgetsAllowSlowMultiTurnPlanning() {
+        InteractivePlannerConfig config = InteractivePlannerConfig.defaults();
+        require(config.maxWallTime().compareTo(Duration.ofMinutes(8L)) >= 0,
+                "default wall time must cover slow multi-turn provider latency");
+        require(config.maxProviderCalls() >= 12,
+                "default provider call budget must cover about a dozen planner turns");
+        require(config.maxToolSteps() >= 12,
+                "default tool step budget must cover about a dozen planner turns");
+        require(config.maxIterations() > 0, "iteration budget must remain finite");
+        require(config.maxProviderCalls() > 0, "provider call budget must remain finite");
+        require(config.maxToolSteps() > 0, "tool step budget must remain finite");
+        require(config.maxWallTime().compareTo(Duration.ZERO) > 0, "wall time budget must remain finite and positive");
+        require(config.maxToolWait().compareTo(Duration.ZERO) > 0, "tool wait budget must remain finite and positive");
+        require(config.maxPollsPerTool() > 0, "poll budget must remain finite");
+        require(config.maxProviderCalls() <= 64, "provider call budget must stay bounded");
+        require(config.maxToolSteps() <= 64, "tool step budget must stay bounded");
+        require(config.maxWallTime().compareTo(Duration.ofMinutes(30L)) <= 0, "wall time budget must stay bounded");
+    }
+
+    private static void tinyWallTimeBudgetStopsSession() throws InterruptedException {
+        InteractivePlannerSession session = new InteractivePlannerSession(
+                UUID.randomUUID(),
+                "wait too long",
+                new InteractivePlannerConfig(4, 4, 4, 1200, 4000, 1,
+                        Duration.ofMillis(1L), Duration.ofMillis(1L), Duration.ofSeconds(2L), 1)
+        );
+        Thread.sleep(10L);
+        PlannerTurnResult result = session.beforeProviderCall();
+        require(result.status() == PlannerTurnStatus.STOPPED,
+                "tiny wall time budget must stop the planner");
+        require(result.message().contains("wall time budget"),
+                "wall time exhaustion message must be truthful");
     }
 
     private static void rejectsRemovedToolBeforePlannerExecution() {
