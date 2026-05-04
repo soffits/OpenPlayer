@@ -169,7 +169,7 @@ public final class OpenPlayerCommands {
     private static int chat(ServerPlayer player, String assignmentId, String message) {
         CommandSubmissionResult result = OpenPlayerNetworking.submitAssignmentCommandTextResult(player, assignmentId, message);
         if (result.status() == CommandSubmissionStatus.ACCEPTED) {
-            player.sendSystemMessage(Component.translatable("commands.openplayer.chat.reply", assignmentId, result.message()));
+            OpenPlayerNetworking.sendAcceptedChatReply(player, assignmentId, result.message());
             return 1;
         }
         return sendResult(player, result);

@@ -35,6 +35,7 @@ public final class ConversationLoopTest {
         invalidParserOutputRejectsWithoutSubmitting();
         validParserOutputSubmitsConstrainedIntent();
         chatIntentReturnsReplyWithoutSubmittingAutomation();
+        longChatIntentReturnsFullSanitizedReplyWithoutSubmittingAutomation();
         unavailableIntentReturnsSafeReplyWithoutSubmittingAutomation();
     }
 
@@ -129,6 +130,23 @@ public final class ConversationLoopTest {
         });
         require(result.status() == CommandSubmissionStatus.ACCEPTED, "CHAT intent must return a visible reply");
         require("Hello there".equals(result.message()), "CHAT reply must use the provider instruction");
+    }
+
+    private static void longChatIntentReturnsFullSanitizedReplyWithoutSubmittingAutomation() {
+        String reply = "Yes, aim at the lowest log, hold the break action until it drops, then keep going. A wooden axe helps a lot. ".repeat(3);
+        ConversationLoop loop = new ConversationLoop(
+                new CountingParser(new CommandIntent(IntentKind.CHAT, IntentPriority.NORMAL, reply + "\n\tKeep chopping nearby logs afterward.")),
+                () -> status(true)
+        );
+        CommandSubmissionResult result = loop.submit(CHARACTER, "how do I chop wood", List.of(), command -> {
+            throw new AssertionError("CHAT conversation intent must not submit automation");
+        });
+
+        require(result.status() == CommandSubmissionStatus.ACCEPTED, "long CHAT intent must return a visible reply");
+        require(result.message().equals(reply + " Keep chopping nearby logs afterward."),
+                "long CHAT reply must preserve the full sanitized provider instruction");
+        require(result.message().length() > ConversationStatusRepository.MAX_EVENT_TEXT_LENGTH,
+                "long CHAT reply must not be truncated to status summary length");
     }
 
     private static void unavailableIntentReturnsSafeReplyWithoutSubmittingAutomation() {

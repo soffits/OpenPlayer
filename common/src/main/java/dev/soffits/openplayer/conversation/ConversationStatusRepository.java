@@ -11,6 +11,7 @@ public final class ConversationStatusRepository {
     public static final int MAX_EVENTS = 6;
     public static final int MAX_ASSIGNMENTS = 128;
     public static final int MAX_EVENT_TEXT_LENGTH = 96;
+    public static final int MAX_NETWORK_EVENT_LINE_LENGTH = 128;
 
     private final Map<Key, List<ConversationEvent>> eventsByAssignment = new LinkedHashMap<>();
 
@@ -48,7 +49,10 @@ public final class ConversationStatusRepository {
     public List<String> eventLines(UUID ownerId, String assignmentId) {
         List<String> lines = new ArrayList<>();
         for (ConversationEvent event : events(ownerId, assignmentId)) {
-            lines.add(event.type().name().toLowerCase(java.util.Locale.ROOT) + ": " + event.text());
+            lines.add(ConversationReplyText.summary(
+                    event.type().name().toLowerCase(java.util.Locale.ROOT) + ": " + event.text(),
+                    MAX_NETWORK_EVENT_LINE_LENGTH
+            ));
         }
         return List.copyOf(lines);
     }
@@ -85,15 +89,7 @@ public final class ConversationStatusRepository {
     }
 
     public static String sanitize(String value) {
-        if (value == null) {
-            return "";
-        }
-        String sanitized = value.replaceAll("[\\p{Cntrl}&&[^\\r\\n\\t]]", " ");
-        sanitized = sanitized.replaceAll("\\s+", " ").trim();
-        if (sanitized.length() > MAX_EVENT_TEXT_LENGTH) {
-            return sanitized.substring(0, MAX_EVENT_TEXT_LENGTH - 3).trim() + "...";
-        }
-        return sanitized;
+        return ConversationReplyText.summary(value, MAX_EVENT_TEXT_LENGTH);
     }
 
     private record Key(UUID ownerId, String assignmentId) {

@@ -16,6 +16,8 @@ public final class ConversationStatusRepositoryTest {
         storesOnlyBoundedEvents();
         evictsOldAssignmentKeysAfterRepositoryCap();
         sanitizesAndTruncatesPublicText();
+        storesNetworkSafeEventLinesForLongCjkReplies();
+        splitsLongCjkRepliesIntoSafeChatChunks();
         recordsDeterministicActionSummaryWithoutProviderText();
     }
 
@@ -52,6 +54,31 @@ public final class ConversationStatusRepositoryTest {
         require(!sanitized.contains("\t"), "sanitized text must not include tabs");
         require(sanitized.length() <= ConversationStatusRepository.MAX_EVENT_TEXT_LENGTH,
                 "sanitized text must be truncated to the public bound");
+    }
+
+    private static void storesNetworkSafeEventLinesForLongCjkReplies() {
+        ConversationStatusRepository repository = new ConversationStatusRepository();
+        String reply = "Yes, aim at the lowest log, hold the break action until it drops, then keep going. A wooden axe helps a lot. ".repeat(3);
+        repository.recordNpcReply(OWNER_ID, "alex_01", reply);
+
+        String eventLine = repository.eventLines(OWNER_ID, "alex_01").get(0);
+        require(eventLine.length() <= ConversationStatusRepository.MAX_NETWORK_EVENT_LINE_LENGTH,
+                "conversation event line must fit the network writeUtf bound");
+        require(eventLine.startsWith("action: "), "conversation event line must keep the event prefix");
+    }
+
+    private static void splitsLongCjkRepliesIntoSafeChatChunks() {
+        String reply = ConversationReplyText.sanitizeProviderReply(
+                "Yes, aim at the lowest log, hold the break action until it drops, then keep going. A wooden axe helps a lot. ".repeat(3)
+        );
+        List<String> chunks = ConversationReplyText.displayChunks(reply);
+
+        require(chunks.size() > 1, "long CJK replies must be split into multiple chat chunks");
+        for (String chunk : chunks) {
+            require(chunk.length() <= ConversationReplyText.CHAT_REPLY_CHUNK_LENGTH,
+                    "each chat chunk must fit the configured chat reply chunk bound");
+        }
+        require(String.join("", chunks).equals(reply), "chat chunks must reconstruct the sanitized reply");
     }
 
     private static void recordsDeterministicActionSummaryWithoutProviderText() {

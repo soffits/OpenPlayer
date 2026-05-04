@@ -104,22 +104,14 @@ public final class ConversationLoop {
         }
         acceptedIntentRecorder.accept(intent);
         if (intent.kind() == IntentKind.CHAT) {
-            return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED, chatReply(intent.instruction()));
+            return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED,
+                    ConversationReplyText.chatReply(intent.instruction()));
         }
         if (intent.kind() == IntentKind.UNAVAILABLE) {
-            return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED, unavailableReply(intent.instruction()));
+            return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED,
+                    ConversationReplyText.unavailableReply(intent.instruction()));
         }
         return submitter.submit(new AiPlayerNpcCommand(UUID.randomUUID(), intent));
-    }
-
-    private static String chatReply(String instruction) {
-        String reply = ConversationStatusRepository.sanitize(instruction);
-        return reply.isBlank() ? "I heard you." : reply;
-    }
-
-    private static String unavailableReply(String instruction) {
-        String reply = ConversationStatusRepository.sanitize(instruction);
-        return reply.isBlank() ? "I cannot do that safely right now." : reply;
     }
 
     private static String conversationFailureMessage(IntentParseException exception) {

@@ -20,6 +20,7 @@ import dev.soffits.openplayer.character.LocalCharacterDefinition;
 import dev.soffits.openplayer.character.LocalCharacterRepositoryResult;
 import dev.soffits.openplayer.character.LocalSkinPathResolver;
 import dev.soffits.openplayer.character.OpenPlayerLocalCharacters;
+import dev.soffits.openplayer.conversation.ConversationReplyText;
 import dev.soffits.openplayer.debug.OpenPlayerDebugEvent;
 import dev.soffits.openplayer.debug.OpenPlayerDebugEvents;
 import dev.soffits.openplayer.debug.OpenPlayerRawTrace;
@@ -40,6 +41,7 @@ import net.minecraft.server.level.ServerPlayer;
 
 public final class OpenPlayerNetworking {
     private static final int MAX_COMMAND_TEXT_LENGTH = 512;
+    static final int STATUS_LINE_NETWORK_MAX_LENGTH = 128;
     private static final String PROVIDER_TEST_PROMPT = "Test OpenPlayer provider connectivity. Return REPORT_STATUS with NORMAL priority and blank instruction.";
     private static final CompanionLifecycleManager COMPANION_LIFECYCLE_MANAGER = CompanionLifecycleManager.withAssignments(
             OpenPlayerApi::npcService,
@@ -374,14 +376,20 @@ public final class OpenPlayerNetworking {
     }
 
     private static void sendSelectedCommandTextResultMessage(ServerPlayer sender, String assignmentId,
-                                                             CommandSubmissionResult result) {
+                                                              CommandSubmissionResult result) {
         if (result.status() == CommandSubmissionStatus.ACCEPTED) {
-            sender.sendSystemMessage(Component.translatable("commands.openplayer.chat.reply", assignmentId, result.message()));
+            sendAcceptedChatReply(sender, assignmentId, result.message());
             return;
         }
         if (result.status() == CommandSubmissionStatus.REJECTED || result.status() == CommandSubmissionStatus.UNAVAILABLE
                 || result.status() == CommandSubmissionStatus.UNKNOWN_SESSION) {
             sender.sendSystemMessage(Component.translatable("commands.openplayer.result", result.message()));
+        }
+    }
+
+    public static void sendAcceptedChatReply(ServerPlayer sender, String assignmentId, String message) {
+        for (String chunk : ConversationReplyText.displayChunks(message)) {
+            sender.sendSystemMessage(Component.translatable("commands.openplayer.chat.reply", assignmentId, chunk));
         }
     }
 
@@ -611,23 +619,23 @@ public final class OpenPlayerNetworking {
         OpenPlayerRuntimeStatus status = OpenPlayerRuntime.status();
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
         buffer.writeBoolean(status.intentParser().enabled());
-        buffer.writeUtf(status.intentParser().endpointStatus(), 128);
-        buffer.writeUtf(status.intentParser().endpointSource(), 32);
+        writeBoundedUtf(buffer, status.intentParser().endpointStatus(), 128);
+        writeBoundedUtf(buffer, status.intentParser().endpointSource(), 32);
         buffer.writeBoolean(status.intentParser().modelConfigured());
-        buffer.writeUtf(status.intentParser().modelSource(), 32);
+        writeBoundedUtf(buffer, status.intentParser().modelSource(), 32);
         buffer.writeBoolean(status.intentParser().apiKeyPresent());
-        buffer.writeUtf(status.intentParser().apiKeySource(), 32);
-        buffer.writeUtf(status.automationBackend().name(), 64);
-        buffer.writeUtf(status.automationBackend().state().name(), 64);
+        writeBoundedUtf(buffer, status.intentParser().apiKeySource(), 32);
+        writeBoundedUtf(buffer, status.automationBackend().name(), 64);
+        writeBoundedUtf(buffer, status.automationBackend().state().name(), 64);
         List<OpenPlayerDebugEvent> debugEvents = canViewDebugEvents(player) ? OpenPlayerDebugEvents.recent(6) : List.of();
         buffer.writeVarInt(debugEvents.size());
         for (OpenPlayerDebugEvent debugEvent : debugEvents) {
-            buffer.writeUtf(debugEvent.compactLine(), OpenPlayerDebugEvents.MAX_NETWORK_LINE_LENGTH);
+            writeBoundedUtf(buffer, debugEvent.compactLine(), OpenPlayerDebugEvents.MAX_NETWORK_LINE_LENGTH);
         }
         List<String> capabilityStatusLines = capabilityStatusLines(player, selectedAssignmentId);
         buffer.writeVarInt(capabilityStatusLines.size());
         for (String line : capabilityStatusLines) {
-            buffer.writeUtf(line, 128);
+            writeBoundedUtf(buffer, line, STATUS_LINE_NETWORK_MAX_LENGTH);
         }
         NetworkManager.sendToPlayer(player, OpenPlayerConstants.STATUS_RESPONSE_PACKET_ID, buffer);
     }
@@ -639,13 +647,31 @@ public final class OpenPlayerNetworking {
     static List<String> capabilityStatusLines(ServerPlayer player, String selectedAssignmentId) {
         String dimensionId = player == null ? "unknown" : player.serverLevel().dimension().location().toString();
         java.util.ArrayList<String> lines = new java.util.ArrayList<>();
-        lines.add("runtime_status source=current_viewer_world current_dimension=" + dimensionId
-                + " inventory_source=not_reported selected_npc_source=separate_runtime_snapshot");
+        lines.add(runtimeStatusLine(dimensionId));
         if (player != null && selectedAssignmentId != null && !selectedAssignmentId.isBlank()) {
             lines.addAll(COMPANION_LIFECYCLE_MANAGER.selectedRuntimeStatusLines(player.getUUID(), selectedAssignmentId));
         }
         lines.addAll(RuntimeCapabilityRegistry.reportLines());
-        return List.copyOf(lines.subList(0, Math.min(lines.size(), RuntimeCapabilityRegistry.MAX_REPORT_LINES)));
+        java.util.ArrayList<String> boundedLines = new java.util.ArrayList<>();
+        int lineCount = Math.min(lines.size(), RuntimeCapabilityRegistry.MAX_REPORT_LINES);
+        for (int index = 0; index < lineCount; index++) {
+            boundedLines.add(boundedPacketString(lines.get(index), STATUS_LINE_NETWORK_MAX_LENGTH));
+        }
+        return List.copyOf(boundedLines);
+    }
+
+    static String runtimeStatusLine(String dimensionId) {
+        String safeDimensionId = dimensionId == null || dimensionId.isBlank() ? "unknown" : dimensionId;
+        return boundedPacketString("runtime_status source=current_viewer_world current_dimension=" + safeDimensionId
+                + " inventory_source=not_reported selected_npc=runtime_snapshot", STATUS_LINE_NETWORK_MAX_LENGTH);
+    }
+
+    static String boundedPacketString(String value, int maxLength) {
+        return ConversationReplyText.summary(value, maxLength);
+    }
+
+    private static void writeBoundedUtf(FriendlyByteBuf buffer, String value, int maxLength) {
+        buffer.writeUtf(boundedPacketString(value, maxLength), maxLength);
     }
 
     private static void sendCharacterListResponse(ServerPlayer player) {
@@ -677,7 +703,7 @@ public final class OpenPlayerNetworking {
             buffer.writeUtf(character.conversationStatus(), 64);
             buffer.writeVarInt(character.conversationEvents().size());
             for (String event : character.conversationEvents()) {
-                buffer.writeUtf(event, 128);
+                writeBoundedUtf(buffer, event, STATUS_LINE_NETWORK_MAX_LENGTH);
             }
         }
         buffer.writeVarInt(view.errors().size());
@@ -700,14 +726,14 @@ public final class OpenPlayerNetworking {
 
     private static void sendProviderTestResponse(ServerPlayer player, String code, String detail) {
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
-        buffer.writeUtf(code == null ? "request_failed" : code, 64);
-        buffer.writeUtf(detail == null ? "" : detail, 96);
+        writeBoundedUtf(buffer, code == null ? "request_failed" : code, 64);
+        writeBoundedUtf(buffer, detail == null ? "" : detail, 96);
         NetworkManager.sendToPlayer(player, OpenPlayerConstants.PROVIDER_TEST_RESPONSE_PACKET_ID, buffer);
     }
 
     private static void sendSafeStatusMessage(ServerPlayer player, String message) {
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
-        buffer.writeUtf(message, 256);
+        writeBoundedUtf(buffer, message, 256);
         NetworkManager.sendToPlayer(player, OpenPlayerConstants.CHARACTER_FILE_OPERATION_RESPONSE_PACKET_ID, buffer);
     }
 

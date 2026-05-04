@@ -323,7 +323,7 @@ public final class CompanionLifecycleManagerTest {
             CompanionLifecycleManager manager = CompanionLifecycleManager.withAssignments(
                     () -> service,
                     () -> new LocalAssignmentRepositoryResult(List.of(LocalAssignmentDefinition.defaultFor(character)), List.of(character), List.of()),
-                    () -> input -> new CommandIntent(IntentKind.CHAT, IntentPriority.NORMAL, "你好")
+                    () -> input -> new CommandIntent(IntentKind.CHAT, IntentPriority.NORMAL, "Hello")
             );
             manager.spawnSelectedAssignment(new NpcOwnerId(OWNER_ID),
                     new NpcSpawnLocation("minecraft:overworld", 1.0D, 64.0D, 1.0D), character.id());
@@ -331,11 +331,11 @@ public final class CompanionLifecycleManagerTest {
             CommandSubmissionResult result = manager.submitSelectedCommandText(OWNER_ID, character.id(), "hello");
 
             require(result.status() == CommandSubmissionStatus.ACCEPTED, "CHAT conversation must be accepted as a reply");
-            require("你好".equals(result.message()), "CHAT conversation result must expose the NPC reply");
+            require("Hello".equals(result.message()), "CHAT conversation result must expose the NPC reply");
             require(service.submittedCommandCount == 0, "CHAT conversation must not submit automation");
             requireProviderParseSuccess(IntentKind.CHAT, "CHAT conversation must record provider_parse success");
             List<String> events = manager.conversationEventLines(OWNER_ID, LocalAssignmentDefinition.defaultFor(character));
-            require(events.stream().anyMatch(event -> event.contains("你好")),
+            require(events.stream().anyMatch(event -> event.contains("Hello")),
                     "CHAT conversation must record the NPC reply for UI display");
         } finally {
             restoreProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT", previousEndpoint);
