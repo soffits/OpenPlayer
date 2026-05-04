@@ -61,8 +61,8 @@ public final class RuntimeIntentValidator {
                     intent, AdvancedTaskInstructionParser.FIND_LOADED_BIOME_USAGE
             );
             case EXPLORE_CHUNKS -> requireExploreChunksInstruction(intent);
-            case LOCATE_STRUCTURE,
-                    USE_PORTAL,
+            case LOCATE_STRUCTURE -> requireLocateStructureInstruction(intent);
+            case USE_PORTAL,
                     TRAVEL_NETHER,
                     LOCATE_STRONGHOLD,
                     END_GAME_TASK -> RuntimeIntentValidationResult.rejected(AdvancedTaskPolicy.unsupportedReason(kind));
@@ -232,6 +232,13 @@ public final class RuntimeIntentValidator {
     private static RuntimeIntentValidationResult requireExploreChunksInstruction(CommandIntent intent) {
         if (AdvancedTaskInstructionParser.parseExploreChunksOrNull(intent.instruction()) == null) {
             return RuntimeIntentValidationResult.rejected(AdvancedTaskInstructionParser.EXPLORE_CHUNKS_USAGE);
+        }
+        return RuntimeIntentValidationResult.accepted();
+    }
+
+    private static RuntimeIntentValidationResult requireLocateStructureInstruction(CommandIntent intent) {
+        if (AdvancedTaskInstructionParser.parseLocateStructureOrNull(intent.instruction()) == null) {
+            return RuntimeIntentValidationResult.rejected(AdvancedTaskInstructionParser.LOCATE_STRUCTURE_USAGE);
         }
         return RuntimeIntentValidationResult.accepted();
     }

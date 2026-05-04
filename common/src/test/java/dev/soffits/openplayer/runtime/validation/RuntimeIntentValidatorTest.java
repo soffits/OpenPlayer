@@ -379,6 +379,17 @@ public final class RuntimeIntentValidatorTest {
                 "EXPLORE_CHUNKS requires blank, reset, clear, or instruction: radius=<blocks> steps=<count>");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.EXPLORE_CHUNKS, ""), false),
                 "World actions are disabled for this OpenPlayer character");
+
+        require(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_STRUCTURE, "minecraft:village 64"), true).isAccepted(),
+                "LOCATE_STRUCTURE should accept exact structure id and bounded radius");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_STRUCTURE, "minecraft:village source=loaded"), true).isAccepted(),
+                "LOCATE_STRUCTURE should accept explicit loaded source");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_STRUCTURE, "village 16"), true),
+                "LOCATE_STRUCTURE requires instruction: <structure_id> [radius] [source=loaded]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_STRUCTURE, "minecraft:village source=generated"), true),
+                "LOCATE_STRUCTURE requires instruction: <structure_id> [radius] [source=loaded]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_STRUCTURE, "minecraft:village"), false),
+                "World actions are disabled for this OpenPlayer character");
     }
 
     private static void validatesPhaseFourteenInteractionInstructions() {
@@ -412,8 +423,6 @@ public final class RuntimeIntentValidatorTest {
 
 
     private static void rejectsUnsupportedAdvancedInstructionsWithDeterministicReasons() {
-        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_STRUCTURE, "minecraft:village"), true),
-                "LOCATE_STRUCTURE is unsupported: vanilla runtime does not run long-range structure search or load chunks");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.USE_PORTAL, "nether"), true),
                 "USE_PORTAL is unsupported: portal construction/use needs a separate reviewed safe phase");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.TRAVEL_NETHER, ""), true),
@@ -508,7 +517,6 @@ public final class RuntimeIntentValidatorTest {
 
     private static EnumSet<IntentKind> plannedGatedKinds() {
         return EnumSet.of(
-                IntentKind.LOCATE_STRUCTURE,
                 IntentKind.USE_PORTAL,
                 IntentKind.TRAVEL_NETHER,
                 IntentKind.LOCATE_STRONGHOLD,

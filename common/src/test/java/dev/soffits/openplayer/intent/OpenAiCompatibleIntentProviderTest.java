@@ -169,6 +169,18 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must document loaded-only chunk exploration");
         require(prompt.contains("radius=<blocks> steps=<count>"),
                 "system prompt must document EXPLORE_CHUNKS key/value syntax");
+        require(prompt.contains("LOCATE_STRUCTURE is a loaded-only structure evidence diagnostic scan"),
+                "system prompt must document loaded-only structure diagnostics");
+        require(prompt.contains("<structure_id> [radius] [source=loaded]"),
+                "system prompt must document LOCATE_STRUCTURE syntax");
+        require(prompt.contains("source=loaded_scan evidence_found/not_found/unsupported_structure"),
+                "system prompt must document truthful structure diagnostic statuses");
+        require(prompt.contains("diagnostic-only nearby loaded chest/barrel hints"),
+                "system prompt must document diagnostic-only container hints");
+        require(prompt.contains("no ownership, loot, or structure membership guarantee"),
+                "system prompt must avoid ownership, loot, and membership guarantees");
+        require(prompt.contains("never uses server locate APIs, never loads chunks, never teleports, never moves items, and never auto-loots"),
+                "system prompt must document LOCATE_STRUCTURE safety boundaries");
         require(prompt.contains("never generates chunks, never teleports"),
                 "system prompt must not overclaim unsafe exploration behavior");
         require(!prompt.contains("COLLECT_FOOD <"),

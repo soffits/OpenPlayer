@@ -8,7 +8,9 @@ import dev.soffits.openplayer.automation.InteractionInstruction.InteractionTarge
 import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser;
 import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser.ExploreChunksInstruction;
 import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser.LoadedSearchInstruction;
+import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser.LocateStructureInstruction;
 import dev.soffits.openplayer.automation.advanced.AdvancedTaskPolicy;
+import dev.soffits.openplayer.automation.advanced.LoadedStructureDiagnosticScanner;
 import dev.soffits.openplayer.automation.building.BuildPlan;
 import dev.soffits.openplayer.automation.building.BuildPlanParser;
 import dev.soffits.openplayer.automation.navigation.LoadedAreaNavigator;
@@ -162,6 +164,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private final NavigationRuntime navigationRuntime = new NavigationRuntime(NAVIGATION_MAX_RECOVERIES);
         private final WorkstationLocator workstationLocator = new WorkstationLocator();
         private final LoadedAreaNavigator loadedAreaNavigator = new LoadedAreaNavigator();
+        private final LoadedStructureDiagnosticScanner loadedStructureDiagnosticScanner = new LoadedStructureDiagnosticScanner();
         private final ResourceAffordanceScanner resourceAffordanceScanner = new ResourceAffordanceScanner();
         private final LoadedChunkExplorationMemory loadedChunkExplorationMemory = new LoadedChunkExplorationMemory();
         private QueuedCommand activeCommand;
@@ -748,6 +751,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (kind == IntentKind.EXPLORE_CHUNKS) {
                 return submitExploreChunks(intent.instruction());
             }
+            if (kind == IntentKind.LOCATE_STRUCTURE) {
+                return reportLoadedStructure(intent.instruction());
+            }
             if (AdvancedTaskPolicy.isUnsupportedAdvancedKind(kind)) {
                 return rejected(AdvancedTaskPolicy.unsupportedReason(kind));
             }
@@ -965,6 +971,17 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             queuedCommands.add(QueuedCommand.exploreChunks(exploreInstruction.radius(), exploreInstruction.steps()));
             return accepted("EXPLORE_CHUNKS accepted: loaded_only radius=" + formatRadius(exploreInstruction.radius())
                     + " steps=" + exploreInstruction.steps());
+        }
+
+        private AutomationCommandResult reportLoadedStructure(String instruction) {
+            LocateStructureInstruction locateStructureInstruction = AdvancedTaskInstructionParser.parseLocateStructureOrNull(instruction);
+            if (locateStructureInstruction == null) {
+                return rejected(AdvancedTaskInstructionParser.LOCATE_STRUCTURE_USAGE);
+            }
+            LoadedStructureDiagnosticScanner.StructureDiagnosticResult result = loadedStructureDiagnosticScanner.scan(
+                    serverLevel(), entity.position(), locateStructureInstruction.structureId(), locateStructureInstruction.radius()
+            );
+            return accepted("LOCATE_STRUCTURE " + result.status() + ": " + result.summary());
         }
 
         @Override

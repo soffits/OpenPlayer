@@ -284,7 +284,7 @@ OpenPlayer already has:
 
 ### Phase 12: Advanced World Tasks
 
-**Status:** Phase 12 implements a strict advanced-task vocabulary and truthful safety layer. `LOCATE_LOADED_BLOCK <block_or_item_id> [radius]`, `LOCATE_LOADED_ENTITY <entity_type_id> [radius]`, and `FIND_LOADED_BIOME <biome_id> [radius]` are report-only reconnaissance commands capped to already-loaded server-visible area; they do not navigate, mutate blocks, generate chunks, or call long-range locate APIs. High-risk families `LOCATE_STRUCTURE`, `EXPLORE_CHUNKS`, `USE_PORTAL`, `TRAVEL_NETHER`, `LOCATE_STRONGHOLD`, and `END_GAME_TASK` are recognized but deterministically rejected with exact reasons until separate reviewed safe phases define bounded execution, cancellation, and diagnostics.
+**Status:** Phase 12 implements a strict advanced-task vocabulary and truthful safety layer. `LOCATE_LOADED_BLOCK <block_or_item_id> [radius]`, `LOCATE_LOADED_ENTITY <entity_type_id> [radius]`, and `FIND_LOADED_BIOME <biome_id> [radius]` are report-only reconnaissance commands capped to already-loaded server-visible area; they do not navigate, mutate blocks, generate chunks, or call long-range locate APIs. `EXPLORE_CHUNKS` and `LOCATE_STRUCTURE` are implemented by later loaded-only phases. High-risk families `USE_PORTAL`, `TRAVEL_NETHER`, `LOCATE_STRONGHOLD`, and `END_GAME_TASK` are recognized but deterministically rejected with exact reasons until separate reviewed safe phases define bounded execution, cancellation, and diagnostics.
 
 **Objective:** Expand toward advanced AltoClef-style task families after the runtime is mature.
 
@@ -408,19 +408,21 @@ The first twelve phases establish a bounded first-party runtime foundation, but 
 
 ### Phase 18: Structure Locate and Loot Tasks
 
+**Status:** Phase 18 implements a loaded-only diagnostics foundation. `LOCATE_STRUCTURE <structure_id> [radius] [source=loaded]` is gated by `allowWorldActions`, capped to a small loaded-only radius, and currently supports conservative `minecraft:village` loaded-world evidence sightings from already-loaded distinctive blocks only. Results are accepted diagnostics with `source=loaded_scan` and `evidence_found`, `not_found`, or `unsupported_structure`; they include evidence kind, position, distance, capped checked positions, inspected loaded positions/chunks/candidates, and diagnostic-only nearby loaded chest/barrel hints when present. Container hints do not move items and do not guarantee ownership, loot, or structure membership. It does not use server locate APIs, implicitly load or generate chunks, teleport, navigate to structures, claim exact structure membership, auto-open containers, auto-withdraw items, or support Nether, End, stronghold, desert/jungle pyramid, mineshaft, or speedrun behavior.
+
 **Objective:** Implement a safe subset of structure location/looting without uncontrolled long-range search.
 
 **Capabilities:**
 
-- Server-authorized `LOCATE_STRUCTURE` policies that may use loaded-only sightings first and optionally capped server locate calls when explicitly enabled.
-- Structure approach and simple loot-container plans for known vanilla structures with no-loss container transfer semantics.
+- Server-authorized `LOCATE_STRUCTURE` policies that use loaded-only sightings; server locate calls remain out of scope.
+- Diagnostic loaded-world evidence and nearby loaded chest/barrel hints without item movement, ownership guarantees, loot guarantees, or structure membership guarantees.
 - Truthful unsupported for complex/destructive structures until adapters exist.
 
 **Acceptance Criteria:**
 
 - No implicit chunk loading or long-distance teleport/path claims.
-- Looting uses existing container no-loss semantics and never deletes or overwrites items.
-- Locate results clearly state source: loaded scan, configured locate API, or unsupported.
+- Container diagnostics never delete, overwrite, move, open, or withdraw items; any later transfer requires separate explicit owner choice and reviewed no-loss container transfer semantics.
+- Locate results clearly state source `loaded_scan` and status `evidence_found`, `not_found`, or `unsupported_structure`.
 
 ### Phase 19: Portal and Dimension Travel
 

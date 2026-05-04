@@ -9,6 +9,8 @@ public final class AdvancedTaskInstructionParserTest {
         rejectsInvalidLoadedSearchInstruction();
         parsesExploreChunksInstruction();
         rejectsInvalidExploreChunksInstruction();
+        parsesLocateStructureInstruction();
+        rejectsInvalidLocateStructureInstruction();
     }
 
     private static void parsesStrictLoadedSearchInstruction() {
@@ -71,6 +73,41 @@ public final class AdvancedTaskInstructionParserTest {
                 "Explore chunks should reject zero steps");
         require(AdvancedTaskInstructionParser.parseExploreChunksOrNull("radius=16 direction=north") == null,
                 "Explore chunks should reject unsupported keys");
+    }
+
+    private static void parsesLocateStructureInstruction() {
+        AdvancedTaskInstructionParser.LocateStructureInstruction defaultRadius =
+                AdvancedTaskInstructionParser.parseLocateStructureOrNull("minecraft:village");
+        require(defaultRadius != null, "Locate structure should accept exact structure id");
+        require(defaultRadius.structureId().equals("minecraft:village"), "Locate structure should preserve structure id");
+        require(defaultRadius.radius() == AdvancedTaskInstructionParser.STRUCTURE_DEFAULT_RADIUS,
+                "Locate structure should use default radius");
+
+        AdvancedTaskInstructionParser.LocateStructureInstruction cappedRadius =
+                AdvancedTaskInstructionParser.parseLocateStructureOrNull("minecraft:village 128 source=loaded");
+        require(cappedRadius != null, "Locate structure should accept source=loaded and positive radius");
+        require(cappedRadius.radius() == AdvancedTaskInstructionParser.STRUCTURE_MAX_RADIUS,
+                "Locate structure radius should be capped to loaded-only max");
+
+        AdvancedTaskInstructionParser.LocateStructureInstruction reorderedSource =
+                AdvancedTaskInstructionParser.parseLocateStructureOrNull("minecraft:village source=loaded 16");
+        require(reorderedSource != null && reorderedSource.radius() == 16.0D,
+                "Locate structure should accept source=loaded before radius");
+    }
+
+    private static void rejectsInvalidLocateStructureInstruction() {
+        require(AdvancedTaskInstructionParser.parseLocateStructureOrNull("") == null,
+                "Locate structure should reject blank instruction");
+        require(AdvancedTaskInstructionParser.parseLocateStructureOrNull("village") == null,
+                "Locate structure should reject non-namespaced ids");
+        require(AdvancedTaskInstructionParser.parseLocateStructureOrNull("minecraft:village 0") == null,
+                "Locate structure should reject zero radius");
+        require(AdvancedTaskInstructionParser.parseLocateStructureOrNull("minecraft:village near") == null,
+                "Locate structure should reject non-numeric radius");
+        require(AdvancedTaskInstructionParser.parseLocateStructureOrNull("minecraft:village 16 source=generated") == null,
+                "Locate structure should reject unsupported sources");
+        require(AdvancedTaskInstructionParser.parseLocateStructureOrNull("minecraft:village 16 8") == null,
+                "Locate structure should reject duplicate radii");
     }
 
     private static void require(boolean condition, String message) {

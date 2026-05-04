@@ -9,12 +9,16 @@ public final class AdvancedTaskInstructionParser {
             "LOCATE_LOADED_ENTITY requires instruction: <entity_type_id> [radius]";
     public static final String FIND_LOADED_BIOME_USAGE =
             "FIND_LOADED_BIOME requires instruction: <biome_id> [radius]";
+    public static final String LOCATE_STRUCTURE_USAGE =
+            "LOCATE_STRUCTURE requires instruction: <structure_id> [radius] [source=loaded]";
     public static final String EXPLORE_CHUNKS_USAGE =
             "EXPLORE_CHUNKS requires blank, reset, clear, or instruction: radius=<blocks> steps=<count>";
     public static final double DEFAULT_RADIUS = 16.0D;
     public static final double MAX_RADIUS = 32.0D;
     public static final double EXPLORE_DEFAULT_RADIUS = 32.0D;
     public static final double EXPLORE_MAX_RADIUS = 64.0D;
+    public static final double STRUCTURE_DEFAULT_RADIUS = 32.0D;
+    public static final double STRUCTURE_MAX_RADIUS = 64.0D;
     public static final int EXPLORE_DEFAULT_STEPS = 1;
     public static final int EXPLORE_MAX_STEPS = 8;
 
@@ -80,6 +84,44 @@ public final class AdvancedTaskInstructionParser {
         return ExploreChunksInstruction.navigate(radius, steps);
     }
 
+    public static LocateStructureInstruction parseLocateStructureOrNull(String instruction) {
+        if (instruction == null) {
+            return null;
+        }
+        String trimmedInstruction = instruction.trim();
+        if (trimmedInstruction.isEmpty()) {
+            return null;
+        }
+        String[] parts = trimmedInstruction.split("\\s+");
+        if (parts.length < 1 || parts.length > 3 || !AutomationInstructionParser.isValidResourceId(parts[0])) {
+            return null;
+        }
+        double radius = STRUCTURE_DEFAULT_RADIUS;
+        boolean sourceSeen = false;
+        boolean radiusSeen = false;
+        for (int index = 1; index < parts.length; index++) {
+            String part = parts[index];
+            if (part.equals("source=loaded")) {
+                if (sourceSeen) {
+                    return null;
+                }
+                sourceSeen = true;
+            } else {
+                if (radiusSeen) {
+                    return null;
+                }
+                radius = AutomationInstructionParser.parseOptionalRadiusOrNegative(
+                        part, STRUCTURE_DEFAULT_RADIUS, STRUCTURE_MAX_RADIUS
+                );
+                if (radius < 0.0D) {
+                    return null;
+                }
+                radiusSeen = true;
+            }
+        }
+        return new LocateStructureInstruction(parts[0], radius);
+    }
+
     private static int parseStepsOrNegative(String value) {
         try {
             int parsed = Integer.parseInt(value);
@@ -119,6 +161,17 @@ public final class AdvancedTaskInstructionParser {
 
         public static ExploreChunksInstruction reset() {
             return new ExploreChunksInstruction(0.0D, 0, true);
+        }
+    }
+
+    public record LocateStructureInstruction(String structureId, double radius) {
+        public LocateStructureInstruction {
+            if (!AutomationInstructionParser.isValidResourceId(structureId)) {
+                throw new IllegalArgumentException("structureId must be a valid namespaced id");
+            }
+            if (!Double.isFinite(radius) || radius <= 0.0D || radius > STRUCTURE_MAX_RADIUS) {
+                throw new IllegalArgumentException("radius must be finite and within loaded structure diagnostic bounds");
+            }
         }
     }
 }
