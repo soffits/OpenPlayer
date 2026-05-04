@@ -495,9 +495,7 @@ public final class OpenPlayerNetworking {
                     SWAP_TO_OFFHAND,
                     DROP_ITEM,
                     ATTACK_NEAREST,
-                    GUARD_OWNER,
-                    COLLECT_FOOD,
-                    DEFEND_OWNER -> "";
+                    GUARD_OWNER -> "";
             case MOVE,
                     LOOK,
                     PATROL,
@@ -513,21 +511,12 @@ public final class OpenPlayerNetworking {
                     DEPOSIT_ITEM,
                     STASH_ITEM,
                     WITHDRAW_ITEM,
-                    GET_ITEM,
-                    SMELT_ITEM,
-                    FARM_NEARBY,
-                    FISH,
                     ATTACK_TARGET,
                     PAUSE,
                     UNPAUSE,
                     RESET_MEMORY,
-                    BODY_LANGUAGE,
-                    BUILD_STRUCTURE,
-                    LOCATE_STRUCTURE,
-                    EXPLORE_CHUNKS,
-                    USE_PORTAL,
-                    TRAVEL_NETHER -> intentKind.name();
-            case GOTO -> "owner";
+                    BODY_LANGUAGE -> intentKind.name();
+            case GOTO -> "1 64 1";
             case LOCATE_LOADED_BLOCK -> "minecraft:oak_log";
             case LOCATE_LOADED_ENTITY -> "minecraft:zombie";
             case FIND_LOADED_BIOME -> "minecraft:plains";

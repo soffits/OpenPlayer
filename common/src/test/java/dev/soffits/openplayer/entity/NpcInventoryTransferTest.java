@@ -1,6 +1,5 @@
 package dev.soffits.openplayer.entity;
 
-import dev.soffits.openplayer.automation.resource.ResourcePlanStep;
 import java.util.List;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.NonNullList;
@@ -23,10 +22,6 @@ public final class NpcInventoryTransferTest {
         hotbarSelectionOnlyScansHotbar();
         selectedHotbarDropCommitsOnlyAfterSpawnSuccess();
         armorEquipRejectsWrongSlotAndSwapsSafely();
-        craftingMutationConsumesIngredientsAndInsertsResult();
-        craftingMutationRejectsMissingIngredientsAtomically();
-        craftingMutationRejectsFullOutputInventoryAtomically();
-        craftingTableStepRejectsInventoryOnlyExecution();
         exactDepositMovesRequestedCountAtomically();
         exactDepositPreservesStackData();
         exactDepositRejectsIncompatibleTaggedMergeAtomically();
@@ -138,65 +133,6 @@ public final class NpcInventoryTransferTest {
 
         require(!NpcInventoryTransfer.equipArmorByItem(stacks, Items.IRON_SWORD), "non-armor must reject");
         require(!NpcInventoryTransfer.equipArmorByItem(stacks, Items.IRON_BOOTS), "missing armor item must reject");
-    }
-
-    private static void craftingMutationConsumesIngredientsAndInsertsResult() {
-        NonNullList<ItemStack> stacks = emptyInventory();
-        stacks.set(0, new ItemStack(Items.OAK_LOG));
-
-        boolean applied = NpcInventoryTransfer.applyCraftingSteps(
-                stacks,
-                List.of(new ResourcePlanStep(List.of(new ItemStack(Items.OAK_LOG)), new ItemStack(Items.OAK_PLANKS, 4)))
-        );
-        require(applied, "crafting step must apply");
-        require(NpcInventoryTransfer.countItem(stacks, Items.OAK_LOG, 0, 31) == 0, "ingredient must be consumed");
-        require(NpcInventoryTransfer.countItem(stacks, Items.OAK_PLANKS, 0, 31) == 4, "result must be inserted");
-    }
-
-    private static void craftingMutationRejectsMissingIngredientsAtomically() {
-        NonNullList<ItemStack> stacks = emptyInventory();
-        stacks.set(0, new ItemStack(Items.OAK_LOG));
-        List<ItemStack> snapshot = NpcInventoryTransfer.copyStacks(stacks);
-
-        boolean applied = NpcInventoryTransfer.applyCraftingSteps(
-                stacks,
-                List.of(new ResourcePlanStep(List.of(new ItemStack(Items.OAK_LOG, 2)), new ItemStack(Items.OAK_PLANKS, 8)))
-        );
-        require(!applied, "missing ingredient count must reject");
-        require(stacksEqual(stacks, snapshot), "missing ingredients must leave inventory unchanged");
-    }
-
-    private static void craftingMutationRejectsFullOutputInventoryAtomically() {
-        NonNullList<ItemStack> stacks = emptyInventory();
-        stacks.set(0, new ItemStack(Items.OAK_LOG, 64));
-        for (int slot = 1; slot < 31; slot++) {
-            stacks.set(slot, new ItemStack(Items.STONE, 64));
-        }
-        List<ItemStack> snapshot = NpcInventoryTransfer.copyStacks(stacks);
-
-        boolean applied = NpcInventoryTransfer.applyCraftingSteps(
-                stacks,
-                List.of(new ResourcePlanStep(List.of(new ItemStack(Items.OAK_LOG)), new ItemStack(Items.OAK_PLANKS, 4)))
-        );
-        require(!applied, "full output inventory must reject");
-        require(stacksEqual(stacks, snapshot), "full output inventory must leave inventory unchanged");
-    }
-
-    private static void craftingTableStepRejectsInventoryOnlyExecution() {
-        NonNullList<ItemStack> stacks = emptyInventory();
-        stacks.set(0, new ItemStack(Items.OAK_PLANKS, 4));
-        ResourcePlanStep step = new ResourcePlanStep(
-                List.of(new ItemStack(Items.OAK_PLANKS, 4)),
-                new ItemStack(Items.CRAFTING_TABLE),
-                true
-        );
-        List<ItemStack> snapshot = NpcInventoryTransfer.copyStacks(stacks);
-
-        require(!NpcInventoryTransfer.applyCraftingSteps(stacks, List.of(step)),
-                "table-required step must reject in inventory-only mode");
-        require(stacksEqual(stacks, snapshot), "inventory-only table step rejection must be atomic");
-        require(NpcInventoryTransfer.applyCraftingSteps(stacks, List.of(step), true),
-                "table-required step must apply when table capability is present");
     }
 
     private static void exactDepositMovesRequestedCountAtomically() {

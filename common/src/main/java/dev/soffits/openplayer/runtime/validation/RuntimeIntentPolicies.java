@@ -1,5 +1,6 @@
 package dev.soffits.openplayer.runtime.validation;
 
+import dev.soffits.openplayer.aicore.MinecraftPrimitiveTools;
 import dev.soffits.openplayer.intent.IntentKind;
 import java.util.Arrays;
 import java.util.EnumSet;
@@ -22,22 +23,11 @@ public final class RuntimeIntentPolicies {
             IntentKind.DEPOSIT_ITEM,
             IntentKind.STASH_ITEM,
             IntentKind.WITHDRAW_ITEM,
-            IntentKind.GET_ITEM,
-            IntentKind.SMELT_ITEM,
-            IntentKind.COLLECT_FOOD,
-            IntentKind.FARM_NEARBY,
-            IntentKind.FISH,
             IntentKind.INTERACT,
             IntentKind.ATTACK_TARGET,
-            IntentKind.DEFEND_OWNER,
-            IntentKind.BUILD_STRUCTURE,
             IntentKind.LOCATE_LOADED_BLOCK,
             IntentKind.LOCATE_LOADED_ENTITY,
-            IntentKind.FIND_LOADED_BIOME,
-            IntentKind.LOCATE_STRUCTURE,
-            IntentKind.EXPLORE_CHUNKS,
-            IntentKind.USE_PORTAL,
-            IntentKind.TRAVEL_NETHER
+            IntentKind.FIND_LOADED_BIOME
     );
 
     private RuntimeIntentPolicies() {
@@ -63,22 +53,11 @@ public final class RuntimeIntentPolicies {
                     DEPOSIT_ITEM,
                     STASH_ITEM,
                     WITHDRAW_ITEM,
-                    GET_ITEM,
-                    SMELT_ITEM,
-                    COLLECT_FOOD,
-                    FARM_NEARBY,
-                    FISH,
                     INTERACT,
                     ATTACK_TARGET,
-                    DEFEND_OWNER,
-                    BUILD_STRUCTURE,
                     LOCATE_LOADED_BLOCK,
                     LOCATE_LOADED_ENTITY,
-                    FIND_LOADED_BIOME,
-                    LOCATE_STRUCTURE,
-                    EXPLORE_CHUNKS,
-                    USE_PORTAL,
-                    TRAVEL_NETHER -> true;
+                    FIND_LOADED_BIOME -> true;
             case UNAVAILABLE,
                     OBSERVE,
                     STOP,
@@ -114,8 +93,6 @@ public final class RuntimeIntentPolicies {
     }
 
     public static String providerIntentKindNames() {
-        return Arrays.stream(IntentKind.values())
-                .map(IntentKind::name)
-                .collect(Collectors.joining(", "));
+        return "CHAT, UNAVAILABLE, " + MinecraftPrimitiveTools.providerToolNames();
     }
 }

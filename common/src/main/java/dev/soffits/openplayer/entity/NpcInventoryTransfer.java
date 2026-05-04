@@ -1,6 +1,5 @@
 package dev.soffits.openplayer.entity;
 
-import dev.soffits.openplayer.automation.resource.ResourcePlanStep;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -93,30 +92,6 @@ public final class NpcInventoryTransfer {
         mergeIntoExisting(stacks, remaining, startSlotInclusive, endSlotExclusive);
         fillEmpty(stacks, remaining, startSlotInclusive, endSlotExclusive);
         return remaining.isEmpty();
-    }
-
-    public static boolean applyCraftingSteps(List<ItemStack> stacks, List<ResourcePlanStep> steps) {
-        return applyCraftingSteps(stacks, steps, false);
-    }
-
-    public static boolean applyCraftingSteps(List<ItemStack> stacks, List<ResourcePlanStep> steps,
-                                             boolean allowCraftingTableSteps) {
-        if (steps == null || steps.isEmpty()) {
-            return false;
-        }
-        List<ItemStack> snapshot = copyStacks(stacks);
-        for (ResourcePlanStep step : steps) {
-            if (step != null && step.requiresCraftingTable() && !allowCraftingTableSteps) {
-                return false;
-            }
-            if (!applyCraftingStep(snapshot, step)) {
-                return false;
-            }
-        }
-        for (int slot = 0; slot < stacks.size() && slot < snapshot.size(); slot++) {
-            stacks.set(slot, snapshot.get(slot).copy());
-        }
-        return true;
     }
 
     public static boolean depositAllNormalInventory(List<ItemStack> npcStacks, List<ItemStack> containerStacks) {
@@ -304,30 +279,6 @@ public final class NpcInventoryTransfer {
             }
         }
         return false;
-    }
-
-    private static boolean applyCraftingStep(List<ItemStack> stacks, ResourcePlanStep step) {
-        if (step == null) {
-            return false;
-        }
-        List<ItemStack> beforeStep = copyStacks(stacks);
-        for (ItemStack ingredient : step.ingredients()) {
-            if (removeExactCount(
-                    stacks,
-                    ingredient.getItem(),
-                    ingredient.getCount(),
-                    FIRST_NORMAL_SLOT,
-                    FIRST_EQUIPMENT_SLOT
-            ).isEmpty()) {
-                restoreStacks(stacks, beforeStep);
-                return false;
-            }
-        }
-        if (!insertAll(stacks, step.result(), FIRST_NORMAL_SLOT, FIRST_EQUIPMENT_SLOT)) {
-            restoreStacks(stacks, beforeStep);
-            return false;
-        }
-        return true;
     }
 
     private static void restoreStacks(List<ItemStack> stacks, List<ItemStack> snapshot) {

@@ -75,23 +75,6 @@ public final class AutomationInstructionParserTest {
         );
         require(coordinate != null && coordinate.kind() == AutomationInstructionParser.GotoTargetKind.COORDINATE,
                 "GOTO coordinate syntax must parse");
-        AutomationInstructionParser.GotoInstruction owner = AutomationInstructionParser.parseGotoInstructionOrNull(
-                "owner", 16.0D, 32.0D
-        );
-        require(owner != null && owner.kind() == AutomationInstructionParser.GotoTargetKind.OWNER,
-                "GOTO owner syntax must parse");
-        AutomationInstructionParser.GotoInstruction block = AutomationInstructionParser.parseGotoInstructionOrNull(
-                "block minecraft:oak_log 24", 16.0D, 32.0D
-        );
-        require(block != null && block.kind() == AutomationInstructionParser.GotoTargetKind.BLOCK,
-                "GOTO block syntax must parse");
-        require(block.radius() == 24.0D, "GOTO block radius must parse");
-        AutomationInstructionParser.GotoInstruction entity = AutomationInstructionParser.parseGotoInstructionOrNull(
-                "entity minecraft:zombie", 16.0D, 32.0D
-        );
-        require(entity != null && entity.kind() == AutomationInstructionParser.GotoTargetKind.ENTITY,
-                "GOTO entity syntax must parse");
-        require(entity.radius() == 16.0D, "GOTO entity blank radius must use default");
     }
 
     private static void rejectsInvalidGotoInstructions() {
@@ -99,6 +82,12 @@ public final class AutomationInstructionParserTest {
                 "GOTO must reject blank instruction");
         require(AutomationInstructionParser.parseGotoInstructionOrNull("home", 16.0D, 32.0D) == null,
                 "GOTO must reject fuzzy target names");
+        require(AutomationInstructionParser.parseGotoInstructionOrNull("owner", 16.0D, 32.0D) == null,
+                "GOTO must reject owner lookup syntax");
+        require(AutomationInstructionParser.parseGotoInstructionOrNull("block minecraft:oak_log 24", 16.0D, 32.0D) == null,
+                "GOTO must reject block lookup syntax");
+        require(AutomationInstructionParser.parseGotoInstructionOrNull("entity minecraft:zombie", 16.0D, 32.0D) == null,
+                "GOTO must reject entity lookup syntax");
         require(AutomationInstructionParser.parseGotoInstructionOrNull("block oak log", 16.0D, 32.0D) == null,
                 "GOTO block must reject non-id target");
         require(AutomationInstructionParser.parseGotoInstructionOrNull("entity minecraft:zombie far", 16.0D, 32.0D) == null,

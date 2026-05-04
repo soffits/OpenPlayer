@@ -216,36 +216,6 @@ tasks.register('runSurvivalPolicyTest', JavaExec) {
     mainClass = 'dev.soffits.openplayer.automation.survival.SurvivalPolicyTest'
 }
 
-tasks.register('runWorkLoopPolicyTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'dev.soffits.openplayer.automation.work.WorkLoopPolicyTest'
-}
-
-tasks.register('runBuildPlanParserTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'dev.soffits.openplayer.automation.building.BuildPlanParserTest'
-}
-
-tasks.register('runAdvancedTaskInstructionParserTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParserTest'
-}
-
-tasks.register('runLoadedStructureDiagnosticScannerTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'dev.soffits.openplayer.automation.advanced.LoadedStructureDiagnosticScannerTest'
-}
-
-tasks.register('runPortalFramePlannerTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'dev.soffits.openplayer.automation.advanced.PortalFramePlannerTest'
-}
-
 tasks.register('runRuntimeContextFormatterTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
@@ -256,6 +226,12 @@ tasks.register('runRuntimeIntentValidatorTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'dev.soffits.openplayer.runtime.validation.RuntimeIntentValidatorTest'
+}
+
+tasks.register('runMinecraftPrimitiveToolsTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.aicore.MinecraftPrimitiveToolsTest'
 }
 
 tasks.register('runNpcEquipmentSelectionTest', JavaExec) {
@@ -270,12 +246,6 @@ tasks.register('runNpcInventoryTransferTest', JavaExec) {
     mainClass = 'dev.soffits.openplayer.entity.NpcInventoryTransferTest'
 }
 
-tasks.register('runResourceDependencyPlannerTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'dev.soffits.openplayer.automation.resource.ResourceDependencyPlannerTest'
-}
-
 tasks.register('runResourceAffordanceSummaryTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
@@ -286,18 +256,6 @@ tasks.register('runRuntimeCapabilityRegistryTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'dev.soffits.openplayer.automation.capability.RuntimeCapabilityRegistryTest'
-}
-
-tasks.register('runRuntimeCraftingRecipeIndexTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'dev.soffits.openplayer.automation.resource.RuntimeCraftingRecipeIndexTest'
-}
-
-tasks.register('runRuntimeSmeltingRecipeIndexTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'dev.soffits.openplayer.automation.resource.RuntimeSmeltingRecipeIndexTest'
 }
 
 tasks.register('runWorkstationCapabilityTest', JavaExec) {
@@ -342,19 +300,12 @@ tasks.named('check') {
     dependsOn tasks.named('runNavigationRuntimeTest')
     dependsOn tasks.named('runLoadedAreaNavigatorTest')
     dependsOn tasks.named('runSurvivalPolicyTest')
-    dependsOn tasks.named('runWorkLoopPolicyTest')
-    dependsOn tasks.named('runBuildPlanParserTest')
-    dependsOn tasks.named('runAdvancedTaskInstructionParserTest')
-    dependsOn tasks.named('runLoadedStructureDiagnosticScannerTest')
-    dependsOn tasks.named('runPortalFramePlannerTest')
     dependsOn tasks.named('runRuntimeContextFormatterTest')
     dependsOn tasks.named('runRuntimeIntentValidatorTest')
+    dependsOn tasks.named('runMinecraftPrimitiveToolsTest')
     dependsOn tasks.named('runNpcEquipmentSelectionTest')
     dependsOn tasks.named('runNpcInventoryTransferTest')
-    dependsOn tasks.named('runResourceDependencyPlannerTest')
     dependsOn tasks.named('runResourceAffordanceSummaryTest')
     dependsOn tasks.named('runRuntimeCapabilityRegistryTest')
-    dependsOn tasks.named('runRuntimeCraftingRecipeIndexTest')
-    dependsOn tasks.named('runRuntimeSmeltingRecipeIndexTest')
     dependsOn tasks.named('runWorkstationCapabilityTest')
 }

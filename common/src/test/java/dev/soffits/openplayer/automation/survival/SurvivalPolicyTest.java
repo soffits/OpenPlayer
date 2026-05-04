@@ -33,7 +33,7 @@ public final class SurvivalPolicyTest {
 
     private static void classifiesSafeFoodDrops() {
         require(SurvivalFoodPolicy.isSafeEdibleDrop(new ItemStack(Items.APPLE)),
-                "ordinary food must be safe for COLLECT_FOOD");
+                "ordinary food must be safe for direct consumable pickup checks");
         require(!SurvivalFoodPolicy.isSafeEdibleDrop(new ItemStack(Items.POTION)),
                 "potion drops must not be safe food");
         require(!SurvivalFoodPolicy.isSafeEdibleDrop(new ItemStack(Items.RABBIT_STEW)),
@@ -149,11 +149,11 @@ public final class SurvivalPolicyTest {
         require(eatBeforeCombat == SurvivalIdleAction.EAT_SAFE_FOOD,
                 "low health safe food must be chosen before combat");
 
-        SurvivalIdleAction defend = SurvivalIdlePolicy.choose(
+        SurvivalIdleAction ownerDanger = SurvivalIdlePolicy.choose(
                 true, false, true, true, SurvivalDangerKind.NONE, false, false, false, true, false
         );
-        require(defend == SurvivalIdleAction.DEFEND_OWNER,
-                "owner danger must queue defense when no higher priority is present");
+        require(ownerDanger == SurvivalIdleAction.NONE,
+                "owner danger must not queue a macro defense action");
     }
 
     private static void require(boolean condition, String message) {

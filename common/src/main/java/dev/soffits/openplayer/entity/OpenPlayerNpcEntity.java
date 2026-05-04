@@ -5,7 +5,6 @@ import dev.soffits.openplayer.api.CommandSubmissionResult;
 import dev.soffits.openplayer.api.NpcOwnerId;
 import dev.soffits.openplayer.automation.AutomationControllerSnapshot;
 import dev.soffits.openplayer.automation.survival.SurvivalFoodPolicy;
-import dev.soffits.openplayer.automation.resource.ResourcePlanStep;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -311,14 +310,6 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
                 NpcInventoryTransfer.FIRST_NORMAL_SLOT,
                 NpcInventoryTransfer.FIRST_EQUIPMENT_SLOT
         );
-    }
-
-    public boolean applyInventoryCraftingSteps(List<ResourcePlanStep> steps) {
-        return NpcInventoryTransfer.applyCraftingSteps(internalInventory, steps);
-    }
-
-    public boolean applyInventoryCraftingSteps(List<ResourcePlanStep> steps, boolean allowCraftingTableSteps) {
-        return NpcInventoryTransfer.applyCraftingSteps(internalInventory, steps, allowCraftingTableSteps);
     }
 
     public boolean depositAllNormalInventoryTo(List<ItemStack> containerStacks) {

@@ -28,9 +28,6 @@ public final class SurvivalIdlePolicy {
         if (selfDangerTarget) {
             return SurvivalIdleAction.SELF_DEFENSE;
         }
-        if (ownerDangerTarget) {
-            return SurvivalIdleAction.DEFEND_OWNER;
-        }
         if (armorUpgradeAvailable) {
             return SurvivalIdleAction.EQUIP_ARMOR;
         }

@@ -5,47 +5,19 @@ import dev.soffits.openplayer.automation.workstation.WorkstationDiagnostics;
 import dev.soffits.openplayer.automation.workstation.WorkstationKind;
 import dev.soffits.openplayer.automation.workstation.WorkstationTarget;
 import java.util.List;
-import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.NonNullList;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.Bootstrap;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
-import net.minecraft.world.item.crafting.CookingBookCategory;
-import net.minecraft.world.item.crafting.Ingredient;
-import net.minecraft.world.item.crafting.SmeltingRecipe;
 
 public final class WorkstationCapabilityTest {
     private WorkstationCapabilityTest() {
     }
 
     public static void main(String[] args) {
-        SharedConstants.tryDetectVersion();
-        Bootstrap.bootStrap();
-        dynamicSmeltingRecipeIsSeparateFromAdapterAvailability();
+        workstationAdapterAvailabilityIsExplicit();
         diagnosticsAreBoundedAndDeterministic();
         unavailableAdaptersHaveDeterministicDiagnostics();
     }
 
-    private static void dynamicSmeltingRecipeIsSeparateFromAdapterAvailability() {
-        SmeltingRecipe recipe = new SmeltingRecipe(
-                new ResourceLocation("openplayer", "iron"),
-                "",
-                CookingBookCategory.MISC,
-                Ingredient.of(Items.RAW_IRON),
-                new ItemStack(Items.IRON_INGOT),
-                0.0F,
-                200
-        );
-        NonNullList<ItemStack> inventory = NonNullList.withSize(36, ItemStack.EMPTY);
-        inventory.set(0, new ItemStack(Items.RAW_IRON));
-
-        SmeltingPlan plan = RuntimeSmeltingRecipeIndex.planFor(
-                recipe, new ResourceLocation("minecraft", "iron_ingot"), Items.IRON_INGOT, 1, inventory
-        );
-
-        require(plan != null, "dynamic smelting recipe lookup must still plan safe recipes");
+    private static void workstationAdapterAvailabilityIsExplicit() {
         require(WorkstationCapability.VANILLA_FURNACE.supportsVanillaSmelting(),
                 "vanilla furnace adapter must expose smelting capability");
         require(WorkstationCapability.SMOKER.hasSafeAdapter() && WorkstationCapability.SMOKER.supportsVanillaSmelting(),

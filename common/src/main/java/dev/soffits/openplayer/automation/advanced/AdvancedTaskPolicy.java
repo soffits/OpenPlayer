@@ -17,10 +17,6 @@ public final class AdvancedTaskPolicy {
         if (kind == null) {
             throw new IllegalArgumentException("kind cannot be null");
         }
-        return switch (kind) {
-            case USE_PORTAL -> "USE_PORTAL is unsupported: portal construction/use needs a separate reviewed safe phase";
-            case TRAVEL_NETHER -> "TRAVEL_NETHER is unsupported: Nether travel needs a separate reviewed safe phase";
-            default -> throw new IllegalArgumentException(kind.name() + " is not an unsupported advanced kind");
-        };
+        throw new IllegalArgumentException(kind.name() + " is not an unsupported advanced kind");
     }
 }

@@ -5,12 +5,18 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import dev.architectury.event.events.common.CommandRegistrationEvent;
+import dev.soffits.openplayer.aicore.MinecraftPrimitiveTools;
+import dev.soffits.openplayer.aicore.ToolArguments;
+import dev.soffits.openplayer.aicore.ToolCall;
+import dev.soffits.openplayer.aicore.ToolName;
 import dev.soffits.openplayer.api.CommandSubmissionResult;
 import dev.soffits.openplayer.api.CommandSubmissionStatus;
 import dev.soffits.openplayer.intent.IntentKind;
+import dev.soffits.openplayer.intent.IntentPriority;
 import dev.soffits.openplayer.network.OpenPlayerNetworking;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -44,17 +50,10 @@ public final class OpenPlayerCommands {
             IntentKind.DEPOSIT_ITEM,
             IntentKind.STASH_ITEM,
             IntentKind.WITHDRAW_ITEM,
-            IntentKind.GET_ITEM,
-            IntentKind.SMELT_ITEM,
-            IntentKind.COLLECT_FOOD,
-            IntentKind.FARM_NEARBY,
-            IntentKind.FISH,
-            IntentKind.DEFEND_OWNER,
             IntentKind.PAUSE,
             IntentKind.UNPAUSE,
             IntentKind.RESET_MEMORY,
             IntentKind.BODY_LANGUAGE,
-            IntentKind.BUILD_STRUCTURE,
             IntentKind.LOCATE_LOADED_BLOCK,
             IntentKind.LOCATE_LOADED_ENTITY,
             IntentKind.FIND_LOADED_BIOME
@@ -144,8 +143,8 @@ public final class OpenPlayerCommands {
     }
 
     private static CompletableFuture<Suggestions> suggestQueueIntentKinds(SuggestionsBuilder builder) {
-        for (IntentKind kind : QUEUE_SUGGESTED_INTENT_KINDS) {
-            builder.suggest(kind.name().toLowerCase(Locale.ROOT));
+        for (String toolName : MinecraftPrimitiveTools.providerToolNames().split(", ")) {
+            builder.suggest(toolName);
         }
         return builder.buildFuture();
     }
@@ -153,6 +152,15 @@ public final class OpenPlayerCommands {
     static IntentKind parseQueueIntentKind(String input) {
         if (input == null || input.isBlank()) {
             return null;
+        }
+        Optional<ToolName> toolName = MinecraftPrimitiveTools.toolNameForProviderKind(input);
+        if (toolName.isPresent()) {
+            Optional<dev.soffits.openplayer.intent.CommandIntent> commandIntent = MinecraftPrimitiveTools.toCommandIntent(
+                    new ToolCall(toolName.get(), ToolArguments.empty()), IntentPriority.NORMAL
+            );
+            if (commandIntent.isPresent()) {
+                return commandIntent.get().kind();
+            }
         }
         try {
             IntentKind kind = IntentKind.valueOf(input.trim().toUpperCase(Locale.ROOT));

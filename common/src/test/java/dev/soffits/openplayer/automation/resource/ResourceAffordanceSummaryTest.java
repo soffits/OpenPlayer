@@ -166,7 +166,7 @@ public final class ResourceAffordanceSummaryTest {
         );
 
         require(summary.canAttemptVisibleBlockSourceAcquisition(),
-                "visible block sources must allow truthful GET_ITEM block acquisition attempts");
+                "visible block sources must allow truthful primitive block acquisition attempts");
         require(summary.blockSource().nearestBlockPos().equals(new BlockPos(4, 64, 0)),
                 "visible block source must preserve nearest loaded block target");
     }

@@ -1,7 +1,12 @@
 package dev.soffits.openplayer.intent;
 
+import dev.soffits.openplayer.aicore.MinecraftPrimitiveTools;
+import dev.soffits.openplayer.aicore.ToolArguments;
+import dev.soffits.openplayer.aicore.ToolCall;
+import dev.soffits.openplayer.aicore.ToolName;
 import dev.soffits.openplayer.debug.OpenPlayerRawTrace;
 import java.util.Locale;
+import java.util.Optional;
 
 public final class ProviderBackedIntentParser implements IntentParser {
     private final IntentProvider provider;
@@ -37,18 +42,35 @@ public final class ProviderBackedIntentParser implements IntentParser {
         }
 
         try {
-            IntentKind kind = parseKind(providerIntent.kind());
             IntentPriority priority = parsePriority(providerIntent.priority());
+            CommandIntent commandIntent = parseCommandIntent(providerIntent, priority);
             OpenPlayerRawTrace.parseOutput("provider_backed_parser", null,
                     "kind=" + providerIntent.kind() + " priority=" + providerIntent.priority()
                             + " instruction=" + providerIntent.instruction());
-            return new CommandIntent(kind, priority, providerIntent.instruction());
+            return commandIntent;
         } catch (IntentParseException exception) {
             OpenPlayerRawTrace.parseRejection("provider_backed_parser", null,
                     "kind=" + providerIntent.kind() + " priority=" + providerIntent.priority()
                             + " instruction=" + providerIntent.instruction(), exception.getMessage());
             throw exception;
         }
+    }
+
+    private static CommandIntent parseCommandIntent(ProviderIntent providerIntent, IntentPriority priority)
+            throws IntentParseException {
+        Optional<ToolName> toolName = MinecraftPrimitiveTools.toolNameForProviderKind(providerIntent.kind());
+        if (toolName.isPresent()) {
+            ToolCall call = new ToolCall(toolName.get(), ToolArguments.instruction(providerIntent.instruction()));
+            Optional<CommandIntent> commandIntent = MinecraftPrimitiveTools.toCommandIntent(call, priority);
+            if (commandIntent.isPresent()) {
+                return commandIntent.get();
+            }
+        }
+        IntentKind kind = parseKind(providerIntent.kind());
+        if (kind != IntentKind.CHAT && kind != IntentKind.UNAVAILABLE) {
+            throw new IntentParseException("intent provider returned an unsupported primitive tool");
+        }
+        return new CommandIntent(kind, priority, providerIntent.instruction());
     }
 
     private static IntentKind parseKind(String value) throws IntentParseException {

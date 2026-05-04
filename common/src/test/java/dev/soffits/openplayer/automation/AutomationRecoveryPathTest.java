@@ -11,24 +11,8 @@ public final class AutomationRecoveryPathTest {
     }
 
     public static void main(String[] args) throws IOException {
-        smeltRecoveryUsesLiveNpcInventory();
         pauseSuspendsNavigationWithoutCompletingRuntime();
         resetMemoryDoesNotClearExplorationMemory();
-        exploreChunksRechecksWorldActionsBeforeNavigationExecution();
-    }
-
-    private static void smeltRecoveryUsesLiveNpcInventory() throws IOException {
-        String source = Files.readString(sourcePath());
-        int methodStart = source.indexOf("private void recoverActiveSmeltResources()");
-        require(methodStart >= 0, "recoverActiveSmeltResources must exist");
-        int methodEnd = source.indexOf("private boolean requiresNavigationProgress", methodStart);
-        require(methodEnd > methodStart, "recoverActiveSmeltResources boundary must be detectable");
-
-        String methodSource = source.substring(methodStart, methodEnd);
-        require(methodSource.contains("entity.recoverFurnaceSmeltResources("),
-                "smelt recovery must use the live NPC inventory method");
-        require(!methodSource.contains("inventorySnapshot()"),
-                "smelt recovery must not recover into an inventory snapshot");
     }
 
     private static void pauseSuspendsNavigationWithoutCompletingRuntime() throws IOException {
@@ -67,46 +51,6 @@ public final class AutomationRecoveryPathTest {
                 "RESET_MEMORY must report that automation-local memory was not cleared");
     }
 
-    private static void exploreChunksRechecksWorldActionsBeforeNavigationExecution() throws IOException {
-        String source = Files.readString(sourcePath());
-        int startExploreStart = source.indexOf("private void startExploreChunks(QueuedCommand command)");
-        require(startExploreStart >= 0, "startExploreChunks must exist");
-        int startExploreEnd = source.indexOf("private void continueExploreChunks", startExploreStart);
-        require(startExploreEnd > startExploreStart, "startExploreChunks boundary must be detectable");
-        String startExploreSource = source.substring(startExploreStart, startExploreEnd);
-
-        int continueExploreStart = source.indexOf("private void continueExploreChunks(QueuedCommand command)");
-        require(continueExploreStart >= 0, "continueExploreChunks must exist");
-        int continueExploreEnd = source.indexOf("private boolean moveToExploreTarget", continueExploreStart);
-        require(continueExploreEnd > continueExploreStart, "continueExploreChunks boundary must be detectable");
-        String continueExploreSource = source.substring(continueExploreStart, continueExploreEnd);
-
-        int reissueStart = source.indexOf("private void reissueActiveNavigation()");
-        require(reissueStart >= 0, "reissueActiveNavigation must exist");
-        int reissueEnd = source.indexOf("if (kind == IntentKind.PATROL)", reissueStart);
-        require(reissueEnd > reissueStart, "EXPLORE_CHUNKS reissue boundary must be detectable");
-        String reissueSource = source.substring(reissueStart, reissueEnd);
-
-        requireOccursBefore(startExploreSource,
-                "if (!entity.allowWorldActions())",
-                "moveToExploreTarget(target.targetPos());",
-                "startExploreChunks must re-check allowWorldActions before starting navigation");
-        require(startExploreSource.contains("failActiveCommand(\"world_actions_disabled_before_explore\")"),
-                "startExploreChunks must fail deterministically when world actions are disabled");
-        requireOccursBefore(continueExploreSource,
-                "if (!entity.allowWorldActions())",
-                "navigationRuntime.updateDistance(distanceTo(target));",
-                "continueExploreChunks must re-check allowWorldActions before continuing navigation");
-        require(continueExploreSource.contains("failActiveCommand(\"world_actions_disabled_during_explore\")"),
-                "continueExploreChunks must fail deterministically when world actions are disabled");
-        requireOccursBefore(reissueSource,
-                "if (!entity.allowWorldActions())",
-                "moveToExploreTarget(activeCommand.explorationTarget());",
-                "reissueActiveNavigation must re-check allowWorldActions before reissuing EXPLORE_CHUNKS navigation");
-        require(reissueSource.contains("failActiveCommand(\"world_actions_disabled_before_explore\")"),
-                "reissueActiveNavigation must fail deterministically when EXPLORE_CHUNKS reissue is disabled");
-    }
-
     private static Path sourcePath() {
         Path projectDir = Path.of(System.getProperty("user.dir"));
         Path commonProjectSource = projectDir.resolve(SOURCE_PATH);
@@ -122,11 +66,4 @@ public final class AutomationRecoveryPathTest {
         }
     }
 
-    private static void requireOccursBefore(String source, String first, String second, String message) {
-        int firstIndex = source.indexOf(first);
-        int secondIndex = source.indexOf(second);
-        require(firstIndex >= 0, message + ": missing " + first);
-        require(secondIndex >= 0, message + ": missing " + second);
-        require(firstIndex < secondIndex, message);
-    }
 }

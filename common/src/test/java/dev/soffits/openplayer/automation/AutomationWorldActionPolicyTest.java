@@ -23,22 +23,11 @@ public final class AutomationWorldActionPolicyTest {
                 IntentKind.DEPOSIT_ITEM,
                 IntentKind.STASH_ITEM,
                 IntentKind.WITHDRAW_ITEM,
-                IntentKind.GET_ITEM,
-                IntentKind.SMELT_ITEM,
-                IntentKind.COLLECT_FOOD,
-                IntentKind.FARM_NEARBY,
-                IntentKind.FISH,
                 IntentKind.INTERACT,
                 IntentKind.ATTACK_TARGET,
-                IntentKind.DEFEND_OWNER,
-                IntentKind.BUILD_STRUCTURE,
                 IntentKind.LOCATE_LOADED_BLOCK,
                 IntentKind.LOCATE_LOADED_ENTITY,
-                IntentKind.FIND_LOADED_BIOME,
-                IntentKind.LOCATE_STRUCTURE,
-                IntentKind.EXPLORE_CHUNKS,
-                IntentKind.USE_PORTAL,
-                IntentKind.TRAVEL_NETHER
+                IntentKind.FIND_LOADED_BIOME
         );
 
         for (IntentKind kind : IntentKind.values()) {
@@ -84,8 +73,8 @@ public final class AutomationWorldActionPolicyTest {
                 "ATTACK_TARGET must use the world-action gate for targeted combat");
         require(RuntimeIntentPolicies.isLocalWorldOrInventoryAction(IntentKind.LOCATE_LOADED_BLOCK),
                 "LOCATE_LOADED_BLOCK must use the world-action gate for loaded-world reconnaissance");
-        require(RuntimeIntentPolicies.isLocalWorldOrInventoryAction(IntentKind.TRAVEL_NETHER),
-                "TRAVEL_NETHER must use the world-action gate before unsupported rejection");
+        require(!RuntimeIntentPolicies.allIntentKindNames().contains("TRAVEL_NETHER"),
+                "TRAVEL_NETHER must not remain in the runtime intent surface");
         require(VanillaAutomationBackend.PLAYER_LIKE_NAVIGATION_SPEED >= 1.2D,
                 "NPC navigation speed must be faster than the prior slow default");
         require(VanillaAutomationBackend.PLAYER_LIKE_NAVIGATION_SPEED <= 1.5D,

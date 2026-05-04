@@ -78,41 +78,8 @@ public final class AutomationInstructionParser {
     }
 
     public static GotoInstruction parseGotoInstructionOrNull(String instruction, double defaultRadius, double maxRadius) {
-        if (instruction == null || !Double.isFinite(defaultRadius) || !Double.isFinite(maxRadius)
-                || defaultRadius <= 0.0D || maxRadius <= 0.0D) {
-            return null;
-        }
-        String trimmedInstruction = instruction.trim();
-        Coordinate coordinate = parseCoordinateOrNull(trimmedInstruction);
-        if (coordinate != null) {
-            return GotoInstruction.coordinate(coordinate);
-        }
-        if (trimmedInstruction.equals("owner")) {
-            return GotoInstruction.owner();
-        }
-        String[] parts = trimmedInstruction.split("\\s+");
-        if (parts.length < 2 || parts.length > 3) {
-            return null;
-        }
-        GotoTargetKind targetKind;
-        if (parts[0].equals("block")) {
-            targetKind = GotoTargetKind.BLOCK;
-        } else if (parts[0].equals("entity")) {
-            targetKind = GotoTargetKind.ENTITY;
-        } else {
-            return null;
-        }
-        if (!isValidResourceId(parts[1])) {
-            return null;
-        }
-        double radius = defaultRadius;
-        if (parts.length == 3) {
-            radius = parseOptionalRadiusOrNegative(parts[2], defaultRadius, maxRadius);
-            if (radius < 0.0D) {
-                return null;
-            }
-        }
-        return new GotoInstruction(targetKind, null, parts[1], radius);
+        Coordinate coordinate = parseCoordinateOrNull(instruction);
+        return coordinate == null ? null : GotoInstruction.coordinate(coordinate);
     }
 
     public static boolean isValidResourceId(String value) {

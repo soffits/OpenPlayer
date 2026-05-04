@@ -12,10 +12,10 @@ public final class OpenAiCompatibleIntentProviderTest {
         preservesOtherExplicitEndpoints();
         preservesQueryWhenResolvingV1BaseEndpoint();
         systemPromptConstrainConversationReplies();
-        systemPromptContainsRecommendedIntentKindsOnly();
-        systemPromptIncludesPhaseFiveSyntax();
+        systemPromptContainsPrimitiveToolNamesOnly();
+        systemPromptIncludesPrimitiveSyntax();
         systemPromptIncludesPlannedUnsupportedInstruction();
-        systemPromptSteersResourceAcquisitionToGetItem();
+        systemPromptRejectsMacroSurface();
     }
 
     private static void resolvesV1BaseEndpoint() throws Exception {
@@ -60,11 +60,12 @@ public final class OpenAiCompatibleIntentProviderTest {
         require(prompt.contains("no secrets"), "system prompt must prohibit secrets");
     }
 
-    private static void systemPromptContainsRecommendedIntentKindsOnly() {
+    private static void systemPromptContainsPrimitiveToolNamesOnly() {
         String prompt = OpenAiCompatibleIntentProvider.systemPrompt();
-        for (IntentKind kind : IntentKind.values()) {
-            require(prompt.contains(kind.name()), "system prompt must list " + kind.name());
-        }
+        require(prompt.contains("move_to"), "system prompt must list move_to");
+        require(prompt.contains("break_block_at"), "system prompt must list break_block_at");
+        require(prompt.contains("pickup_items_nearby"), "system prompt must list pickup_items_nearby");
+        require(!prompt.contains("GIVE_ITEM"), "system prompt must not expose old non-tool enum names");
     }
 
     private static void systemPromptIncludesPlannedUnsupportedInstruction() {
@@ -75,171 +76,49 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must tell providers not to overclaim missing adapters");
     }
 
-    private static void systemPromptIncludesPhaseFiveSyntax() {
+    private static void systemPromptIncludesPrimitiveSyntax() {
         String prompt = OpenAiCompatibleIntentProvider.systemPrompt();
-        require(prompt.contains("INVENTORY_QUERY"), "system prompt must document inventory query syntax");
-        require(prompt.contains("for GOTO use exactly one of: x y z, owner, block <block_or_item_id> [radius], or entity <entity_type_id> [radius]"),
-                "system prompt must document deterministic GOTO syntax");
-        require(prompt.contains("GOTO block/entity only searches already-loaded server-visible area with bounded radius"),
-                "system prompt must document bounded loaded-area GOTO search");
-        require(prompt.contains("do not include the literal GOTO in instruction"),
-                "system prompt must prevent providers from putting GOTO in the instruction field");
-        require(prompt.contains("For EQUIP_ITEM use exact item id <item_id>"),
+        require(prompt.contains("inventory_query"), "system prompt must document inventory query syntax");
+        require(prompt.contains("move_to is coordinate-only"),
+                "system prompt must narrow move_to to explicit coordinates");
+        require(prompt.contains("do not use owner, block id, entity id, search, resource, route, or goal syntax for move_to"),
+                "system prompt must reject move_to lookup macros");
+        require(prompt.contains("For equip_item use exact item id <item_id>"),
                 "system prompt must document exact equip item ids");
-        require(prompt.contains("DROP_ITEM use blank to drop selected hotbar stack or exact one-stack item id syntax <item_id> [count]"),
+        require(prompt.contains("drop_item use blank to drop selected hotbar stack or exact one-stack item id syntax <item_id> [count]"),
                 "system prompt must document drop item count syntax");
-        require(prompt.contains("GIVE_ITEM use exact owner-only one-stack syntax <item_id> [count]"),
-                "system prompt must document owner-only give syntax");
-        require(prompt.contains("For DEPOSIT_ITEM and STASH_ITEM, instruction must be blank to move all normal inventory or exact item id syntax <item_id> [count]"),
-                "system prompt must document deposit and stash syntax");
-        require(prompt.contains("WITHDRAW_ITEM, instruction must contain only exact item id syntax <item_id> [count]"),
-                "system prompt must document withdraw syntax");
-        require(prompt.contains("remembered stash or loaded nearby safe container adapters / Container block entities"),
-                "system prompt must document broadened bounded container capability limits");
-        require(prompt.contains("vanilla chests and barrels are examples, not the only supported container surface"),
-                "system prompt must document vanilla containers as examples only");
-        require(prompt.contains("unsupported/locked/custom containers may reject with deterministic missing-adapter/state diagnostics"),
-                "system prompt must document deterministic container rejection diagnostics");
-        require(prompt.contains("must not use arbitrary inventory API calls or claim fake success"),
-                "system prompt must prevent arbitrary provider inventory calls and fake success");
-        require(prompt.contains("STASH_ITEM remembers a successful local stash container"),
-                "system prompt must document stash memory");
-        require(prompt.contains("For kind GET_ITEM, instruction must contain only exact item id syntax <item_id> [count]"),
-                "system prompt must document get item instruction syntax without the kind token");
-        require(prompt.contains("do not include the literal GET_ITEM in instruction"),
-                "system prompt must prevent providers from putting GET_ITEM in the instruction field");
-        require(!prompt.contains("GET_ITEM <item_id> [count]"),
-                "system prompt must not include misleading GET_ITEM instruction syntax");
-        require(prompt.contains("bounded one-stack local inventory/crafting plus exact visible dropped-item acquisition"),
-                "system prompt must document bounded GET_ITEM scope");
-        require(prompt.contains("already-loaded nearby LOS only"),
-                "system prompt must document visible loaded dropped-item limits");
-        require(prompt.contains("verifies NPC inventory count before completion"),
-                "system prompt must document no-fake-completion policy");
-        require(prompt.contains("server recipe data for supported simple recipes"),
-                "system prompt must document dynamic GET_ITEM recipe data");
-        require(prompt.contains("simple datapack/mod recipes visible to the server"),
-                "system prompt must document simple datapack/mod recipe visibility");
-        require(prompt.contains("finite tag-backed ingredient alternatives"),
-                "system prompt must document finite tag-backed alternative support");
-        require(prompt.contains("Crafting-table recipes require a loaded nearby crafting table capability gate"),
-                "system prompt must document crafting table capability gate");
-        require(prompt.contains("special/custom, NBT-bearing ingredient/result, crafting remainder recipes"),
-                "system prompt must document GET_ITEM recipe support limits");
-        require(!prompt.contains("NBT/tag"),
-                "system prompt must not group finite tag-backed ingredients with unsupported NBT");
-        require(prompt.contains("reports dropped item unavailable/disappeared before pickup, full inventory, stuck/timeout, missing materials, or unsupported recipes instead of searching indefinitely"),
-                "system prompt must document GET_ITEM missing material behavior");
-        require(prompt.contains("For SMELT_ITEM, instruction must contain only exact item id syntax <output_item_id> [count]"),
-                "system prompt must document smelt output syntax");
-        require(!prompt.contains("SMELT_ITEM <output_item_id> [count]"),
-                "system prompt must not tell providers to include the literal SMELT_ITEM token in instruction");
-        require(prompt.contains("loaded nearby vanilla furnace, smoker, or blast furnace block entity adapter"),
-                "system prompt must document nearby loaded furnace/smoker/blast furnace adapters");
-        require(prompt.contains("NPC-carried recipe input plus NPC-carried fuel"),
-                "system prompt must document carried input and fuel requirement");
-        require(prompt.contains("For PAUSE, UNPAUSE, and RESET_MEMORY, instruction must be blank"),
+        require(prompt.contains("Container transfer, owner item transfer, automatic best-equipment selection"),
+                "system prompt must declare non-tool inventory macros unavailable to providers");
+        require(prompt.contains("pause stops automation ticks without clearing active or queued tasks"),
                 "system prompt must document control command blank syntax");
-        require(prompt.contains("RESET_MEMORY clears only bounded local conversation history"),
+        require(prompt.contains("Memory reset is not an AICore tool"),
                 "system prompt must document bounded reset memory scope");
-        require(prompt.contains("does not clear automation-local exploration or navigation memory"),
-                "system prompt must document reset memory does not clear automation-local exploration/navigation memory");
-        require(prompt.contains("For BODY_LANGUAGE, instruction must be blank, idle, wave, swing, crouch, uncrouch, or look_owner"),
-                "system prompt must document body language grammar");
-        require(prompt.contains("unsupported gestures such as nod and shake should use UNAVAILABLE"),
-                "system prompt must not overclaim unsupported gestures");
-        require(prompt.contains("It is asynchronous"),
-                "system prompt must document async smelting behavior");
-        require(prompt.contains("REPORT_STATUS observes progress"),
-                "system prompt must document status observation for smelting");
-        require(prompt.contains("completion is only after requested output is transferred into NPC normal inventory"),
-                "system prompt must prevent fake smelting success");
-        require(prompt.contains("common vanilla blocks such as levers, buttons, doors, trapdoors, fence gates"),
-                "system prompt must document expanded block interaction capability scope");
-        require(prompt.contains("shearing sheep with carried shears and milking cows/mooshrooms with carried buckets"),
-                "system prompt must document initial entity interaction adapters");
+        require(prompt.contains("interact is player-like and capability-gated"),
+                "system prompt must document interaction capability gates");
         require(prompt.contains("friendly mobs, neutral mobs, or arbitrary non-hostile entities"),
                 "system prompt must document narrow explicit attack target scope");
-        require(prompt.contains("For COLLECT_FOOD, instruction must be blank or only a positive radius number"),
-                "system prompt must document COLLECT_FOOD radius syntax");
-        require(prompt.contains("do not include the literal COLLECT_FOOD in instruction"),
-                "system prompt must prevent COLLECT_FOOD kind token in instruction");
-        require(prompt.contains("excluding potion, stew, and container-remainder items"),
-                "system prompt must document safe food limits");
-        require(prompt.contains("For DEFEND_OWNER, instruction must be blank or only a positive radius number"),
-                "system prompt must document DEFEND_OWNER radius syntax");
-        require(prompt.contains("do not include the literal DEFEND_OWNER in instruction"),
-                "system prompt must prevent DEFEND_OWNER kind token in instruction");
-        require(prompt.contains("not players, OpenPlayer NPCs, or passive animals by default"),
-                "system prompt must document defense target limits");
-        require(prompt.contains("EXPLORE_CHUNKS is loaded-only bounded navigation"),
-                "system prompt must document loaded-only chunk exploration");
-        require(prompt.contains("radius=<blocks> steps=<count>"),
-                "system prompt must document EXPLORE_CHUNKS key/value syntax");
-        require(prompt.contains("LOCATE_STRUCTURE is a loaded-only structure evidence diagnostic scan"),
-                "system prompt must document loaded-only structure diagnostics");
-        require(prompt.contains("<structure_id> [radius] [source=loaded]"),
-                "system prompt must document LOCATE_STRUCTURE syntax");
-        require(prompt.contains("source=loaded_scan evidence_found/not_found/unsupported_structure"),
-                "system prompt must document truthful structure diagnostic statuses");
-        require(prompt.contains("diagnostic-only nearby loaded chest/barrel hints"),
-                "system prompt must document diagnostic-only container hints");
-        require(prompt.contains("no ownership, loot, or structure membership guarantee"),
-                "system prompt must avoid ownership, loot, and membership guarantees");
-        require(prompt.contains("never uses server locate APIs, never loads chunks, never teleports, never moves items, and never auto-loots"),
-                "system prompt must document LOCATE_STRUCTURE safety boundaries");
-        require(prompt.contains("USE_PORTAL and TRAVEL_NETHER are player-like portal tasks"),
-                "system prompt must document portal tasks as player-like actions");
-        require(prompt.contains("radius=<blocks> target=<dimension_id> build=<true|false>"),
-                "system prompt must document USE_PORTAL strict syntax");
-        require(prompt.contains("any declared ResourceLocation target"),
-                "system prompt must allow observed portal targets in arbitrary dimensions");
-        require(prompt.contains("vanilla_nether_portal_build_adapter"),
-                "system prompt must describe obsidian-frame building as a vanilla Nether adapter");
-        require(prompt.contains("NPC-carried obsidian plus flint_and_steel"),
-                "system prompt must document carried portal materials");
-        require(prompt.contains("must not use OP/admin commands, teleport, /locate, /give, forced dimension changes"),
-                "system prompt must document portal anti-cheat boundaries");
-        require(prompt.contains("completion requires an observed dimension transition"),
-                "system prompt must prevent fake portal success");
-        require(prompt.contains("Plan in natural Minecraft goal terms, but emit only supported generic primitives"),
-                "system prompt must tell providers to plan naturally but emit generic primitives");
-        require(prompt.contains("Do not follow a hardcoded vanilla walkthrough or route tree"),
-                "system prompt must forbid hardcoded walkthroughs");
-        require(prompt.contains("Local strategy/meta pack text, when explicitly supplied by local context or character text, is advisory reference only"),
-                "system prompt must keep strategy/meta packs advisory");
-        require(prompt.contains("REPORT_STATUS exposes runtime, current dimension, portal progress, resource affordances, and bounded capability diagnostics"),
-                "system prompt must document generic status and capability diagnostics");
-        require(prompt.contains("does not expose a hardcoded stronghold, End portal, dragon, or speedrun route tree"),
-                "system prompt must reject hardcoded endgame route trees");
-        require(prompt.contains("if a needed primitive is absent, return UNAVAILABLE or use REPORT_STATUS/capability diagnostics"),
+        require(prompt.contains("find_loaded_blocks and find_loaded_entities are report-only loaded-world reconnaissance primitives"),
+                "system prompt must document report-only loaded reconnaissance");
+        require(prompt.contains("they do not navigate, mutate the world, load chunks, run long-range locate searches, or imply a plan"),
+                "system prompt must constrain loaded reconnaissance to report-only behavior");
+        require(prompt.contains("if the requested next primitive is unavailable, return UNAVAILABLE or report_status"),
                 "system prompt must direct missing primitives to unavailable/status diagnostics");
-        require(prompt.contains("Unknown or modded dimensions should use observation/status/exploration"),
-                "system prompt must not assume vanilla dimensions are exhaustive");
-        require(prompt.contains("Vanilla Nether return travel may be requested through USE_PORTAL target=minecraft:overworld or TRAVEL_NETHER rather than teleport"),
-                "system prompt must document player-like return travel affordance");
-        require(!prompt.contains("endgame task-tree") && !prompt.contains("task tree over visible primitives"),
-                "system prompt must not recommend an endgame task tree");
-        require(!prompt.contains("speedrun_success") && !prompt.contains("dragon_success"),
-                "system prompt must not encode speedrun or dragon success states");
-        require(!prompt.contains("recognized only to return deterministic unsupported status"),
-                "system prompt must not describe endgame diagnostics as flat unsupported status");
-        require(prompt.contains("never generates chunks, never teleports"),
-                "system prompt must not overclaim unsafe exploration behavior");
-        require(!prompt.contains("COLLECT_FOOD <"),
-                "system prompt must not tell providers to include COLLECT_FOOD token syntax");
-        require(!prompt.contains("DEFEND_OWNER <"),
-                "system prompt must not tell providers to include DEFEND_OWNER token syntax");
     }
 
-    private static void systemPromptSteersResourceAcquisitionToGetItem() {
+    private static void systemPromptRejectsMacroSurface() {
         String prompt = OpenAiCompatibleIntentProvider.systemPrompt();
-        require(prompt.contains("For chop, mine, gather, harvest, or break requests where the player's goal is obtaining a visible loaded block resource, choose GET_ITEM with the dropped item id and count"),
-                "system prompt must steer resource acquisition requests to GET_ITEM");
-        require(prompt.contains("Do not use GOTO block for resource acquisition; GOTO block is only navigation to reach or inspect a target"),
-                "system prompt must prevent GOTO block dead-ends for resource acquisition");
-        require(prompt.contains("visible block-item resources by navigating near a matching loaded block, breaking it, collecting real drops, and verifying NPC inventory count"),
-                "system prompt must describe verified visible block resource acquisition");
+        String[] removedKinds = {
+                "GET_ITEM", "SMELT_ITEM", "COLLECT_FOOD", "FARM_NEARBY", "FISH", "DEFEND_OWNER",
+                "BUILD_STRUCTURE", "LOCATE_STRUCTURE", "EXPLORE_CHUNKS", "USE_PORTAL", "TRAVEL_NETHER"
+        };
+        for (String removedKind : removedKinds) {
+            require(!prompt.contains("kind must be one of " + removedKind),
+                    "system prompt must not expose removed macro kind as provider kind: " + removedKind);
+        }
+        require(prompt.contains("Do not emit high-level goals or macro task chains"),
+                "system prompt must forbid macro task chains");
+        require(prompt.contains("acquiring resources, crafting, smelting, farming, fishing, defending an owner, building structures, exploring chunks, locating structures, using portals, Nether travel"),
+                "system prompt must name removed macro categories");
     }
 
     private static String normalize(String value) throws Exception {
