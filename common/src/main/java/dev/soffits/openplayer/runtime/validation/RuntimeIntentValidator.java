@@ -9,6 +9,8 @@ import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser;
 import dev.soffits.openplayer.automation.advanced.AdvancedTaskPolicy;
 import dev.soffits.openplayer.automation.building.BuildPlanParser;
 import dev.soffits.openplayer.automation.work.FishingWorkPolicy;
+import dev.soffits.openplayer.automation.work.FarmingWorkPolicy;
+import dev.soffits.openplayer.automation.work.WorkRepeatPolicy;
 import dev.soffits.openplayer.automation.InventoryActionInstructionParser;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentKind;
@@ -47,7 +49,7 @@ public final class RuntimeIntentValidator {
             case ATTACK_NEAREST -> requireBlankOrPositiveRadius(intent, "ATTACK_NEAREST");
             case GUARD_OWNER -> requireBlankOrPositiveRadius(intent, "GUARD_OWNER");
             case COLLECT_FOOD -> requireBlankOrPositiveRadius(intent, "COLLECT_FOOD");
-            case FARM_NEARBY -> requireBlankOrPositiveRadius(intent, "FARM_NEARBY");
+            case FARM_NEARBY -> requireRepeatableRadiusInstruction(intent, "FARM_NEARBY");
             case BUILD_STRUCTURE -> requireBuildStructureInstruction(intent);
             case LOCATE_LOADED_BLOCK -> requireLoadedSearchInstruction(
                     intent, AdvancedTaskInstructionParser.LOCATE_LOADED_BLOCK_USAGE
@@ -69,7 +71,7 @@ public final class RuntimeIntentValidator {
             case INVENTORY_QUERY -> requireBlankInstruction(intent, "INVENTORY_QUERY");
             case EQUIP_ITEM -> requireItemOnlyInstruction(intent, "EQUIP_ITEM");
             case GIVE_ITEM -> requireGiveItemInstruction(intent);
-            case DEPOSIT_ITEM, STASH_ITEM -> requireBlankOrItemCountInstruction(intent, kind.name());
+            case DEPOSIT_ITEM, STASH_ITEM -> requireBlankOrItemCountRepeatInstruction(intent, kind.name());
             case WITHDRAW_ITEM -> requireItemCountInstruction(intent, "WITHDRAW_ITEM");
             case GET_ITEM -> requireItemCountInstruction(intent, "GET_ITEM");
             case SMELT_ITEM -> requireItemCountInstruction(intent, "SMELT_ITEM");
@@ -126,6 +128,28 @@ public final class RuntimeIntentValidator {
         return RuntimeIntentValidationResult.accepted();
     }
 
+    private static RuntimeIntentValidationResult requireBlankOrItemCountRepeatInstruction(
+            CommandIntent intent,
+            String kindName
+    ) {
+        WorkRepeatPolicy.InventoryRepeatInstruction repeatInstruction = WorkRepeatPolicy
+                .parseInventoryRepeatInstructionOrNull(intent.instruction());
+        if (repeatInstruction == null) {
+            return RuntimeIntentValidationResult.rejected(kindName
+                    + " requires blank or instruction: <item_id> [count] [repeat=1.."
+                    + WorkRepeatPolicy.MAX_REPEAT_COUNT + "]");
+        }
+        if (AutomationInstructionParser.isBlankInstruction(repeatInstruction.itemInstruction())) {
+            return RuntimeIntentValidationResult.accepted();
+        }
+        if (InventoryActionInstructionParser.parseItemCountOrNull(repeatInstruction.itemInstruction(), false) == null) {
+            return RuntimeIntentValidationResult.rejected(kindName
+                    + " requires blank or instruction: <item_id> [count] [repeat=1.."
+                    + WorkRepeatPolicy.MAX_REPEAT_COUNT + "]");
+        }
+        return RuntimeIntentValidationResult.accepted();
+    }
+
     private static RuntimeIntentValidationResult requireItemCountInstruction(CommandIntent intent, String kindName) {
         if (InventoryActionInstructionParser.parseItemCountOrNull(intent.instruction(), false) == null) {
             return RuntimeIntentValidationResult.rejected(kindName + " requires instruction: <item_id> [count]");
@@ -142,12 +166,28 @@ public final class RuntimeIntentValidator {
 
     private static RuntimeIntentValidationResult requireFishInstruction(CommandIntent intent) {
         if (FishingWorkPolicy.isStopInstruction(intent.instruction())
-                || FishingWorkPolicy.parseDurationTicksOrNegative(intent.instruction()) >= 0) {
+                || WorkRepeatPolicy.parseDurationSecondsInstructionOrNull(
+                intent.instruction(),
+                FishingWorkPolicy.DEFAULT_DURATION_TICKS / 20.0D,
+                FishingWorkPolicy.MAX_DURATION_TICKS / 20.0D
+        ) != null) {
             return RuntimeIntentValidationResult.accepted();
         }
         return RuntimeIntentValidationResult.rejected(
-                "FISH instruction must be blank, stop, cancel, or a positive duration in seconds"
+                "FISH instruction must be blank, stop, cancel, a positive duration in seconds, or duration=<seconds> repeat=1.."
+                        + WorkRepeatPolicy.MAX_REPEAT_COUNT
         );
+    }
+
+    private static RuntimeIntentValidationResult requireRepeatableRadiusInstruction(CommandIntent intent, String kindName) {
+        if (WorkRepeatPolicy.parseRadiusInstructionOrNull(
+                intent.instruction(), FarmingWorkPolicy.DEFAULT_RADIUS, FarmingWorkPolicy.MAX_RADIUS
+        ) == null) {
+            return RuntimeIntentValidationResult.rejected(kindName
+                    + " instruction must be blank, a positive radius number, or radius=<blocks> repeat=1.."
+                    + WorkRepeatPolicy.MAX_REPEAT_COUNT);
+        }
+        return RuntimeIntentValidationResult.accepted();
     }
 
     private static RuntimeIntentValidationResult requireBodyLanguageInstruction(CommandIntent intent) {

@@ -172,14 +172,20 @@ public final class RuntimeIntentValidatorTest {
                 "DEPOSIT_ITEM should accept blank deposit-all syntax");
         require(RuntimeIntentValidator.validate(intent(IntentKind.DEPOSIT_ITEM, "minecraft:bread 3"), true).isAccepted(),
                 "DEPOSIT_ITEM should accept exact item count syntax");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.DEPOSIT_ITEM, "minecraft:bread 3 repeat=2"), true).isAccepted(),
+                "DEPOSIT_ITEM should accept bounded repeat suffix");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.DEPOSIT_ITEM, "minecraft:bread 0"), true),
-                "DEPOSIT_ITEM requires blank or instruction: <item_id> [count]");
+                "DEPOSIT_ITEM requires blank or instruction: <item_id> [count] [repeat=1..5]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.DEPOSIT_ITEM, "minecraft:bread count=2"), true),
+                "DEPOSIT_ITEM requires blank or instruction: <item_id> [count] [repeat=1..5]");
         require(RuntimeIntentValidator.validate(intent(IntentKind.STASH_ITEM, ""), true).isAccepted(),
                 "STASH_ITEM should accept blank deposit-all syntax");
         require(RuntimeIntentValidator.validate(intent(IntentKind.STASH_ITEM, "minecraft:bread 3"), true).isAccepted(),
                 "STASH_ITEM should accept exact item count syntax");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.STASH_ITEM, "minecraft:bread 3 repeat=2"), true).isAccepted(),
+                "STASH_ITEM should accept bounded repeat suffix");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.STASH_ITEM, "minecraft:bread owner"), true),
-                "STASH_ITEM requires blank or instruction: <item_id> [count]");
+                "STASH_ITEM requires blank or instruction: <item_id> [count] [repeat=1..5]");
         require(RuntimeIntentValidator.validate(intent(IntentKind.WITHDRAW_ITEM, "minecraft:bread"), true).isAccepted(),
                 "WITHDRAW_ITEM should accept exact item id with default count");
         require(RuntimeIntentValidator.validate(intent(IntentKind.WITHDRAW_ITEM, "minecraft:bread 3"), true).isAccepted(),
@@ -271,8 +277,14 @@ public final class RuntimeIntentValidatorTest {
                 "FARM_NEARBY should accept blank radius instruction");
         require(RuntimeIntentValidator.validate(intent(IntentKind.FARM_NEARBY, "8"), true).isAccepted(),
                 "FARM_NEARBY should accept positive radius instruction");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.FARM_NEARBY, "radius=8 repeat=3"), true).isAccepted(),
+                "FARM_NEARBY should accept bounded repeat instruction");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.FARM_NEARBY, "radius=8 count=2"), true).isAccepted(),
+                "FARM_NEARBY should accept count as repeat alias");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.FARM_NEARBY, "wide"), true),
-                "FARM_NEARBY instruction must be blank or a positive radius number");
+                "FARM_NEARBY instruction must be blank, a positive radius number, or radius=<blocks> repeat=1..5");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.FARM_NEARBY, "radius=8 repeat=6"), true),
+                "FARM_NEARBY instruction must be blank, a positive radius number, or radius=<blocks> repeat=1..5");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.FARM_NEARBY, "8"), false),
                 "World actions are disabled for this OpenPlayer character");
 
@@ -280,14 +292,16 @@ public final class RuntimeIntentValidatorTest {
                 "FISH should accept blank duration instruction");
         require(RuntimeIntentValidator.validate(intent(IntentKind.FISH, "45"), true).isAccepted(),
                 "FISH should accept positive seconds instruction");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.FISH, "duration=45 repeat=2"), true).isAccepted(),
+                "FISH should accept duration repeat syntax for truthful diagnostics");
         require(RuntimeIntentValidator.validate(intent(IntentKind.FISH, "stop"), true).isAccepted(),
                 "FISH should accept stop instruction");
         require(RuntimeIntentValidator.validate(intent(IntentKind.FISH, "cancel"), true).isAccepted(),
                 "FISH should accept cancel instruction");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.FISH, "0"), true),
-                "FISH instruction must be blank, stop, cancel, or a positive duration in seconds");
+                "FISH instruction must be blank, stop, cancel, a positive duration in seconds, or duration=<seconds> repeat=1..5");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.FISH, "soon"), true),
-                "FISH instruction must be blank, stop, cancel, or a positive duration in seconds");
+                "FISH instruction must be blank, stop, cancel, a positive duration in seconds, or duration=<seconds> repeat=1..5");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.FISH, "45"), false),
                 "World actions are disabled for this OpenPlayer character");
     }

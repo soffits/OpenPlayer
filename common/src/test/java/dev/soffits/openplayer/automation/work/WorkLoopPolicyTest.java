@@ -22,6 +22,7 @@ public final class WorkLoopPolicyTest {
         validatesCropMaturityAndReplantMapping();
         validatesFarmRadiusParsing();
         validatesFishingDurationParsing();
+        validatesBoundedRepeatParsing();
     }
 
     private static void validatesCropMaturityAndReplantMapping() {
@@ -92,6 +93,64 @@ public final class WorkLoopPolicyTest {
         require(FishingWorkPolicy.isStopInstruction("stop"), "stop should be a fishing stop instruction");
         require(FishingWorkPolicy.isStopInstruction("cancel"), "cancel should be a fishing stop instruction");
         require(!FishingWorkPolicy.isStopInstruction(""), "blank should not be a fishing stop instruction");
+    }
+
+    private static void validatesBoundedRepeatParsing() {
+        WorkInstruction blankFarm = WorkRepeatPolicy.parseRadiusInstructionOrNull(
+                "", FarmingWorkPolicy.DEFAULT_RADIUS, FarmingWorkPolicy.MAX_RADIUS
+        );
+        require(blankFarm != null && blankFarm.value() == FarmingWorkPolicy.DEFAULT_RADIUS
+                && blankFarm.repeatCount() == 1, "blank farm instruction should use defaults");
+
+        WorkInstruction legacyFarm = WorkRepeatPolicy.parseRadiusInstructionOrNull(
+                "8", FarmingWorkPolicy.DEFAULT_RADIUS, FarmingWorkPolicy.MAX_RADIUS
+        );
+        require(legacyFarm != null && legacyFarm.value() == 8.0D && legacyFarm.repeatCount() == 1,
+                "legacy farm radius should stay compatible");
+
+        WorkInstruction namedFarm = WorkRepeatPolicy.parseRadiusInstructionOrNull(
+                "radius=8 repeat=3", FarmingWorkPolicy.DEFAULT_RADIUS, FarmingWorkPolicy.MAX_RADIUS
+        );
+        require(namedFarm != null && namedFarm.value() == 8.0D && namedFarm.repeatCount() == 3,
+                "named farm radius and repeat should parse");
+
+        WorkInstruction countAlias = WorkRepeatPolicy.parseRadiusInstructionOrNull(
+                "radius=8 count=2", FarmingWorkPolicy.DEFAULT_RADIUS, FarmingWorkPolicy.MAX_RADIUS
+        );
+        require(countAlias != null && countAlias.repeatCount() == 2,
+                "count should be a repeat alias for valued work instructions");
+
+        require(WorkRepeatPolicy.parseRadiusInstructionOrNull(
+                "radius=8 repeat=6", FarmingWorkPolicy.DEFAULT_RADIUS, FarmingWorkPolicy.MAX_RADIUS
+        ) == null, "repeat above cap should reject");
+        require(WorkRepeatPolicy.parseRadiusInstructionOrNull(
+                "8 repeat=2", FarmingWorkPolicy.DEFAULT_RADIUS, FarmingWorkPolicy.MAX_RADIUS
+        ) == null, "legacy numeric radius should not mix with named repeat tokens");
+
+        WorkInstruction fish = WorkRepeatPolicy.parseDurationSecondsInstructionOrNull(
+                "duration=45 repeat=2",
+                FishingWorkPolicy.DEFAULT_DURATION_TICKS / 20.0D,
+                FishingWorkPolicy.MAX_DURATION_TICKS / 20.0D
+        );
+        require(fish != null && fish.value() == 45.0D && fish.repeatCount() == 2,
+                "fish duration syntax should parse even though runtime rejects execution");
+
+        WorkRepeatPolicy.InventoryRepeatInstruction inventory = WorkRepeatPolicy.parseInventoryRepeatInstructionOrNull(
+                "minecraft:wheat 4 repeat=3"
+        );
+        require(inventory != null && inventory.itemInstruction().equals("minecraft:wheat 4")
+                && inventory.repeatCount() == 3, "inventory repeat suffix should parse without changing item count");
+        require(WorkRepeatPolicy.parseInventoryRepeatInstructionOrNull("minecraft:wheat repeat=0") == null,
+                "inventory repeat zero should reject");
+        require(WorkRepeatPolicy.parseInventoryRepeatInstructionOrNull("minecraft:wheat count=2") == null,
+                "inventory count key should reject to avoid item-count ambiguity");
+
+        require(WorkRepeatPolicy.shouldQueueNextRepeat(true, 2, true),
+                "repeat should requeue when allowed, remaining, and world actions enabled");
+        require(!WorkRepeatPolicy.shouldQueueNextRepeat(true, 2, false),
+                "repeat should stop when world actions are disabled before the next iteration");
+        require(!WorkRepeatPolicy.shouldQueueNextRepeat(true, 1, true),
+                "repeat should stop at the bounded final iteration");
     }
 
     private static void require(boolean condition, String message) {

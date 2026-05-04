@@ -29,6 +29,8 @@ import dev.soffits.openplayer.automation.survival.SurvivalTargetPolicy;
 import dev.soffits.openplayer.automation.work.FarmingWorkPolicy;
 import dev.soffits.openplayer.automation.work.FarmingWorkPolicy.FarmingReplantPlan;
 import dev.soffits.openplayer.automation.work.FishingWorkPolicy;
+import dev.soffits.openplayer.automation.work.WorkInstruction;
+import dev.soffits.openplayer.automation.work.WorkRepeatPolicy;
 import dev.soffits.openplayer.automation.workstation.WorkstationCapability;
 import dev.soffits.openplayer.automation.workstation.WorkstationDiagnostics;
 import dev.soffits.openplayer.automation.workstation.WorkstationKind;
@@ -297,25 +299,33 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return accepted("COLLECT_FOOD accepted");
             }
             if (kind == IntentKind.FARM_NEARBY) {
-                double radius = AutomationInstructionParser.parseOptionalRadiusOrNegative(
+                WorkInstruction instruction = WorkRepeatPolicy.parseRadiusInstructionOrNull(
                         intent.instruction(), FARM_DEFAULT_RADIUS, FARM_MAX_RADIUS
                 );
-                if (radius < 0.0D) {
-                    return rejected("FARM_NEARBY instruction must be blank or a positive radius number");
+                if (instruction == null) {
+                    return rejected("FARM_NEARBY instruction must be blank, a positive radius number, or radius=<blocks> repeat=1.."
+                            + WorkRepeatPolicy.MAX_REPEAT_COUNT);
                 }
-                queuedCommands.add(QueuedCommand.farmNearby(radius));
-                return accepted("FARM_NEARBY accepted: radius=" + formatRadius(radius));
+                queuedCommands.add(QueuedCommand.farmNearby(instruction.value(), instruction.repeatCount()));
+                return accepted("FARM_NEARBY accepted: radius=" + formatRadius(instruction.value())
+                        + " repeat=" + instruction.repeatCount());
             }
             if (kind == IntentKind.FISH) {
                 if (FishingWorkPolicy.isStopInstruction(intent.instruction())) {
                     stopAll();
                     return accepted("FISH stop accepted");
                 }
-                int durationTicks = FishingWorkPolicy.parseDurationTicksOrNegative(intent.instruction());
-                if (durationTicks < 0) {
-                    return rejected("FISH instruction must be blank, stop, cancel, or a positive duration in seconds");
+                WorkInstruction instruction = WorkRepeatPolicy.parseDurationSecondsInstructionOrNull(
+                        intent.instruction(),
+                        FishingWorkPolicy.DEFAULT_DURATION_TICKS / 20.0D,
+                        FishingWorkPolicy.MAX_DURATION_TICKS / 20.0D
+                );
+                if (instruction == null) {
+                    return rejected("FISH instruction must be blank, stop, cancel, a positive duration in seconds, or duration=<seconds> repeat=1.."
+                            + WorkRepeatPolicy.MAX_REPEAT_COUNT);
                 }
-                return rejected("FISH requires a safe NPC fishing hook adapter; vanilla fishing is player-bound and is not simulated");
+                return rejected("FISH requires a safe NPC fishing hook adapter; vanilla fishing is player-bound and is not simulated; durationTicks="
+                        + (int) Math.ceil(instruction.value() * 20.0D) + " repeat=" + instruction.repeatCount());
             }
             if (kind == IntentKind.EQUIP_BEST_ITEM) {
                 if (!AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
@@ -436,11 +446,20 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return accepted("GIVE_ITEM accepted");
             }
             if (kind == IntentKind.DEPOSIT_ITEM || kind == IntentKind.STASH_ITEM) {
+                WorkRepeatPolicy.InventoryRepeatInstruction repeatInstruction = WorkRepeatPolicy
+                        .parseInventoryRepeatInstructionOrNull(intent.instruction());
+                if (repeatInstruction == null) {
+                    return rejected(kind.name() + " requires blank or instruction: <item_id> [count] [repeat=1.."
+                            + WorkRepeatPolicy.MAX_REPEAT_COUNT + "]");
+                }
                 ParsedItemInstruction parsed = null;
-                if (!AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
-                    parsed = InventoryActionInstructionParser.parseItemCountOrNull(intent.instruction(), false);
+                if (!AutomationInstructionParser.isBlankInstruction(repeatInstruction.itemInstruction())) {
+                    parsed = InventoryActionInstructionParser.parseItemCountOrNull(
+                            repeatInstruction.itemInstruction(), false
+                    );
                     if (parsed == null) {
-                        return rejected(kind.name() + " requires blank or instruction: <item_id> [count]");
+                        return rejected(kind.name() + " requires blank or instruction: <item_id> [count] [repeat=1.."
+                                + WorkRepeatPolicy.MAX_REPEAT_COUNT + "]");
                     }
                 }
                 SafeContainerTarget target = kind == IntentKind.STASH_ITEM ? preferredStashContainer() : nearestSafeContainer();
@@ -450,17 +469,53 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 if (!canAcquireInteractionCooldown()) {
                     return rejected(interactionCooldownMessage());
                 }
-                boolean transferred = acquireInteractionCooldown() && depositToContainer(target.container(), parsed);
-                if (!transferred) {
-                    rollbackInteractionCooldown();
-                    return rejected(kind.name() + " requires all requested normal inventory items to fit in the container");
+                if (!acquireInteractionCooldown()) {
+                    return rejected(interactionCooldownMessage());
+                }
+                int completedRepeats = 0;
+                for (int repeatIndex = 0; repeatIndex < repeatInstruction.repeatCount(); repeatIndex++) {
+                    if (parsed == null && !hasNormalInventoryToTransfer()) {
+                        if (completedRepeats == 0) {
+                            rollbackInteractionCooldown();
+                            return rejected(kind.name() + " repeat stopped after " + completedRepeats
+                                    + " completed iteration(s): no_inventory_to_transfer");
+                        }
+                        if (kind == IntentKind.STASH_ITEM) {
+                            entity.rememberStash(dimensionId(serverLevel()), target.blockPos());
+                        }
+                        target.container().setChanged();
+                        entity.swingMainHandAction();
+                        return accepted(kind.name() + " accepted: container " + target.blockPos().toShortString()
+                                + " repeat=" + completedRepeats + "/" + repeatInstruction.repeatCount()
+                                + " stopped=no_inventory_to_transfer");
+                    }
+                    boolean transferred = depositToContainer(target.container(), parsed);
+                    if (!transferred) {
+                        if (completedRepeats == 0) {
+                            rollbackInteractionCooldown();
+                        }
+                        if (completedRepeats > 0) {
+                            if (kind == IntentKind.STASH_ITEM) {
+                                entity.rememberStash(dimensionId(serverLevel()), target.blockPos());
+                            }
+                            target.container().setChanged();
+                            entity.swingMainHandAction();
+                            return accepted(kind.name() + " accepted: container " + target.blockPos().toShortString()
+                                    + " repeat=" + completedRepeats + "/" + repeatInstruction.repeatCount()
+                                    + " stopped=no_more_safe_transfer");
+                        }
+                        return rejected(kind.name() + " repeat stopped after " + completedRepeats
+                                + " completed iteration(s): all requested normal inventory items must fit in the container");
+                    }
+                    completedRepeats++;
                 }
                 if (kind == IntentKind.STASH_ITEM) {
                     entity.rememberStash(dimensionId(serverLevel()), target.blockPos());
                 }
                 target.container().setChanged();
                 entity.swingMainHandAction();
-                return accepted(kind.name() + " accepted: container " + target.blockPos().toShortString());
+                return accepted(kind.name() + " accepted: container " + target.blockPos().toShortString()
+                        + " repeat=" + completedRepeats);
             }
             if (kind == IntentKind.WITHDRAW_ITEM) {
                 ParsedItemInstruction parsed = InventoryActionInstructionParser.parseItemCountOrNull(intent.instruction(), false);
@@ -892,6 +947,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 }
                 activeMonitor = newMonitor(activeCommand);
                 activeMonitor.start(entity.getX(), entity.getY(), entity.getZ());
+                if (activeCommand.repeatRemaining() > 1) {
+                    activeMonitor.note("repeat:remaining=" + activeCommand.repeatRemaining());
+                }
                 OpenPlayerDebugEvents.record("automation", "started", null, null, null,
                         "kind=" + activeCommand.kind().name());
                 OpenPlayerRawTrace.automationOperation("started", activeCommand.kind().name(),
@@ -1020,6 +1078,10 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return;
             }
             if (activeCommand.kind() == IntentKind.FARM_NEARBY) {
+                if (!entity.allowWorldActions()) {
+                    failActiveCommand("world_actions_disabled_before_repeat");
+                    return;
+                }
                 farmNearby(activeCommand);
                 return;
             }
@@ -1397,29 +1459,29 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return;
             }
             if (replantPlan == null) {
-                completeActiveCommand("farm:harvested_no_replant unsupported_replant_capability harvested=1");
+                completeActiveCommand("farm:harvested_no_replant unsupported_replant_capability harvested=1", true);
                 return;
             }
             Item replantItem = replantPlan.item();
             BlockState replantState = replantPlan.state();
             if (entity.normalInventoryCount(replantItem) <= 0) {
-                completeActiveCommand("farm:harvested_no_replant missing=" + itemId(replantItem) + " harvested=1");
+                completeActiveCommand("farm:harvested_no_replant missing=" + itemId(replantItem) + " harvested=1", true);
                 return;
             }
             if (!serverLevel.getBlockState(cropPos).isAir() || !replantState.canSurvive(serverLevel, cropPos)) {
-                completeActiveCommand("farm:harvested_no_replant invalid_soil harvested=1");
+                completeActiveCommand("farm:harvested_no_replant invalid_soil harvested=1", true);
                 return;
             }
             if (!serverLevel.setBlock(cropPos, replantState, Block.UPDATE_ALL)) {
-                completeActiveCommand("farm:harvested_no_replant placement_failed harvested=1");
+                completeActiveCommand("farm:harvested_no_replant placement_failed harvested=1", true);
                 return;
             }
             if (!entity.consumeOneNormalInventoryItem(replantItem)) {
                 serverLevel.destroyBlock(cropPos, false, entity);
-                completeActiveCommand("farm:harvested_no_replant seed_race harvested=1");
+                completeActiveCommand("farm:harvested_no_replant seed_race harvested=1", true);
                 return;
             }
-            completeActiveCommand("farm:harvested=1 replanted=1 item=" + itemId(replantItem));
+            completeActiveCommand("farm:harvested=1 replanted=1 item=" + itemId(replantItem), true);
         }
 
         private BlockPos nearestMatureCrop(ServerLevel serverLevel, QueuedCommand command) {
@@ -1971,6 +2033,17 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             return true;
         }
 
+        private boolean hasNormalInventoryToTransfer() {
+            List<ItemStack> inventory = entity.inventorySnapshot();
+            int endSlot = Math.min(NpcInventoryTransfer.FIRST_EQUIPMENT_SLOT, inventory.size());
+            for (int slot = NpcInventoryTransfer.FIRST_NORMAL_SLOT; slot < endSlot; slot++) {
+                if (!inventory.get(slot).isEmpty()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         private boolean withdrawFromContainer(Container container, Item item, int count) {
             List<ItemStack> containerStacks = containerSnapshot(container);
             if (!entity.withdrawInventoryItemFrom(containerStacks, item, count)) {
@@ -2184,7 +2257,20 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         }
 
         private void completeActiveCommand(String reason) {
+            completeActiveCommand(reason, false);
+        }
+
+        private void completeActiveCommand(String reason, boolean allowRepeat) {
+            QueuedCommand repeatCommand = null;
             if (activeCommand != null) {
+                if (WorkRepeatPolicy.shouldQueueNextRepeat(
+                        allowRepeat, activeCommand.repeatRemaining(), entity.allowWorldActions()
+                )) {
+                    repeatCommand = activeCommand.nextRepeat();
+                    reason = reason + " repeat_remaining=" + repeatCommand.repeatRemaining();
+                } else if (allowRepeat && activeCommand.repeatRemaining() > 1 && !entity.allowWorldActions()) {
+                    reason = reason + " repeat_stopped=world_actions_disabled";
+                }
                 OpenPlayerDebugEvents.record("automation", "completed", null, null, null,
                         "kind=" + activeCommand.kind().name() + " reason=" + AutomationControllerMonitor.bounded(reason));
                 OpenPlayerRawTrace.automationOperation("completed", activeCommand.kind().name(),
@@ -2196,6 +2282,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             navigationRuntime.complete();
             activeCommand = null;
+            if (repeatCommand != null) {
+                queuedCommands.add(repeatCommand);
+            }
         }
 
         private void noteBuildProgress(QueuedCommand command) {
@@ -2622,6 +2711,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             private final FuelPlan fuelPlan;
             private final int maxTicks;
             private final boolean survivalOnly;
+            private final int repeatRemaining;
             private BuildPlan buildPlan;
             private Item buildMaterial;
             private int buildIndex;
@@ -2631,12 +2721,13 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             private boolean smeltStarted;
 
             private QueuedCommand(IntentKind kind, Coordinate coordinate, double radius) {
-                this(kind, coordinate, radius, null, null, false, null, null, null, 0, false);
+                this(kind, coordinate, radius, null, null, false, null, null, null, 0, false, 1);
             }
 
             private QueuedCommand(IntentKind kind, Coordinate coordinate, double radius, BlockPos blockTarget,
-                                   Entity entityTarget, boolean gotoOwner, BlockPos furnacePos,
-                                   SmeltingPlan smeltingPlan, FuelPlan fuelPlan, int maxTicks, boolean survivalOnly) {
+                                    Entity entityTarget, boolean gotoOwner, BlockPos furnacePos,
+                                    SmeltingPlan smeltingPlan, FuelPlan fuelPlan, int maxTicks, boolean survivalOnly,
+                                    int repeatRemaining) {
                 this.kind = kind;
                 this.coordinate = coordinate;
                 this.radius = radius;
@@ -2648,6 +2739,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 this.fuelPlan = fuelPlan;
                 this.maxTicks = maxTicks;
                 this.survivalOnly = survivalOnly;
+                this.repeatRemaining = repeatRemaining;
             }
 
             private static QueuedCommand move(Coordinate coordinate) {
@@ -2659,17 +2751,18 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
 
             private static QueuedCommand gotoOwnerCommand() {
-                return new QueuedCommand(IntentKind.GOTO, null, 0.0D, null, null, true, null, null, null, 0, false);
+                return new QueuedCommand(IntentKind.GOTO, null, 0.0D, null, null, true, null, null, null, 0, false, 1);
             }
 
             private static QueuedCommand gotoBlock(BlockPos blockPos) {
                 return new QueuedCommand(
-                        IntentKind.GOTO, null, 0.0D, blockPos.immutable(), null, false, null, null, null, 0, false
+                        IntentKind.GOTO, null, 0.0D, blockPos.immutable(), null, false, null, null, null, 0,
+                        false, 1
                 );
             }
 
             private static QueuedCommand gotoEntity(Entity entity) {
-                return new QueuedCommand(IntentKind.GOTO, null, 0.0D, null, entity, false, null, null, null, 0, false);
+                return new QueuedCommand(IntentKind.GOTO, null, 0.0D, null, entity, false, null, null, null, 0, false, 1);
             }
 
             private static QueuedCommand look(Coordinate coordinate) {
@@ -2688,8 +2781,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return new QueuedCommand(IntentKind.COLLECT_FOOD, null, radius);
             }
 
-            private static QueuedCommand farmNearby(double radius) {
-                return new QueuedCommand(IntentKind.FARM_NEARBY, null, radius);
+            private static QueuedCommand farmNearby(double radius, int repeatCount) {
+                return new QueuedCommand(IntentKind.FARM_NEARBY, null, radius, null, null, false, null, null, null, 0,
+                        false, repeatCount);
             }
 
             private static QueuedCommand breakBlock(Coordinate coordinate) {
@@ -2709,7 +2803,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
             private static QueuedCommand interactBlock(BlockPos blockPos) {
                 return new QueuedCommand(
-                        IntentKind.INTERACT, null, 0.0D, blockPos.immutable(), null, false, null, null, null, 0, false
+                        IntentKind.INTERACT, null, 0.0D, blockPos.immutable(), null, false, null, null, null, 0,
+                        false, 1
                 );
             }
 
@@ -2718,12 +2813,12 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
 
             private static QueuedCommand attackTarget(Entity target, double radius) {
-                return new QueuedCommand(IntentKind.ATTACK_TARGET, null, radius, null, target, false, null, null, null, 0, false);
+                return new QueuedCommand(IntentKind.ATTACK_TARGET, null, radius, null, target, false, null, null, null, 0, false, 1);
             }
 
             private static QueuedCommand selfDefense(double radius) {
                 return new QueuedCommand(
-                        IntentKind.ATTACK_NEAREST, null, radius, null, null, false, null, null, null, 0, true
+                        IntentKind.ATTACK_NEAREST, null, radius, null, null, false, null, null, null, 0, true, 1
                 );
             }
 
@@ -2754,8 +2849,14 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                         smeltingPlan,
                         fuelPlan,
                         maxTicks,
-                        false
+                        false,
+                        1
                 );
+            }
+
+            private QueuedCommand nextRepeat() {
+                return new QueuedCommand(kind, coordinate, radius, blockTarget, entityTarget, gotoOwner, furnacePos,
+                        smeltingPlan, fuelPlan, maxTicks, survivalOnly, repeatRemaining - 1);
             }
 
             private IntentKind kind() {
@@ -2800,6 +2901,10 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
             private boolean survivalOnly() {
                 return survivalOnly;
+            }
+
+            private int repeatRemaining() {
+                return repeatRemaining;
             }
 
             private BuildPlan buildPlan() {

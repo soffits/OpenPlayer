@@ -348,6 +348,8 @@ The first twelve phases establish a bounded first-party runtime foundation, but 
 
 ### Phase 15: Real Fishing and Repeatable Work Runtime
 
+**Status:** Repeatable work foundation implemented for bounded `FARM_NEARBY` and no-loss `DEPOSIT_ITEM`/`STASH_ITEM` iterations. `FISH` accepts repeat/duration syntax for validation diagnostics but remains truthfully rejected because vanilla 1.20.1 fishing hooks and rod behavior are player-bound and OpenPlayer does not yet have a safe server-authoritative NPC hook adapter.
+
 **Objective:** Replace truthful `FISH` rejection with a real server-authoritative NPC fishing adapter, or keep rejection if a safe adapter cannot be implemented cleanly.
 
 **Capabilities:**
@@ -355,12 +357,14 @@ The first twelve phases establish a bounded first-party runtime foundation, but 
 - Spawn/drive a real fishing hook or equivalent first-party server-side task that produces loot only through vanilla loot mechanics.
 - Track cast, bite, reel, timeout, rod durability, inventory capacity, and cancellation.
 - Add bounded repeat counts for farming/fishing/deposit loops without infinite automation.
+- Current repeat syntax: `FARM_NEARBY` supports blank, legacy radius such as `8`, or `radius=8 repeat=3`/`radius=8 count=3`; `DEPOSIT_ITEM` and `STASH_ITEM` support `<item_id> [count] repeat=3` to avoid ambiguity with item counts; repeat is capped at 5.
 
 **Acceptance Criteria:**
 
 - No fake hook, fake swing success, or fabricated loot.
 - Loot is considered complete only after entering NPC inventory.
 - STOP/cancel recovers hook/task state without item loss.
+- Repeatable work never uses unbounded loops; later iterations start only after the prior iteration truthfully completes, and failures stop further repeats.
 
 ### Phase 16: Loaded Chunk Exploration and Search Tasks
 
