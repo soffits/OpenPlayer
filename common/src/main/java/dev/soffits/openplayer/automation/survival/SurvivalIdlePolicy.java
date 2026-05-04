@@ -22,14 +22,8 @@ public final class SurvivalIdlePolicy {
         if (dangerKind != null && dangerKind != SurvivalDangerKind.NONE) {
             return SurvivalIdleAction.AVOID_DANGER;
         }
-        if (lowHealth && safeFoodAvailable) {
-            return SurvivalIdleAction.EAT_SAFE_FOOD;
-        }
         if (selfDangerTarget) {
             return SurvivalIdleAction.SELF_DEFENSE;
-        }
-        if (armorUpgradeAvailable) {
-            return SurvivalIdleAction.EQUIP_ARMOR;
         }
         return SurvivalIdleAction.NONE;
     }

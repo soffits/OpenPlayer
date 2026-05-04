@@ -5,7 +5,6 @@ import dev.soffits.openplayer.api.CommandSubmissionResult;
 import dev.soffits.openplayer.api.NpcOwnerId;
 import dev.soffits.openplayer.automation.AutomationControllerSnapshot;
 import dev.soffits.openplayer.aicore.AICoreNpcSessionState;
-import dev.soffits.openplayer.automation.survival.SurvivalFoodPolicy;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -27,16 +26,12 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.PathfinderMob;
-import net.minecraft.world.entity.ai.attributes.Attribute;
-import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.UseAnim;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -296,11 +291,6 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
         return true;
     }
 
-    public boolean selectBestAttackItem() {
-        int slot = NpcHotbarSelection.bestScoredSlot(hotbarItems(), OpenPlayerNpcEntity::attackItemScore);
-        return slot >= 0 && selectHotbarSlot(slot);
-    }
-
     public boolean dropSelectedHotbarStack() {
         ItemStack droppedStack = NpcInventoryTransfer.selectedHotbarDropStackOrEmpty(internalInventory, selectedMainHandSlot);
         if (droppedStack.isEmpty()) {
@@ -377,20 +367,6 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
         return true;
     }
 
-    public boolean startFurnaceSmelt(List<ItemStack> furnaceStacks, Item inputItem, int inputCount,
-                                     Item fuelItem, int fuelCount) {
-        return NpcInventoryTransfer.startFurnaceSmelt(internalInventory, furnaceStacks, inputItem, inputCount, fuelItem, fuelCount);
-    }
-
-    public boolean recoverFurnaceSmeltResources(List<ItemStack> furnaceStacks, Item inputItem,
-                                                Item fuelItem, Item outputItem) {
-        return NpcInventoryTransfer.recoverFurnaceSmeltResources(internalInventory, furnaceStacks, inputItem, fuelItem, outputItem);
-    }
-
-    public boolean withdrawFurnaceOutput(List<ItemStack> furnaceStacks, Item outputItem, int outputCount) {
-        return NpcInventoryTransfer.withdrawFurnaceOutput(internalInventory, furnaceStacks, outputItem, outputCount);
-    }
-
     public void rememberStash(String dimensionId, BlockPos blockPos) {
         if (dimensionId == null || dimensionId.isBlank() || blockPos == null) {
             stashMemory = null;
@@ -409,9 +385,6 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
     public boolean equipMatchingItem(Item item) {
         if (item == null) {
             return false;
-        }
-        if (item instanceof ArmorItem) {
-            return NpcInventoryTransfer.equipArmorByItem(internalInventory, item);
         }
         int slot = NpcInventoryTransfer.firstHotbarSlotMatchingItem(internalInventory, item);
         return slot >= 0 && selectHotbarSlot(slot);
@@ -522,78 +495,6 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
         return true;
     }
 
-    public boolean equipBestAvailableArmor() {
-        boolean equippedAny = false;
-        for (EquipmentSlot equipmentSlot : List.of(
-                EquipmentSlot.FEET,
-                EquipmentSlot.LEGS,
-                EquipmentSlot.CHEST,
-                EquipmentSlot.HEAD
-        )) {
-            equippedAny = equipBestAvailableArmor(equipmentSlot) || equippedAny;
-        }
-        return equippedAny;
-    }
-
-    public boolean useSelectedMainHandItemLocally() {
-        ItemStack selectedStack = getMainHandItem();
-        if (!canUseSelectedMainHandItemLocally(selectedStack)) {
-            return false;
-        }
-        ItemStack remainingStack = selectedStack.finishUsingItem(level(), this);
-        internalInventory.set(selectedMainHandSlot, remainingStack.copy());
-        swingMainHandAction();
-        return true;
-    }
-
-    public int bestSafeFoodSlotForLocalUse() {
-        return bestSafeFoodSlotForLocalUse(internalInventory);
-    }
-
-    public boolean useSafeFoodSlotForLocalUse(int slot) {
-        if (!isSafeFoodSlotForLocalUse(internalInventory, slot)) {
-            return false;
-        }
-        List<ItemStack> snapshot = inventorySnapshot();
-        int previousSelectedMainHandSlot = selectedMainHandSlot;
-        if (!selectSafeFoodSlotForLocalUse(slot) || !useSelectedMainHandItemLocally()) {
-            restoreInternalInventory(snapshot);
-            selectedMainHandSlot = previousSelectedMainHandSlot;
-            return false;
-        }
-        return true;
-    }
-
-    public static int bestSafeFoodSlotForLocalUse(List<ItemStack> inventory) {
-        return SurvivalFoodPolicy.bestSafeFoodSlot(
-                inventory,
-                FIRST_NORMAL_INVENTORY_SLOT,
-                FIRST_EQUIPMENT_INVENTORY_SLOT
-        );
-    }
-
-    public static boolean isSafeFoodSlotForLocalUse(List<ItemStack> inventory, int slot) {
-        return slot >= FIRST_NORMAL_INVENTORY_SLOT
-                && slot < FIRST_EQUIPMENT_INVENTORY_SLOT
-                && inventory != null
-                && slot < inventory.size()
-                && SurvivalFoodPolicy.isSafeEdibleDrop(inventory.get(slot));
-    }
-
-    private boolean selectSafeFoodSlotForLocalUse(int slot) {
-        if (!isSafeFoodSlotForLocalUse(internalInventory, slot)) {
-            return false;
-        }
-        if (NpcHotbarSelection.isHotbarSlot(slot)) {
-            return selectHotbarSlot(slot);
-        }
-        ItemStack foodStack = internalInventory.get(slot).copy();
-        ItemStack selectedStack = internalInventory.get(selectedMainHandSlot).copy();
-        internalInventory.set(selectedMainHandSlot, foodStack);
-        internalInventory.set(slot, selectedStack);
-        return true;
-    }
-
     private int firstNormalInventorySlotMatching(Item item, int startSlotInclusive, int endSlotExclusive) {
         int end = Math.min(endSlotExclusive, internalInventory.size());
         for (int slot = Math.max(FIRST_NORMAL_INVENTORY_SLOT, startSlotInclusive); slot < end; slot++) {
@@ -603,18 +504,6 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
             }
         }
         return -1;
-    }
-
-    public static boolean canUseSelectedMainHandItemLocally(ItemStack selectedStack) {
-        if (selectedStack == null || selectedStack.isEmpty() || selectedStack.getUseDuration() <= 0) {
-            return false;
-        }
-        if (selectedStack.getUseAnimation() != UseAnim.EAT) {
-            return false;
-        }
-        return selectedStack.isEdible()
-                && selectedStack.getMaxStackSize() > 1
-                && !selectedStack.getItem().hasCraftingRemainingItem();
     }
 
     public void swingMainHandAction() {
@@ -804,38 +693,6 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
         }
     }
 
-    private boolean equipBestAvailableArmor(EquipmentSlot equipmentSlot) {
-        ItemStack currentStack = getItemBySlot(equipmentSlot);
-        double currentScore = armorScore(currentStack, equipmentSlot);
-        int bestSlot = -1;
-        double bestScore = currentScore;
-        for (int slot = FIRST_NORMAL_INVENTORY_SLOT; slot < FIRST_EQUIPMENT_INVENTORY_SLOT; slot++) {
-            ItemStack candidateStack = internalInventory.get(slot);
-            double candidateScore = armorScore(candidateStack, equipmentSlot);
-            if (NpcEquipmentSelection.shouldReplaceArmor(candidateScore, bestScore)) {
-                bestScore = candidateScore;
-                bestSlot = slot;
-            }
-        }
-        if (bestSlot < 0) {
-            return false;
-        }
-        ItemStack selectedArmor = internalInventory.get(bestSlot).copy();
-        internalInventory.set(bestSlot, currentStack.copy());
-        setItemSlot(equipmentSlot, selectedArmor);
-        return true;
-    }
-
-    private static double armorScore(ItemStack itemStack, EquipmentSlot equipmentSlot) {
-        if (itemStack.isEmpty() || !(itemStack.getItem() instanceof ArmorItem armorItem)) {
-            return 0.0D;
-        }
-        if (armorItem.getEquipmentSlot() != equipmentSlot) {
-            return 0.0D;
-        }
-        return armorItem.getDefense() * 100.0D + armorItem.getToughness();
-    }
-
     private static double toolScore(ItemStack itemStack, BlockState blockState) {
         if (itemStack.isEmpty()) {
             return 0.0D;
@@ -856,28 +713,6 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
             case "forward", "back", "left", "right", "jump", "sprint", "sneak" -> true;
             default -> false;
         };
-    }
-
-    private static double attackItemScore(ItemStack itemStack) {
-        if (itemStack.isEmpty()) {
-            return 0.0D;
-        }
-        double attackDamage = attributeAmount(itemStack, Attributes.ATTACK_DAMAGE);
-        double attackSpeed = attributeAmount(itemStack, Attributes.ATTACK_SPEED);
-        if (attackDamage <= 0.0D && attackSpeed <= 0.0D) {
-            return 0.0D;
-        }
-        return attackDamage * 100.0D + attackSpeed;
-    }
-
-    private static double attributeAmount(ItemStack itemStack, Attribute attribute) {
-        double amount = 0.0D;
-        for (AttributeModifier modifier : itemStack.getAttributeModifiers(EquipmentSlot.MAINHAND).get(attribute)) {
-            if (modifier.getOperation() == AttributeModifier.Operation.ADDITION) {
-                amount += modifier.getAmount();
-            }
-        }
-        return amount;
     }
 
     private void collectNearbyItems() {

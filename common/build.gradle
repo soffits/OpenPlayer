@@ -108,12 +108,6 @@ tasks.register('runNpcHotbarSelectionTest', JavaExec) {
     mainClass = 'dev.soffits.openplayer.entity.NpcHotbarSelectionTest'
 }
 
-tasks.register('runNpcConsumableUsePolicyTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'dev.soffits.openplayer.entity.NpcConsumableUsePolicyTest'
-}
-
 tasks.register('runConversationLoopTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
@@ -306,12 +300,6 @@ tasks.register('runAICorePluginRegistryTest', JavaExec) {
     mainClass = 'dev.soffits.openplayer.aicore.AICorePluginRegistryTest'
 }
 
-tasks.register('runNpcEquipmentSelectionTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'dev.soffits.openplayer.entity.NpcEquipmentSelectionTest'
-}
-
 tasks.register('runNpcInventoryTransferTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
@@ -328,12 +316,6 @@ tasks.register('runRuntimeCapabilityRegistryTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'dev.soffits.openplayer.automation.capability.RuntimeCapabilityRegistryTest'
-}
-
-tasks.register('runWorkstationCapabilityTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'dev.soffits.openplayer.automation.resource.WorkstationCapabilityTest'
 }
 
 tasks.named('check') {
@@ -354,7 +336,6 @@ tasks.named('check') {
     dependsOn tasks.named('runOpenPlayerDebugEventsTest')
     dependsOn tasks.named('runOpenPlayerRawTraceTest')
     dependsOn tasks.named('runNpcHotbarSelectionTest')
-    dependsOn tasks.named('runNpcConsumableUsePolicyTest')
     dependsOn tasks.named('runConversationLoopTest')
     dependsOn tasks.named('runConversationStatusRepositoryTest')
     dependsOn tasks.named('runAutomationInstructionParserTest')
@@ -387,9 +368,7 @@ tasks.named('check') {
     dependsOn tasks.named('runAICoreEventBusTest')
     dependsOn tasks.named('runAICoreAdminPolicyTest')
     dependsOn tasks.named('runAICorePluginRegistryTest')
-    dependsOn tasks.named('runNpcEquipmentSelectionTest')
     dependsOn tasks.named('runNpcInventoryTransferTest')
     dependsOn tasks.named('runResourceAffordanceSummaryTest')
     dependsOn tasks.named('runRuntimeCapabilityRegistryTest')
-    dependsOn tasks.named('runWorkstationCapabilityTest')
 }

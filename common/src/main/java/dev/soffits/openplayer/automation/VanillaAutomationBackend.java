@@ -23,13 +23,9 @@ import dev.soffits.openplayer.automation.navigation.NavigationTarget;
 import dev.soffits.openplayer.automation.survival.SurvivalCooldownPolicy;
 import dev.soffits.openplayer.automation.survival.SurvivalDangerKind;
 import dev.soffits.openplayer.automation.survival.SurvivalDangerPolicy;
-import dev.soffits.openplayer.automation.survival.SurvivalFoodPolicy;
 import dev.soffits.openplayer.automation.survival.SurvivalHealthPolicy;
 import dev.soffits.openplayer.automation.survival.SurvivalTargetPolicy;
 import dev.soffits.openplayer.automation.work.WorkRepeatPolicy;
-import dev.soffits.openplayer.automation.workstation.WorkstationKind;
-import dev.soffits.openplayer.automation.workstation.WorkstationLocator;
-import dev.soffits.openplayer.automation.workstation.WorkstationTarget;
 import dev.soffits.openplayer.debug.OpenPlayerDebugEvents;
 import dev.soffits.openplayer.debug.OpenPlayerRawTrace;
 import dev.soffits.openplayer.entity.NpcInventoryTransfer;
@@ -51,9 +47,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.animal.Cow;
-import net.minecraft.world.entity.animal.MushroomCow;
-import net.minecraft.world.entity.animal.Sheep;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
@@ -62,16 +55,12 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.BarrelBlock;
-import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.BellBlock;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ButtonBlock;
-import net.minecraft.world.level.block.CraftingTableBlock;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
-import net.minecraft.world.level.block.FurnaceBlock;
 import net.minecraft.world.level.block.LeverBlock;
 import net.minecraft.world.level.block.NoteBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
@@ -84,7 +73,6 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.AABB;
-import net.minecraft.sounds.SoundSource;
 
 public final class VanillaAutomationBackend implements AutomationBackend {
     public static final String NAME = "vanilla";
@@ -155,7 +143,6 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 SURVIVAL_DIAGNOSTIC_COOLDOWN_TICKS
         );
         private final NavigationRuntime navigationRuntime = new NavigationRuntime(NAVIGATION_MAX_RECOVERIES);
-        private final WorkstationLocator workstationLocator = new WorkstationLocator();
         private final LoadedAreaNavigator loadedAreaNavigator = new LoadedAreaNavigator();
         private final AICoreEventBus aicoreEventBus = new AICoreEventBus(128);
         private QueuedCommand activeCommand;
@@ -309,47 +296,6 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (kind == IntentKind.COLLECT_ITEMS) {
                 queuedCommands.add(QueuedCommand.collectItems());
                 return accepted("COLLECT_ITEMS accepted");
-            }
-            if (kind == IntentKind.EQUIP_BEST_ITEM) {
-                if (!AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
-                    return rejected("EQUIP_BEST_ITEM requires a blank instruction");
-                }
-                if (!canAcquireInteractionCooldown()) {
-                    return rejected(interactionCooldownMessage());
-                }
-                LivingEntity target = nearestAttackTarget(serverLevel(), ATTACK_DEFAULT_RADIUS, entity.position());
-                if (target != null && acquireInteractionCooldown() && entity.selectBestAttackItem()) {
-                    return accepted("EQUIP_BEST_ITEM accepted");
-                }
-                rollbackInteractionCooldown();
-                return rejected("EQUIP_BEST_ITEM found no useful hotbar item for the nearby context");
-            }
-            if (kind == IntentKind.EQUIP_ARMOR) {
-                if (!AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
-                    return rejected("EQUIP_ARMOR requires a blank instruction");
-                }
-                if (!canAcquireInteractionCooldown()) {
-                    return rejected(interactionCooldownMessage());
-                }
-                if (!acquireInteractionCooldown() || !entity.equipBestAvailableArmor()) {
-                    rollbackInteractionCooldown();
-                    return rejected("EQUIP_ARMOR found no armor upgrade in NPC inventory");
-                }
-                entity.swingMainHandAction();
-                return accepted("EQUIP_ARMOR accepted");
-            }
-            if (kind == IntentKind.USE_SELECTED_ITEM) {
-                if (!AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
-                    return rejected("USE_SELECTED_ITEM requires a blank instruction");
-                }
-                if (!canAcquireInteractionCooldown()) {
-                    return rejected(interactionCooldownMessage());
-                }
-                if (!acquireInteractionCooldown() || !entity.useSelectedMainHandItemLocally()) {
-                    rollbackInteractionCooldown();
-                    return rejected("USE_SELECTED_ITEM requires a selected edible or drinkable main-hand item");
-                }
-                return accepted("USE_SELECTED_ITEM accepted");
             }
             if (kind == IntentKind.SWAP_TO_OFFHAND) {
                 if (!AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
@@ -916,32 +862,14 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 noteIdleSurvivalDiagnostic("survival:unable_to_avoid_" + dangerKind.name().toLowerCase());
                 return;
             }
-            if (SurvivalHealthPolicy.isLowHealth(entity.getHealth(), entity.getMaxHealth())) {
-                int foodSlot = entity.bestSafeFoodSlotForLocalUse();
-                if (foodSlot >= 0 && canAcquireInteractionCooldown() && acquireInteractionCooldown()) {
-                    if (entity.useSafeFoodSlotForLocalUse(foodSlot)) {
-                        noteIdleSurvivalAction("survival:eat_safe_food slot=" + foodSlot);
-                        return;
-                    }
-                    rollbackInteractionCooldown();
-                }
-                if (SurvivalHealthPolicy.isDangerouslyLowHealth(entity.getHealth(), entity.getMaxHealth())) {
-                    noteIdleSurvivalDiagnostic("survival:dangerously_low_health_no_safe_food");
-                    return;
-                }
+            if (SurvivalHealthPolicy.isDangerouslyLowHealth(entity.getHealth(), entity.getMaxHealth())) {
+                noteIdleSurvivalDiagnostic("survival:dangerously_low_health_manual_item_use_required");
+                return;
             }
             if (nearestSelfDefenseTarget(serverLevel, SURVIVAL_DANGER_RADIUS) != null) {
                 queuedCommands.add(QueuedCommand.selfDefense(SURVIVAL_DANGER_RADIUS));
                 noteIdleSurvivalAction("survival:queued_self_defense");
                 return;
-            }
-            if (canAcquireInteractionCooldown() && acquireInteractionCooldown()) {
-                if (entity.equipBestAvailableArmor()) {
-                    entity.swingMainHandAction();
-                    noteIdleSurvivalAction("survival:equip_armor");
-                } else {
-                    rollbackInteractionCooldown();
-                }
             }
         }
 
@@ -1405,7 +1333,6 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
         private boolean attackTarget(LivingEntity target) {
             entity.getLookControl().setLookAt(target);
-            entity.selectBestAttackItem();
             if (entity.distanceToSqr(target) > ATTACK_REACH_DISTANCE * ATTACK_REACH_DISTANCE) {
                 moveToEntity(target, NavigationTarget.entity(entityTypeId(target)));
                 return false;
@@ -2029,17 +1956,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (block instanceof NoteBlock) {
                 return BlockInteractionCapability.NOTE_BLOCK;
             }
-            if (block instanceof BedBlock) {
-                return BlockInteractionCapability.BED_STATUS;
-            }
-            if (block instanceof CraftingTableBlock) {
-                return BlockInteractionCapability.CRAFTING_TABLE_SURFACE;
-            }
-            if (block instanceof FurnaceBlock || state.is(Blocks.SMOKER) || state.is(Blocks.BLAST_FURNACE)) {
-                return BlockInteractionCapability.FURNACE_SURFACE;
-            }
             if (block instanceof BarrelBlock || state.is(Blocks.CHEST) || state.is(Blocks.TRAPPED_CHEST)) {
-                return BlockInteractionCapability.CONTAINER_SURFACE;
+                return BlockInteractionCapability.LOADED_CONTAINER;
             }
             return BlockInteractionCapability.UNAVAILABLE;
         }
@@ -2063,25 +1981,13 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return serverLevel.setBlock(blockPos, state.setValue(ButtonBlock.POWERED, true), Block.UPDATE_ALL);
             }
             if (capability == BlockInteractionCapability.BELL || capability == BlockInteractionCapability.NOTE_BLOCK
-                    || capability == BlockInteractionCapability.BED_STATUS
-                    || capability == BlockInteractionCapability.CRAFTING_TABLE_SURFACE
-                    || capability == BlockInteractionCapability.FURNACE_SURFACE
-                    || capability == BlockInteractionCapability.CONTAINER_SURFACE) {
+                    || capability == BlockInteractionCapability.LOADED_CONTAINER) {
                 return true;
             }
             return false;
         }
 
         private EntityInteractionCapability entityInteractionCapability(Entity target) {
-            if (target instanceof Sheep sheep && sheep.readyForShearing()
-                    && entity.normalInventoryCount(Items.SHEARS) > 0) {
-                return EntityInteractionCapability.SHEAR_SHEEP;
-            }
-            if ((target instanceof Cow || target instanceof MushroomCow)
-                    && entity.normalInventoryCount(Items.BUCKET) > 0
-                    && canInsertOneNormalInventoryItem(Items.MILK_BUCKET)) {
-                return EntityInteractionCapability.MILK_COW;
-            }
             if (target instanceof net.minecraft.world.entity.npc.Villager) {
                 return EntityInteractionCapability.UNAVAILABLE;
             }
@@ -2089,66 +1995,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         }
 
         private boolean applyEntityInteraction(ServerLevel serverLevel, Entity target, EntityInteractionCapability capability) {
-            if (capability == EntityInteractionCapability.SHEAR_SHEEP && target instanceof Sheep sheep) {
-                if (!entity.selectOrMoveNormalItemToHotbar(Items.SHEARS) || !sheep.readyForShearing()) {
-                    return false;
-                }
-                sheep.shear(SoundSource.PLAYERS);
-                damageSelectedToolOnce(Items.SHEARS);
-                return !sheep.readyForShearing();
-            }
-            if (capability == EntityInteractionCapability.MILK_COW && (target instanceof Cow || target instanceof MushroomCow)) {
-                if (entity.normalInventoryCount(Items.BUCKET) <= 0 || !canInsertOneNormalInventoryItem(Items.MILK_BUCKET)) {
-                    return false;
-                }
-                List<ItemStack> snapshot = entity.inventorySnapshot();
-                if (!entity.consumeOneNormalInventoryItem(Items.BUCKET) || !insertOneNormalInventoryItem(Items.MILK_BUCKET)) {
-                    restoreEntityInventory(snapshot);
-                    return false;
-                }
-                return true;
-            }
             return false;
-        }
-
-        private void damageSelectedToolOnce(Item item) {
-            ItemStack selectedStack = entity.getMainHandItem();
-            if (selectedStack.is(item)) {
-                selectedStack.hurtAndBreak(1, entity, ignored -> { });
-            }
-        }
-
-        private boolean canInsertOneNormalInventoryItem(Item item) {
-            return NpcInventoryTransfer.canInsertAll(
-                    entity.inventorySnapshot(), new ItemStack(item),
-                    NpcInventoryTransfer.FIRST_NORMAL_SLOT, NpcInventoryTransfer.FIRST_EQUIPMENT_SLOT
-            );
-        }
-
-        private boolean insertOneNormalInventoryItem(Item item) {
-            List<ItemStack> inventory = entity.inventorySnapshot();
-            ItemStack inserted = new ItemStack(item);
-            for (int slot = NpcInventoryTransfer.FIRST_NORMAL_SLOT;
-                 slot < Math.min(NpcInventoryTransfer.FIRST_EQUIPMENT_SLOT, inventory.size()); slot++) {
-                ItemStack stack = inventory.get(slot);
-                if (!stack.isEmpty() && ItemStack.isSameItemSameTags(stack, inserted) && stack.getCount() < stack.getMaxStackSize()) {
-                    stack.grow(1);
-                    return entity.setInventoryItem(slot, stack);
-                }
-            }
-            for (int slot = NpcInventoryTransfer.FIRST_NORMAL_SLOT;
-                 slot < Math.min(NpcInventoryTransfer.FIRST_EQUIPMENT_SLOT, inventory.size()); slot++) {
-                if (inventory.get(slot).isEmpty()) {
-                    return entity.setInventoryItem(slot, inserted);
-                }
-            }
-            return false;
-        }
-
-        private void restoreEntityInventory(List<ItemStack> snapshot) {
-            for (int slot = 0; slot < snapshot.size(); slot++) {
-                entity.setInventoryItem(slot, snapshot.get(slot));
-            }
         }
 
         private static Item itemByIdOrNull(ResourceLocation id) {
@@ -2193,10 +2040,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             FENCE_GATE("fence_gate"),
             BELL("bell"),
             NOTE_BLOCK("note_block"),
-            BED_STATUS("bed_status"),
-            CRAFTING_TABLE_SURFACE("crafting_table_surface"),
-            FURNACE_SURFACE("furnace_surface"),
-            CONTAINER_SURFACE("container_surface"),
+            LOADED_CONTAINER("loaded_container"),
             UNAVAILABLE("capability_unavailable");
 
             private final String id;
@@ -2211,8 +2055,6 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         }
 
         enum EntityInteractionCapability {
-            SHEAR_SHEEP("shear_sheep"),
-            MILK_COW("milk_cow"),
             UNAVAILABLE("capability_unavailable");
 
             private final String id;

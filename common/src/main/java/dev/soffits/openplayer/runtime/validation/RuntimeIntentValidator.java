@@ -35,9 +35,6 @@ public final class RuntimeIntentValidator {
             case PATROL -> requireCoordinateInstruction(intent, "PATROL");
             case FOLLOW_OWNER -> requireBlankInstruction(intent, "FOLLOW_OWNER");
             case COLLECT_ITEMS -> requireBlankInstruction(intent, "COLLECT_ITEMS");
-            case EQUIP_BEST_ITEM -> requireBlankInstruction(intent, "EQUIP_BEST_ITEM");
-            case EQUIP_ARMOR -> requireBlankInstruction(intent, "EQUIP_ARMOR");
-            case USE_SELECTED_ITEM -> requireBlankInstruction(intent, "USE_SELECTED_ITEM");
             case SWAP_TO_OFFHAND -> requireBlankInstruction(intent, "SWAP_TO_OFFHAND");
             case DROP_ITEM -> requireBlankOrItemCountInstruction(intent, "DROP_ITEM");
             case BREAK_BLOCK -> requireCoordinateInstruction(intent, "BREAK_BLOCK");

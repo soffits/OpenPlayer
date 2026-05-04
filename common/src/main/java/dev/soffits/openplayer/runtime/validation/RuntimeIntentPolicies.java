@@ -9,9 +9,6 @@ import java.util.stream.Collectors;
 public final class RuntimeIntentPolicies {
     private static final EnumSet<IntentKind> LOCAL_WORLD_OR_INVENTORY_ACTIONS = EnumSet.of(
             IntentKind.COLLECT_ITEMS,
-            IntentKind.EQUIP_BEST_ITEM,
-            IntentKind.EQUIP_ARMOR,
-            IntentKind.USE_SELECTED_ITEM,
             IntentKind.SWAP_TO_OFFHAND,
             IntentKind.DROP_ITEM,
             IntentKind.BREAK_BLOCK,
@@ -39,9 +36,6 @@ public final class RuntimeIntentPolicies {
         }
         return switch (kind) {
             case COLLECT_ITEMS,
-                    EQUIP_BEST_ITEM,
-                    EQUIP_ARMOR,
-                    USE_SELECTED_ITEM,
                     SWAP_TO_OFFHAND,
                     DROP_ITEM,
                     BREAK_BLOCK,

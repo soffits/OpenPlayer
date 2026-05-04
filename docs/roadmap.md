@@ -49,7 +49,7 @@ OpenPlayer currently includes:
 ### Inventory, Crafting, And Containers
 
 - Support exact item ids, bounded counts, safe equipment changes, pickup, drop, owner transfer, and inventory status.
-- Plan simple crafting and smelting through server registries and reviewed workstation adapters.
+- Plan simple crafting and smelting through server registries and reviewed generic container/material adapters.
 - Use no-loss container transfer semantics with snapshot/restore behavior where practical.
 - Report unsupported recipes, locked/custom containers, or missing adapters deterministically.
 

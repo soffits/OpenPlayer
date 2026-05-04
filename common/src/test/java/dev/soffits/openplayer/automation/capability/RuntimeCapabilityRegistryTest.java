@@ -29,7 +29,7 @@ public final class RuntimeCapabilityRegistryTest {
         }
         require(ids.contains("movement.loaded"), "movement capability must be reported");
         require(ids.contains("portal.loaded_transition"), "generic portal transition capability must be reported");
-        require(ids.contains("portal.vanilla_nether_build"), "vanilla Nether portal adapter must be reported");
+        require(ids.contains("portal.strategy_pack_reference"), "portal strategy diagnostic must be reported");
         require(ids.contains("status.runtime_snapshot"), "runtime status capability must be reported");
         require(ids.contains("strategy_pack.local_reference"), "docs-only strategy pack reference diagnostic must be reported");
         require(ids.contains("eye_of_ender_observation"), "missing eye observation adapter must be reported");

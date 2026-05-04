@@ -1,18 +1,12 @@
 package dev.soffits.openplayer.automation.survival;
 
 import dev.soffits.openplayer.entity.OpenPlayerNpcEntity;
-import dev.soffits.openplayer.entity.NpcInventoryTransfer;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.entity.animal.Cow;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Arrow;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 
 public final class SurvivalPolicyTest {
     private SurvivalPolicyTest() {
@@ -21,25 +15,11 @@ public final class SurvivalPolicyTest {
     public static void main(String[] args) {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
-        classifiesSafeFoodDrops();
-        selectsDeterministicBestSafeFoodSlot();
-        queriesNpcSafeFoodWithoutMutatingInventory();
         classifiesHostileDangerTargets();
         classifiesImmediateDangers();
         appliesHealthThresholds();
         appliesCooldownBackoff();
         gatesAndPrioritizesIdleSurvival();
-    }
-
-    private static void classifiesSafeFoodDrops() {
-        require(SurvivalFoodPolicy.isSafeEdibleDrop(new ItemStack(Items.APPLE)),
-                "ordinary food must be safe for direct consumable pickup checks");
-        require(!SurvivalFoodPolicy.isSafeEdibleDrop(new ItemStack(Items.POTION)),
-                "potion drops must not be safe food");
-        require(!SurvivalFoodPolicy.isSafeEdibleDrop(new ItemStack(Items.RABBIT_STEW)),
-                "stew/container-remainder food must not be safe food");
-        require(!SurvivalFoodPolicy.isSafeEdibleDrop(new ItemStack(Items.STONE)),
-                "non-food drops must not be safe food");
     }
 
     private static void classifiesHostileDangerTargets() {
@@ -55,42 +35,6 @@ public final class SurvivalPolicyTest {
                 "non-Enemy classes must not be classified as danger targets");
         require(SurvivalTargetPolicy.isImmediateProjectileDangerClass(Arrow.class),
                 "arrows must be classified as immediate projectile danger");
-    }
-
-    private static void selectsDeterministicBestSafeFoodSlot() {
-        List<ItemStack> inventory = new ArrayList<>(Collections.nCopies(NpcInventoryTransfer.INVENTORY_SIZE, ItemStack.EMPTY));
-        inventory.set(2, new ItemStack(Items.APPLE));
-        inventory.set(10, new ItemStack(Items.COOKED_BEEF));
-        inventory.set(11, new ItemStack(Items.RABBIT_STEW));
-        inventory.set(12, new ItemStack(Items.COOKED_BEEF));
-
-        int slot = SurvivalFoodPolicy.bestSafeFoodSlot(
-                inventory,
-                NpcInventoryTransfer.FIRST_NORMAL_SLOT,
-                NpcInventoryTransfer.FIRST_EQUIPMENT_SLOT
-        );
-
-        require(slot == 10, "safe food selection must choose the best nutrition, then first slot");
-    }
-
-    private static void queriesNpcSafeFoodWithoutMutatingInventory() {
-        List<ItemStack> inventory = new ArrayList<>(Collections.nCopies(NpcInventoryTransfer.INVENTORY_SIZE, ItemStack.EMPTY));
-        inventory.set(0, new ItemStack(Items.STONE, 7));
-        inventory.set(10, new ItemStack(Items.COOKED_BEEF, 2));
-        inventory.set(NpcInventoryTransfer.ARMOR_FEET_SLOT, new ItemStack(Items.GOLDEN_CARROT));
-        inventory.set(NpcInventoryTransfer.OFFHAND_SLOT, new ItemStack(Items.APPLE));
-        List<ItemStack> snapshot = copyStacks(inventory);
-
-        int slot = OpenPlayerNpcEntity.bestSafeFoodSlotForLocalUse(inventory);
-
-        require(slot == 10, "NPC safe food query must choose only normal inventory food");
-        require(inventoriesMatch(inventory, snapshot), "NPC safe food query must not mutate inventory");
-        require(OpenPlayerNpcEntity.isSafeFoodSlotForLocalUse(inventory, 10),
-                "normal inventory safe food slot must be usable after cooldown acquisition");
-        require(!OpenPlayerNpcEntity.isSafeFoodSlotForLocalUse(inventory, NpcInventoryTransfer.OFFHAND_SLOT),
-                "offhand food must remain outside the local survival food boundary");
-        require(!OpenPlayerNpcEntity.isSafeFoodSlotForLocalUse(inventory, NpcInventoryTransfer.ARMOR_FEET_SLOT),
-                "equipment food must remain outside the local survival food boundary");
     }
 
     private static void classifiesImmediateDangers() {
@@ -143,11 +87,11 @@ public final class SurvivalPolicyTest {
         require(active == SurvivalIdleAction.NONE,
                 "background survival monitor must not run while another command is active");
 
-        SurvivalIdleAction eatBeforeCombat = SurvivalIdlePolicy.choose(
+        SurvivalIdleAction combat = SurvivalIdlePolicy.choose(
                 true, false, true, true, SurvivalDangerKind.NONE, true, true, true, true, false
         );
-        require(eatBeforeCombat == SurvivalIdleAction.EAT_SAFE_FOOD,
-                "low health safe food must be chosen before combat");
+        require(combat == SurvivalIdleAction.SELF_DEFENSE,
+                "idle survival must not choose hidden food or armor chains before combat");
 
         SurvivalIdleAction ownerDanger = SurvivalIdlePolicy.choose(
                 true, false, true, true, SurvivalDangerKind.NONE, false, false, false, true, false
@@ -162,23 +106,4 @@ public final class SurvivalPolicyTest {
         }
     }
 
-    private static List<ItemStack> copyStacks(List<ItemStack> inventory) {
-        List<ItemStack> copy = new ArrayList<>(inventory.size());
-        for (ItemStack itemStack : inventory) {
-            copy.add(itemStack.copy());
-        }
-        return copy;
-    }
-
-    private static boolean inventoriesMatch(List<ItemStack> left, List<ItemStack> right) {
-        if (left.size() != right.size()) {
-            return false;
-        }
-        for (int slot = 0; slot < left.size(); slot++) {
-            if (!ItemStack.matches(left.get(slot), right.get(slot))) {
-                return false;
-            }
-        }
-        return true;
-    }
 }

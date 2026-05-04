@@ -7,14 +7,14 @@ Use this kind of guide to help an LLM decompose ordinary vanilla Minecraft goals
 ## General Survival
 
 - Observe current health, inventory, nearby hazards, current dimension, and capability diagnostics with status/context first when state is unclear.
-- Prefer loaded, visible, player-like actions: move, follow, collect visible drops, equip carried tools or armor, eat carried safe food, defend against loaded hostile danger entities, and stop/cancel when recovery is unclear.
+- Prefer loaded, visible, player-like actions: move, follow, collect visible drops, select carried tools, use the currently selected usable item when explicitly requested, defend against loaded hostile danger entities, and stop/cancel when recovery is unclear.
 - If a needed action is missing, report the missing primitive or adapter instead of inventing success.
 
 ## Resource Gathering
 
 - Prefer exact item ids and registry-backed recipes.
 - Use visible dropped-item acquisition when the target stack is already loaded and reachable.
-- Use simple crafting or smelting only when server recipe data and workstation/material capability gates are available.
+- Treat crafting or smelting as strategy decomposition only unless server recipe data and reviewed generic container/material capability gates are available.
 - Hidden mining, bucket workflows, trading, fishing, custom machines, and long-range searches need explicit adapters before mutation or success can be claimed.
 
 ## Travel Preparation

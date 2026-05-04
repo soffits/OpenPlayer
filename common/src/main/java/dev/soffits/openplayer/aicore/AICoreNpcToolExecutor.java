@@ -112,11 +112,6 @@ public final class AICoreNpcToolExecutor implements ToolExecutor {
             entity.stopUsingItem();
             return ToolResult.success("stop_digging accepted", Map.of("activeDigging", "false"));
         }
-        if (tool.equals("deactivate_item")) {
-            boolean wasUsingItem = entity.isUsingItem();
-            entity.stopUsingItem();
-            return ToolResult.success("deactivate_item accepted", Map.of("wasUsingItem", Boolean.toString(wasUsingItem), "usingHeldItem", Boolean.toString(entity.isUsingItem())));
-        }
         if (tool.equals("unequip")) {
             return unequip(call);
         }

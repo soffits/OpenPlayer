@@ -10,11 +10,11 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 public record ResourceAffordanceSummary(String itemId, Item item, int requestedCount, int carriedCount,
-                                        int normalInventoryCapacity, int visibleDroppedCount,
-                                        int exactSafeDroppedCount, int candidateCap, boolean candidatesTruncated,
-                                        List<DroppedItemAffordance> droppedItems,
-                                        List<WorkstationAffordance> workstations,
-                                        BlockSourceAffordance blockSource) {
+                                         int normalInventoryCapacity, int visibleDroppedCount,
+                                         int exactSafeDroppedCount, int candidateCap, boolean candidatesTruncated,
+                                         List<DroppedItemAffordance> droppedItems,
+                                         List<LoadedBlockAffordance> loadedBlocks,
+                                         BlockSourceAffordance blockSource) {
     private static final int MAX_DIAGNOSTIC_ENTRIES = 4;
 
     public ResourceAffordanceSummary {
@@ -32,7 +32,7 @@ public record ResourceAffordanceSummary(String itemId, Item item, int requestedC
             throw new IllegalArgumentException("exact-safe drops cannot exceed visible drops");
         }
         droppedItems = sortedDroppedItems(droppedItems);
-        workstations = List.copyOf(workstations == null ? List.of() : workstations);
+        loadedBlocks = List.copyOf(loadedBlocks == null ? List.of() : loadedBlocks);
     }
 
     public int missingCount() {
@@ -59,11 +59,7 @@ public record ResourceAffordanceSummary(String itemId, Item item, int requestedC
         String boundedDimensionId = dimensionId == null || dimensionId.isBlank() ? "unknown" : dimensionId.trim();
         entries.add("current_dimension=" + boundedDimensionId);
         entries.add("environment=observed_loaded_world");
-        if (boundedDimensionId.equals("minecraft:the_nether")) {
-            entries.add("nether_recovery=water_bucket_unusable beware_lava_fire_cliffs return_requires_loaded_portal_or_player_like_portal_task");
-        } else {
-            entries.add("generic_dimension_recovery=loaded_portal_or_explore_or_owner_path_if_available");
-        }
+        entries.add("environment_recovery=loaded_portal_or_explore_or_owner_path_if_available");
         entries.add("inventory=" + carriedCount + "/" + requestedCount + " capacity=" + normalInventoryCapacity);
         entries.add("visible_drops_total=" + visibleDroppedCount + " exact_safe_drops=" + exactSafeDroppedCount
                 + " candidate_stacks=" + droppedItems.size() + " candidate_cap=" + candidateCap
@@ -71,7 +67,7 @@ public record ResourceAffordanceSummary(String itemId, Item item, int requestedC
         if (visibleDroppedCount > exactSafeDroppedCount && exactSafeDroppedCount < missingCount()) {
             entries.add("visible_drop_status=exact_safe_insufficient_or_oversized");
         }
-        entries.add("workstations=" + workstationsSummary());
+        entries.add("loaded_blocks=" + loadedBlocksSummary());
         entries.add("containers=" + (containerSeen ? "nearby_safe_loaded" : "none_seen"));
         if (blockSource != null && blockSource.seen() && blockSource.diagnosticOnly()) {
             entries.add("block_sources=diagnostic_only matched=" + blockSource.matchedCount());
@@ -131,18 +127,18 @@ public record ResourceAffordanceSummary(String itemId, Item item, int requestedC
         return String.join(", ", entries);
     }
 
-    private String workstationsSummary() {
-        if (workstations.isEmpty()) {
+    private String loadedBlocksSummary() {
+        if (loadedBlocks.isEmpty()) {
             return "none";
         }
         List<String> entries = new ArrayList<>();
-        int limit = Math.min(MAX_DIAGNOSTIC_ENTRIES, workstations.size());
+        int limit = Math.min(MAX_DIAGNOSTIC_ENTRIES, loadedBlocks.size());
         for (int index = 0; index < limit; index++) {
-            WorkstationAffordance workstation = workstations.get(index);
-            entries.add(workstation.kindId() + "@" + workstation.blockPos().toShortString());
+            LoadedBlockAffordance loadedBlock = loadedBlocks.get(index);
+            entries.add(loadedBlock.blockId() + "@" + loadedBlock.blockPos().toShortString());
         }
-        if (workstations.size() > limit) {
-            entries.add("+" + (workstations.size() - limit) + " more");
+        if (loadedBlocks.size() > limit) {
+            entries.add("+" + (loadedBlocks.size() - limit) + " more");
         }
         return String.join(", ", entries);
     }
@@ -172,10 +168,10 @@ public record ResourceAffordanceSummary(String itemId, Item item, int requestedC
         }
     }
 
-    public record WorkstationAffordance(String kindId, BlockPos blockPos, String adapterId) {
-        public WorkstationAffordance {
-            if (kindId == null || kindId.isBlank() || blockPos == null || adapterId == null || adapterId.isBlank()) {
-                throw new IllegalArgumentException("invalid workstation affordance");
+    public record LoadedBlockAffordance(String blockId, BlockPos blockPos, String capabilityId) {
+        public LoadedBlockAffordance {
+            if (blockId == null || blockId.isBlank() || blockPos == null || capabilityId == null || capabilityId.isBlank()) {
+                throw new IllegalArgumentException("invalid loaded block affordance");
             }
             blockPos = blockPos.immutable();
         }

@@ -41,7 +41,7 @@ Statuses: `implemented`, `implemented_with_server_side_semantics`, `policy_rejec
 
 | Mineflayer surface | AICore tools | Status | Notes |
 | --- | --- | --- | --- |
-| `activateItem`, `deactivateItem`, `consume`, `useOn`, `activateEntity`, `activateEntityAt`, `swingArm` | `activate_item`, `deactivate_item`, `consume`, `use_on_entity`, `activate_entity`, `activate_entity_at`, `swing_arm` | `implemented_with_server_side_semantics` | Safe selected edible use, reviewed entity interaction bridges, main-hand swing, and held-use cancellation are implemented. |
+| `useOn`, `activateEntity`, `activateEntityAt`, `swingArm` | `use_on_entity`, `activate_entity`, `activate_entity_at`, `swing_arm` | implemented | Reviewed entity interaction bridges and main-hand swing. Generic held-item activation/consumption is intentionally not exposed until a reviewed adapter exists. |
 | `attack` | `attack`, `attack_nearest`, `attack_target` | `implemented_with_server_side_semantics` | Existing combat bridge remains hostile-policy gated. |
 
 ## Inventory, Equipment, And Windows
@@ -52,12 +52,12 @@ Statuses: `implemented`, `implemented_with_server_side_semantics`, `policy_rejec
 | `equip`, `unequip`, `tossStack`, `toss` | `equip`, `equip_item`, `unequip`, `toss_stack`, `toss`, `drop_item` | `implemented_with_server_side_semantics` | Existing equip/drop bridge remains. `unequip` moves equipped armor/offhand items into normal inventory only when the full transfer can be committed. `toss_stack` uses selected-stack no-loss spawn commit checks as a facade-only live executor tool and is not provider-executable yet. |
 | `simpleClick`, `clickWindow`, `putSelectedItemRange`, `putAway`, `closeWindow`, `transfer`, `openBlock`, `openEntity`, `moveSlotItem` | Matching `simple_click_*`, `click_window`, `put_selected_item_range`, `put_away`, `close_window`, `transfer`, `open_block`, `open_entity`, `move_slot_item` | `implemented_with_server_side_semantics` / `unsupported_missing_adapter` | Loaded reachable block-entity container sessions, session close, explicit no-loss item transfer, and NPC inventory slot moves are implemented in the live executor. Generic transfer rejects slot-restricted sessions with `slot_restricted_container_transfer_unsupported`. Click-mode emulation, selected-item ranges, put-away, and entity windows remain missing adapters because they need reviewed menu/session semantics. |
 
-## Recipes, Crafting, Containers, Workstations
+## Recipes, Crafting, And Containers
 
 | Mineflayer surface | AICore tools | Status | Notes |
 | --- | --- | --- | --- |
-| `recipesFor`, `recipesAll`, `craft` | `recipes_for`, `recipes_all`, `craft` | `implemented_with_server_side_semantics` / `unsupported_missing_adapter` | `recipes_for` and `recipes_all` query the live server `RecipeManager` and respect datapack/modded recipe IDs. `craft` remains unsupported until a no-loss inventory/workstation/remainder transaction adapter exists. |
-| `window.deposit`, `window.withdraw`, `window.close`, `openContainer` | `window_deposit`, `window_withdraw`, `window_close`, `open_container` | `implemented_with_server_side_semantics` | The live executor uses an NPC-owned bounded server-side session for loaded reachable block-entity containers, so sessions survive per-submit executor replacement and close clears them. Transfers use no-loss snapshots and rollback on failed fit or missing item; slot-restricted containers are rejected truthfully instead of using hidden workstation branches. Unsupported/custom non-container blocks are rejected truthfully. |
+| `recipesFor`, `recipesAll`, `craft` | `recipes_for`, `recipes_all`, `craft` | `implemented_with_server_side_semantics` / `unsupported_missing_adapter` | `recipes_for` and `recipes_all` query the live server `RecipeManager` and respect datapack/modded recipe IDs. `craft` remains unsupported until a no-loss inventory, remainder, and generic validation adapter exists. |
+| `window.deposit`, `window.withdraw`, `window.close`, `openContainer` | `window_deposit`, `window_withdraw`, `window_close`, `open_container` | `implemented_with_server_side_semantics` | The live executor uses an NPC-owned bounded server-side session for loaded reachable block-entity containers, so sessions survive per-submit executor replacement and close clears them. Transfers use no-loss snapshots and rollback on failed fit or missing item; slot-restricted containers are rejected truthfully instead of using hidden mechanics-specific branches. Unsupported/custom non-container blocks are rejected truthfully. |
 
 ## Chat, Settings, And Resource Packs
 

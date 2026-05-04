@@ -1,15 +1,11 @@
 package dev.soffits.openplayer.automation.resource;
 
 import dev.soffits.openplayer.automation.navigation.LoadedAreaNavigator;
-import dev.soffits.openplayer.automation.workstation.WorkstationCapability;
-import dev.soffits.openplayer.automation.workstation.WorkstationLocator;
-import dev.soffits.openplayer.automation.workstation.WorkstationTarget;
 import dev.soffits.openplayer.entity.NpcInventoryTransfer;
 import dev.soffits.openplayer.entity.OpenPlayerNpcEntity;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.BlockItem;
@@ -23,10 +19,7 @@ public final class ResourceAffordanceScanner {
     public static final double MAX_DROP_RADIUS = 24.0D;
     public static final int DEFAULT_CANDIDATE_CAP = 8;
     public static final int MAX_CANDIDATE_CAP = 16;
-    private static final int WORKSTATION_RADIUS = 8;
-
     private final LoadedAreaNavigator loadedAreaNavigator = new LoadedAreaNavigator();
-    private final WorkstationLocator workstationLocator = new WorkstationLocator();
 
     public ResourceAffordanceSummary summarize(OpenPlayerNpcEntity entity, String itemId, Item item, int requestedCount) {
         return summarize(entity, itemId, item, requestedCount, DEFAULT_DROP_RADIUS, DEFAULT_CANDIDATE_CAP);
@@ -47,9 +40,6 @@ public final class ResourceAffordanceScanner {
                 ? ResourceAffordanceSummary.DroppedItemScan.empty(boundedCandidateCap(requestedCandidateCap))
                 : droppedItems(serverLevel, entity, item, Math.max(0, requestedCount - carriedCount),
                         requestedDropRadius, requestedCandidateCap);
-        List<ResourceAffordanceSummary.WorkstationAffordance> workstations = serverLevel == null
-                ? List.of()
-                : workstationAffordances(serverLevel, entity.position());
         ResourceAffordanceSummary.BlockSourceAffordance blockSource = serverLevel == null
                 ? ResourceAffordanceSummary.BlockSourceAffordance.unavailable("server_level_unavailable")
                 : blockSourceAffordance(serverLevel, entity.position(), itemId, item);
@@ -57,7 +47,7 @@ public final class ResourceAffordanceScanner {
                 itemId, item, requestedCount, carriedCount, capacity,
                 droppedItemScan.visibleDroppedCount(), droppedItemScan.exactSafeDroppedCount(),
                 droppedItemScan.candidateCap(), droppedItemScan.candidatesTruncated(),
-                droppedItemScan.droppedItems(), workstations, blockSource
+                droppedItemScan.droppedItems(), List.of(), blockSource
         );
     }
 
@@ -110,26 +100,6 @@ public final class ResourceAffordanceScanner {
         return new ResourceAffordanceSummary.DroppedItemScan(
                 visibleDroppedCount, exactSafeDroppedCount, cap, exactSafeStackCount > cap, affordances
         );
-    }
-
-    private List<ResourceAffordanceSummary.WorkstationAffordance> workstationAffordances(ServerLevel serverLevel, Vec3 origin) {
-        List<ResourceAffordanceSummary.WorkstationAffordance> affordances = new ArrayList<>();
-        addWorkstations(affordances, workstationLocator.loadedNearby(
-                serverLevel, origin, WORKSTATION_RADIUS, WorkstationCapability.CRAFTING_TABLE
-        ));
-        addWorkstations(affordances, workstationLocator.loadedNearby(
-                serverLevel, origin, WORKSTATION_RADIUS, WorkstationCapability.VANILLA_FURNACE
-        ));
-        return affordances;
-    }
-
-    private static void addWorkstations(List<ResourceAffordanceSummary.WorkstationAffordance> affordances,
-                                        List<WorkstationTarget> targets) {
-        for (WorkstationTarget target : targets) {
-            affordances.add(new ResourceAffordanceSummary.WorkstationAffordance(
-                    target.capability().kind().id(), target.blockPos(), target.capability().adapterId()
-            ));
-        }
     }
 
     private ResourceAffordanceSummary.BlockSourceAffordance blockSourceAffordance(ServerLevel serverLevel, Vec3 origin,

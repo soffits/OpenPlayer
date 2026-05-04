@@ -91,10 +91,6 @@ public final class AICoreToolCatalog {
         add(defs, "activate_block", "block_mutation", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Activate a loaded block with optional cursor position.", integer("x"), integer("y"), integer("z"), object("direction", false), object("cursorPos", false));
         add(defs, "update_sign", "block_mutation", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, "unsupported_missing_sign_update_adapter", "Update sign text with bounded sanitized content.", integer("x"), integer("y"), integer("z"), text("text"), bool("back", false));
 
-        String itemUnsupported = "unsupported_missing_item_or_entity_interaction_adapter";
-        add(defs, "activate_item", "item_entity_combat", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Activate held item when the selected item is policy-safe for local NPC use.", bool("offHand", false));
-        add(defs, "deactivate_item", "item_entity_combat", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Deactivate held item use if the NPC is currently using one.");
-        add(defs, "consume", "item_entity_combat", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Consume a selected safe edible item with no container remainder.");
         add(defs, "use_on_entity", "item_entity_combat", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Use held item on a target entity through the reviewed interaction primitive.", text("entityId"));
         add(defs, "activate_entity", "item_entity_combat", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Activate an entity through the reviewed interaction primitive.", text("entityId"));
         add(defs, "activate_entity_at", "item_entity_combat", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Activate an entity at a relative position through the reviewed interaction primitive.", text("entityId"), object("position"));
@@ -140,10 +136,10 @@ public final class AICoreToolCatalog {
         add(defs, "recipes_all", "recipes_crafting", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Query all server recipes for one output item.", text("itemType"), text("metadata", false), object("craftingTable", false));
         add(defs, "craft", "recipes_crafting", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, "unsupported_missing_no_loss_crafting_adapter", "Craft a known recipe without acquiring missing resources.", text("recipe"), integer("count"), object("craftingTable", false));
 
-        add(defs, "open_container", "containers_workstations", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Open a loaded reachable block-entity container session.", object("target"));
-        add(defs, "window_deposit", "containers_workstations", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Deposit items into current generic block-entity container with no-loss semantics.", text("itemType"), text("metadata", false), integer("count"));
-        add(defs, "window_withdraw", "containers_workstations", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Withdraw items from current generic block-entity container with no-loss semantics.", text("itemType"), text("metadata", false), integer("count"));
-        add(defs, "window_close", "containers_workstations", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Close current bounded container session.");
+        add(defs, "open_container", "containers", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Open a loaded reachable block-entity container session.", object("target"));
+        add(defs, "window_deposit", "containers", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Deposit items into current generic block-entity container with no-loss semantics.", text("itemType"), text("metadata", false), integer("count"));
+        add(defs, "window_withdraw", "containers", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Withdraw items from current generic block-entity container with no-loss semantics.", text("itemType"), text("metadata", false), integer("count"));
+        add(defs, "window_close", "containers", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Close current bounded container session.");
     }
 
     private static void addChatEventsPluginsAndAdmin(List<AICoreToolDefinition> defs) {

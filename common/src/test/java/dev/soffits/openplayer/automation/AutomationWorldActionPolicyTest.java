@@ -9,9 +9,6 @@ public final class AutomationWorldActionPolicyTest {
     public static void main(String[] args) {
         Set<IntentKind> gatedActions = EnumSet.of(
                 IntentKind.COLLECT_ITEMS,
-                IntentKind.EQUIP_BEST_ITEM,
-                IntentKind.EQUIP_ARMOR,
-                IntentKind.USE_SELECTED_ITEM,
                 IntentKind.SWAP_TO_OFFHAND,
                 IntentKind.DROP_ITEM,
                 IntentKind.BREAK_BLOCK,

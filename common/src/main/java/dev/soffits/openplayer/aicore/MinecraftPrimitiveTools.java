@@ -190,8 +190,6 @@ public final class MinecraftPrimitiveTools {
         map.put(ToolName.of("activate_entity"), IntentKind.INTERACT);
         map.put(ToolName.of("activate_entity_at"), IntentKind.INTERACT);
         map.put(ToolName.of("use_on_entity"), IntentKind.INTERACT);
-        map.put(ToolName.of("activate_item"), IntentKind.USE_SELECTED_ITEM);
-        map.put(ToolName.of("consume"), IntentKind.USE_SELECTED_ITEM);
         map.put(ATTACK_NEAREST, IntentKind.ATTACK_NEAREST);
         map.put(ATTACK_TARGET, IntentKind.ATTACK_TARGET);
         map.put(ToolName.of("attack"), IntentKind.ATTACK_TARGET);

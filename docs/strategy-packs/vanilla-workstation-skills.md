@@ -19,7 +19,7 @@ This strategy pack is advisory planner knowledge only. The Java runtime does not
 ## Armor Goal
 
 - Inspect inventory and equipment with `inventory`.
-- Choose a candidate item in planner logic, then use `equip` for a specific item or `unequip` for a specific destination.
+- Choose a candidate item in planner logic, then use generic slot movement, hotbar selection, selected-item use, or `unequip` only where the runtime exposes a truthful primitive for that exact operation.
 - If the planner cannot prove a safe upgrade from visible inventory state, ask for clarification or report unavailable. Do not call an armor-manager tool.
 
 ## Trading, Enchanting, Anvils, Brewing, Smithing

@@ -21,7 +21,6 @@ public final class NpcInventoryTransferTest {
         insertionRejectsFullTargetWithoutMutation();
         hotbarSelectionOnlyScansHotbar();
         selectedHotbarDropCommitsOnlyAfterSpawnSuccess();
-        armorEquipRejectsWrongSlotAndSwapsSafely();
         exactDepositMovesRequestedCountAtomically();
         exactDepositPreservesStackData();
         exactDepositRejectsIncompatibleTaggedMergeAtomically();
@@ -31,12 +30,6 @@ public final class NpcInventoryTransferTest {
         exactWithdrawFullNpcInventoryRollsBack();
         depositAllRequiresEveryNormalStackToFit();
         containerTransferIgnoresArmorAndOffhand();
-        furnaceStartMovesInputAndFuelAtomically();
-        furnaceStartRejectsMissingInputOrFuelAtomically();
-        furnaceStartRejectsOccupiedIncompatibleSlotsAtomically();
-        furnaceOutputWithdrawPreservesStackDataAndCapacityAtomicity();
-        furnaceRecoveryMovesOwnedStacksBestEffort();
-        furnaceTransfersIgnoreArmorAndOffhand();
     }
 
     private static void matchesExactItemsOnly() {
@@ -120,19 +113,6 @@ public final class NpcInventoryTransferTest {
         require(NpcInventoryTransfer.commitSelectedHotbarDrop(stacks, 2, true),
                 "successful spawn must commit selected hotbar drop");
         require(stacks.get(2).isEmpty(), "successful spawn must clear selected hotbar slot");
-    }
-
-    private static void armorEquipRejectsWrongSlotAndSwapsSafely() {
-        NonNullList<ItemStack> stacks = emptyInventory();
-        stacks.set(10, new ItemStack(Items.IRON_CHESTPLATE));
-        stacks.set(33, new ItemStack(Items.LEATHER_CHESTPLATE));
-        require(NpcInventoryTransfer.equipArmorByItem(stacks, Items.IRON_CHESTPLATE),
-                "matching armor must equip");
-        require(stacks.get(33).is(Items.IRON_CHESTPLATE), "target armor slot must receive selected armor");
-        require(stacks.get(10).is(Items.LEATHER_CHESTPLATE), "source slot must receive previous armor");
-
-        require(!NpcInventoryTransfer.equipArmorByItem(stacks, Items.IRON_SWORD), "non-armor must reject");
-        require(!NpcInventoryTransfer.equipArmorByItem(stacks, Items.IRON_BOOTS), "missing armor item must reject");
     }
 
     private static void exactDepositMovesRequestedCountAtomically() {
@@ -267,146 +247,6 @@ public final class NpcInventoryTransferTest {
         require(npc.get(35).is(Items.SHIELD), "offhand slot must not be deposited");
         require(NpcInventoryTransfer.countItem(container, Items.DIAMOND_BOOTS, 0, container.size()) == 0,
                 "container must not receive armor slot contents");
-    }
-
-    private static void furnaceStartMovesInputAndFuelAtomically() {
-        NonNullList<ItemStack> npc = emptyInventory();
-        NonNullList<ItemStack> furnace = NonNullList.withSize(3, ItemStack.EMPTY);
-        npc.set(0, new ItemStack(Items.RAW_IRON, 2));
-        npc.set(1, new ItemStack(Items.COAL, 1));
-
-        require(NpcInventoryTransfer.startFurnaceSmelt(npc, furnace, Items.RAW_IRON, 2, Items.COAL, 1),
-                "furnace start must move exact input and fuel");
-        require(npc.get(0).isEmpty() && npc.get(1).isEmpty(), "NPC input and fuel must be removed");
-        require(furnace.get(0).is(Items.RAW_IRON) && furnace.get(0).getCount() == 2,
-                "furnace input slot must receive raw iron");
-        require(furnace.get(1).is(Items.COAL) && furnace.get(1).getCount() == 1,
-                "furnace fuel slot must receive coal");
-    }
-
-    private static void furnaceStartRejectsMissingInputOrFuelAtomically() {
-        NonNullList<ItemStack> npc = emptyInventory();
-        NonNullList<ItemStack> furnace = NonNullList.withSize(3, ItemStack.EMPTY);
-        npc.set(0, new ItemStack(Items.RAW_IRON, 1));
-        List<ItemStack> npcSnapshot = NpcInventoryTransfer.copyStacks(npc);
-        List<ItemStack> furnaceSnapshot = NpcInventoryTransfer.copyStacks(furnace);
-
-        require(!NpcInventoryTransfer.startFurnaceSmelt(npc, furnace, Items.RAW_IRON, 2, Items.COAL, 1),
-                "missing input must reject");
-        require(stacksEqual(npc, npcSnapshot), "missing input must leave NPC unchanged");
-        require(stacksEqual(furnace, furnaceSnapshot), "missing input must leave furnace unchanged");
-
-        npc.set(0, new ItemStack(Items.RAW_IRON, 2));
-        npcSnapshot = NpcInventoryTransfer.copyStacks(npc);
-        require(!NpcInventoryTransfer.startFurnaceSmelt(npc, furnace, Items.RAW_IRON, 2, Items.COAL, 1),
-                "missing fuel must reject");
-        require(stacksEqual(npc, npcSnapshot), "missing fuel must leave NPC unchanged");
-        require(stacksEqual(furnace, furnaceSnapshot), "missing fuel must leave furnace unchanged");
-    }
-
-    private static void furnaceStartRejectsOccupiedIncompatibleSlotsAtomically() {
-        NonNullList<ItemStack> npc = emptyInventory();
-        npc.set(0, new ItemStack(Items.RAW_IRON, 1));
-        npc.set(1, new ItemStack(Items.COAL, 1));
-        NonNullList<ItemStack> furnace = NonNullList.withSize(3, ItemStack.EMPTY);
-        furnace.set(0, new ItemStack(Items.RAW_COPPER, 1));
-        requireFurnaceStartRejectedUnchanged(npc, furnace, "incompatible input must reject");
-
-        furnace = NonNullList.withSize(3, ItemStack.EMPTY);
-        furnace.set(1, new ItemStack(Items.CHARCOAL, 1));
-        requireFurnaceStartRejectedUnchanged(npc, furnace, "incompatible fuel must reject");
-
-        furnace = NonNullList.withSize(3, ItemStack.EMPTY);
-        furnace.set(0, new ItemStack(Items.RAW_IRON, 1));
-        requireFurnaceStartRejectedUnchanged(npc, furnace, "compatible pre-filled input must reject");
-
-        furnace = NonNullList.withSize(3, ItemStack.EMPTY);
-        furnace.set(1, new ItemStack(Items.COAL, 1));
-        requireFurnaceStartRejectedUnchanged(npc, furnace, "compatible pre-filled fuel must reject");
-
-        furnace = NonNullList.withSize(3, ItemStack.EMPTY);
-        furnace.set(2, new ItemStack(Items.IRON_INGOT, 1));
-        requireFurnaceStartRejectedUnchanged(npc, furnace, "occupied result must reject");
-    }
-
-    private static void furnaceOutputWithdrawPreservesStackDataAndCapacityAtomicity() {
-        NonNullList<ItemStack> npc = emptyInventory();
-        NonNullList<ItemStack> furnace = NonNullList.withSize(3, ItemStack.EMPTY);
-        ItemStack taggedOutput = taggedStack(Items.IRON_INGOT, 2, "phase7b-output");
-        furnace.set(2, taggedOutput.copy());
-
-        require(NpcInventoryTransfer.withdrawFurnaceOutput(npc, furnace, Items.IRON_INGOT, 1),
-                "furnace output withdraw must move requested output");
-        require(npc.get(0).getCount() == 1 && ItemStack.isSameItemSameTags(npc.get(0), taggedOutput),
-                "withdrawn furnace output must preserve tags");
-        require(furnace.get(2).getCount() == 1 && ItemStack.isSameItemSameTags(furnace.get(2), taggedOutput),
-                "furnace output remainder must preserve tags");
-
-        for (int slot = 0; slot < 31; slot++) {
-            npc.set(slot, new ItemStack(Items.STONE, 64));
-        }
-        List<ItemStack> npcSnapshot = NpcInventoryTransfer.copyStacks(npc);
-        List<ItemStack> furnaceSnapshot = NpcInventoryTransfer.copyStacks(furnace);
-        require(!NpcInventoryTransfer.withdrawFurnaceOutput(npc, furnace, Items.IRON_INGOT, 1),
-                "full NPC inventory must reject furnace output withdraw");
-        require(stacksEqual(npc, npcSnapshot), "failed output withdraw must leave NPC unchanged");
-        require(stacksEqual(furnace, furnaceSnapshot), "failed output withdraw must leave furnace unchanged");
-    }
-
-    private static void furnaceRecoveryMovesOwnedStacksBestEffort() {
-        NonNullList<ItemStack> npc = emptyInventory();
-        NonNullList<ItemStack> furnace = NonNullList.withSize(3, ItemStack.EMPTY);
-        ItemStack taggedOutput = taggedStack(Items.IRON_INGOT, 1, "phase7b-recovery");
-        furnace.set(0, new ItemStack(Items.RAW_IRON, 1));
-        furnace.set(1, new ItemStack(Items.COAL, 1));
-        furnace.set(2, taggedOutput.copy());
-
-        require(NpcInventoryTransfer.recoverFurnaceSmeltResources(
-                npc, furnace, Items.RAW_IRON, Items.COAL, Items.IRON_INGOT
-        ), "owned furnace resources must recover into NPC inventory when capacity exists");
-        require(furnace.get(0).isEmpty() && furnace.get(1).isEmpty() && furnace.get(2).isEmpty(),
-                "successful recovery must clear owned furnace slots");
-        require(NpcInventoryTransfer.countItem(npc, Items.RAW_IRON, 0, 31) == 1,
-                "recovery must return owned input");
-        require(NpcInventoryTransfer.countItem(npc, Items.COAL, 0, 31) == 1,
-                "recovery must return owned fuel");
-        require(npc.get(0).getCount() == 1 && ItemStack.isSameItemSameTags(npc.get(0), taggedOutput),
-                "recovery must preserve output stack tags");
-
-        for (int slot = 0; slot < 31; slot++) {
-            npc.set(slot, new ItemStack(Items.STONE, 64));
-        }
-        furnace.set(0, new ItemStack(Items.RAW_IRON, 1));
-        List<ItemStack> npcSnapshot = NpcInventoryTransfer.copyStacks(npc);
-        List<ItemStack> furnaceSnapshot = NpcInventoryTransfer.copyStacks(furnace);
-        require(!NpcInventoryTransfer.recoverFurnaceSmeltResources(
-                npc, furnace, Items.RAW_IRON, Items.COAL, Items.IRON_INGOT
-        ), "recovery without capacity must fail atomically");
-        require(stacksEqual(npc, npcSnapshot), "failed recovery must leave NPC unchanged");
-        require(stacksEqual(furnace, furnaceSnapshot), "failed recovery must leave furnace unchanged");
-    }
-
-    private static void furnaceTransfersIgnoreArmorAndOffhand() {
-        NonNullList<ItemStack> npc = emptyInventory();
-        NonNullList<ItemStack> furnace = NonNullList.withSize(3, ItemStack.EMPTY);
-        npc.set(31, new ItemStack(Items.RAW_IRON, 1));
-        npc.set(35, new ItemStack(Items.COAL, 1));
-
-        require(!NpcInventoryTransfer.startFurnaceSmelt(npc, furnace, Items.RAW_IRON, 1, Items.COAL, 1),
-                "furnace start must ignore armor and offhand slots");
-        require(npc.get(31).is(Items.RAW_IRON), "armor slot must remain unchanged");
-        require(npc.get(35).is(Items.COAL), "offhand slot must remain unchanged");
-        require(furnace.get(0).isEmpty() && furnace.get(1).isEmpty(), "furnace must remain unchanged");
-    }
-
-    private static void requireFurnaceStartRejectedUnchanged(NonNullList<ItemStack> npc,
-                                                            NonNullList<ItemStack> furnace,
-                                                            String message) {
-        List<ItemStack> npcSnapshot = NpcInventoryTransfer.copyStacks(npc);
-        List<ItemStack> furnaceSnapshot = NpcInventoryTransfer.copyStacks(furnace);
-        require(!NpcInventoryTransfer.startFurnaceSmelt(npc, furnace, Items.RAW_IRON, 1, Items.COAL, 1), message);
-        require(stacksEqual(npc, npcSnapshot), message + " and leave NPC unchanged");
-        require(stacksEqual(furnace, furnaceSnapshot), message + " and leave furnace unchanged");
     }
 
     private static NonNullList<ItemStack> emptyInventory() {

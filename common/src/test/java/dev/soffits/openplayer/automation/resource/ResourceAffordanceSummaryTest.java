@@ -21,7 +21,7 @@ public final class ResourceAffordanceSummaryTest {
         multipleExactSafeStacksCanSatisfyMissingCount();
         droppedItemsAreSortedDeterministically();
         diagnosticsAreBoundedAndTruthful();
-        diagnosticsIncludeNetherRecoveryConstraints();
+        diagnosticsIncludeEnvironmentRecoveryConstraints();
         diagnosticsIncludeGenericDimensionRecovery();
         visibleBlockSourcesCanSatisfyBlockItemsWhenInventoryFits();
     }
@@ -105,8 +105,8 @@ public final class ResourceAffordanceSummaryTest {
         ResourceAffordanceSummary summary = new ResourceAffordanceSummary(
                 "minecraft:oak_log", Items.OAK_LOG, 12, 1, 64, 10, 10, 1, true,
                 List.of(new ResourceAffordanceSummary.DroppedItemAffordance("a", new BlockPos(1, 64, 0), 2, 1.0D)),
-                List.of(new ResourceAffordanceSummary.WorkstationAffordance(
-                        "crafting_table", new BlockPos(2, 64, 0), "vanilla_crafting_table"
+                List.of(new ResourceAffordanceSummary.LoadedBlockAffordance(
+                        "minecraft:barrel", new BlockPos(2, 64, 0), "loaded_container"
                 )),
                 new ResourceAffordanceSummary.BlockSourceAffordance(true, 3, false,
                         "visible_block_break_collect_verify", new BlockPos(3, 64, 0))
@@ -119,25 +119,25 @@ public final class ResourceAffordanceSummaryTest {
         require(diagnostics.contains("exact_safe_drops=10"), "diagnostics must include exact-safe drop count");
         require(diagnostics.contains("candidate_stacks=1 candidate_cap=1 truncated=true"),
                 "diagnostics must include candidate cap status");
-        require(diagnostics.contains("workstations=crafting_table@"), "diagnostics must include workstation summary");
+        require(diagnostics.contains("loaded_blocks=minecraft:barrel@"), "diagnostics must include loaded block summary");
         require(diagnostics.contains("containers=nearby_safe_loaded"), "diagnostics must include container observation");
         require(diagnostics.contains("block_sources=available matched=3 nearest=3, 64, 0"),
                 "block sources must expose bounded acquisition capability");
     }
 
-    private static void diagnosticsIncludeNetherRecoveryConstraints() {
+    private static void diagnosticsIncludeEnvironmentRecoveryConstraints() {
         ResourceAffordanceSummary summary = new ResourceAffordanceSummary(
                 "minecraft:blaze_rod", Items.BLAZE_ROD, 1, 0, 64, 0, 0, 8, false,
                 List.of(), List.of(),
                 new ResourceAffordanceSummary.BlockSourceAffordance(false, 0, true, "not_a_block_item")
         );
 
-        String diagnostics = summary.boundedDiagnostics(false, "minecraft:the_nether");
+        String diagnostics = summary.boundedDiagnostics(false, "minecraft:custom_dimension");
 
-        require(diagnostics.contains("current_dimension=minecraft:the_nether"),
+        require(diagnostics.contains("current_dimension=minecraft:custom_dimension"),
                 "diagnostics must include current dimension");
-        require(diagnostics.contains("nether_recovery=water_bucket_unusable"),
-                "Nether diagnostics must include obvious recovery constraints");
+        require(diagnostics.contains("environment_recovery=loaded_portal_or_explore_or_owner_path_if_available"),
+                "environment diagnostics must include generic recovery options");
     }
 
     private static void diagnosticsIncludeGenericDimensionRecovery() {
@@ -153,7 +153,7 @@ public final class ResourceAffordanceSummaryTest {
                 "diagnostics must preserve arbitrary dimension ids");
         require(diagnostics.contains("environment=observed_loaded_world"),
                 "diagnostics must describe observed loaded world state");
-        require(diagnostics.contains("generic_dimension_recovery=loaded_portal_or_explore_or_owner_path_if_available"),
+        require(diagnostics.contains("environment_recovery=loaded_portal_or_explore_or_owner_path_if_available"),
                 "diagnostics must expose generic player-like recovery options");
     }
 

@@ -52,7 +52,7 @@ Suggested fields:
 - `scope`: `vanilla`, `datapack`, `modpack`, or another safe local label.
 - `description`: bounded non-secret summary.
 - `guide`: relative markdown or text path inside the pack.
-- `requiresCapability`: optional comma-separated capability ids that the guide expects, such as `movement.loaded` or `recipe.simple_crafting`.
+- `requiresCapability`: optional comma-separated capability ids that the guide expects, such as `movement.loaded` or `recipe.registry_query`.
 
 Unknown fields should be rejected by any future parser rather than silently gaining behavior.
 
