@@ -14,6 +14,10 @@ final class AICoreTestSupport {
         require(AICoreToolCatalog.registry().contains(ToolName.of(name)), "missing tool: " + name);
     }
 
+    static void requireNoTool(String name) {
+        require(!AICoreToolCatalog.registry().contains(ToolName.of(name)), "unexpected tool: " + name);
+    }
+
     static void requireStatus(String name, CapabilityStatus status) {
         AICoreToolDefinition definition = AICoreToolCatalog.definition(ToolName.of(name)).orElseThrow();
         require(definition.capabilityStatus() == status, "unexpected status for " + name + ": " + definition.capabilityStatus());

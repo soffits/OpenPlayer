@@ -19,7 +19,7 @@ public final class AICoreToolValidationTest {
         requireRejectedMaxDistance("entity_at_cursor", new ToolArguments(Map.of("maxDistance", "Infinity")));
         requireRejectedMaxDistance("block_at_entity_cursor", new ToolArguments(Map.of("entityId", "entity-1", "maxDistance", "0")));
         AICoreTestSupport.requireRejected(MinecraftPrimitiveTools.validate(ToolCall.of("dig", new ToolArguments(Map.of("x", "1", "y", "64", "z", "2"))), new ToolValidationContext(false)), "World actions are disabled for this OpenPlayer character");
-        AICoreTestSupport.requireFailed(MinecraftPrimitiveTools.validate(ToolCall.of("fish", ToolArguments.empty()), new ToolValidationContext(true)), "unsupported_missing_npc_fishing_hook_adapter");
+        AICoreTestSupport.requireRejected(MinecraftPrimitiveTools.validate(ToolCall.of("fish", ToolArguments.empty()), new ToolValidationContext(true)), "Unknown tool: fish");
     }
 
     private static void requireDecimalMaxDistance(String toolName, ToolArguments arguments) {

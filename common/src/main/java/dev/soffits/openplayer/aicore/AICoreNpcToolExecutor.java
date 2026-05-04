@@ -18,16 +18,12 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
-import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.WorldlyContainer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Recipe;
-import net.minecraft.world.item.crafting.RecipeType;
-import net.minecraft.world.level.block.BedBlock;
-import net.minecraft.world.level.block.ChestBlock;
-import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.state.BlockState;
@@ -133,8 +129,8 @@ public final class AICoreNpcToolExecutor implements ToolExecutor {
         if (tool.equals("pathfinder_set_goal")) {
             return pathfinderSetGoal(call);
         }
-        if (tool.equals("open_block") || tool.equals("open_container") || tool.equals("open_chest")) {
-            return openContainer(call, tool.equals("open_chest"));
+        if (tool.equals("open_block") || tool.equals("open_container")) {
+            return openContainer(call);
         }
         if (tool.equals("window_deposit")) {
             return windowTransfer(call, true);
@@ -151,21 +147,6 @@ public final class AICoreNpcToolExecutor implements ToolExecutor {
         }
         if (tool.equals("transfer")) {
             return transfer(call);
-        }
-        if (tool.equals("open_furnace")) {
-            return openFurnace(call);
-        }
-        if (tool.startsWith("furnace_")) {
-            return furnace(call);
-        }
-        if (tool.equals("is_bed")) {
-            return isBed(call);
-        }
-        if (tool.equals("armor_manager_equip_best")) {
-            return entity.equipBestAvailableArmor() ? ToolResult.success("armor_manager_equip_best accepted") : ToolResult.rejected("no_armor_upgrade_available");
-        }
-        if (tool.equals("armor_manager_status")) {
-            return ToolResult.success("armor_manager_status idle", Map.of("mode", "manual", "active", "false"));
         }
         if (tool.equals("look")) {
             return look(call);
@@ -421,7 +402,7 @@ public final class AICoreNpcToolExecutor implements ToolExecutor {
                 : ToolResult.rejected(submission.message());
     }
 
-    private ToolResult openContainer(ToolCall call, boolean chestOnly) {
+    private ToolResult openContainer(ToolCall call) {
         ServerLevel level = serverLevel();
         if (level == null) {
             return ToolResult.failed("server_level_unavailable");
@@ -434,10 +415,7 @@ public final class AICoreNpcToolExecutor implements ToolExecutor {
         if (container == null) {
             return ToolResult.failed("unsupported_missing_loaded_container_block_entity");
         }
-        if (chestOnly && !(level.getBlockState(pos).getBlock() instanceof ChestBlock)) {
-            return ToolResult.failed("target_is_not_loaded_chest_block");
-        }
-        entity.aicoreSessionState().openContainer(pos, container instanceof AbstractFurnaceBlockEntity);
+        entity.aicoreSessionState().openContainer(pos, container instanceof WorldlyContainer);
         return ToolResult.success("container session opened", Map.of("x", Integer.toString(pos.getX()), "y", Integer.toString(pos.getY()), "z", Integer.toString(pos.getZ()), "slots", Integer.toString(container.getContainerSize())));
     }
 
@@ -495,107 +473,10 @@ public final class AICoreNpcToolExecutor implements ToolExecutor {
     }
 
     static ToolResult genericWindowTransferSessionRejection(AICoreNpcSessionState sessionState) {
-        if (sessionState != null && sessionState.hasFurnaceSession()) {
-            return ToolResult.rejected("use_furnace_specific_transfer_tools");
+        if (sessionState != null && sessionState.hasSlotRestrictedContainerSession()) {
+            return ToolResult.rejected("slot_restricted_container_transfer_unsupported");
         }
         return null;
-    }
-
-    private ToolResult openFurnace(ToolCall call) {
-        ServerLevel level = serverLevel();
-        if (level == null) {
-            return ToolResult.failed("server_level_unavailable");
-        }
-        BlockPos pos = blockPos(call.arguments().values());
-        Container container = containerAt(level, pos);
-        if (!(container instanceof AbstractFurnaceBlockEntity)) {
-            return ToolResult.failed("target_is_not_loaded_furnace_block_entity");
-        }
-        entity.aicoreSessionState().openFurnace(pos);
-        return ToolResult.success("furnace session opened", Map.of("x", Integer.toString(pos.getX()), "y", Integer.toString(pos.getY()), "z", Integer.toString(pos.getZ())));
-    }
-
-    private ToolResult furnace(ToolCall call) {
-        ServerLevel level = serverLevel();
-        Container furnace = currentFurnace(level);
-        if (furnace == null) {
-            return ToolResult.failed("no_current_loaded_furnace_session");
-        }
-        String tool = call.name().value();
-        if (tool.equals("furnace_status")) {
-            return ToolResult.success("furnace_status", Map.of(
-                    "input", stackSummary(furnace.getItem(0)),
-                    "fuel", stackSummary(furnace.getItem(1)),
-                    "output", stackSummary(furnace.getItem(2))
-            ));
-        }
-        int slot = switch (tool) {
-            case "furnace_put_input", "furnace_take_input" -> 0;
-            case "furnace_put_fuel", "furnace_take_fuel" -> 1;
-            case "furnace_take_output" -> 2;
-            default -> -1;
-        };
-        if (slot < 0) {
-            return ToolResult.failed("unsupported_missing_workstation_adapter");
-        }
-        Item item = item(call.arguments().values().get("itemType"));
-        if (item == null) {
-            return ToolResult.rejected("unknown_item_type");
-        }
-        Integer count = boundedCountOrNull(call.arguments().values().getOrDefault("count", "1"));
-        if (count == null) {
-            return ToolResult.rejected("count must be between 1 and 256");
-        }
-        if (tool.equals("furnace_put_input") && !isSmeltableInput(level, item)) {
-            return ToolResult.rejected("furnace_input_item_is_not_smeltable");
-        }
-        if (tool.equals("furnace_put_fuel") && !AbstractFurnaceBlockEntity.isFuel(new ItemStack(item))) {
-            return ToolResult.rejected("furnace_fuel_item_is_not_fuel");
-        }
-        List<ItemStack> furnaceSnapshot = containerSnapshot(furnace);
-        List<ItemStack> npcSnapshot = entity.inventorySnapshot();
-        boolean transferred = tool.startsWith("furnace_put")
-                ? putFurnaceSlot(furnaceSnapshot, slot, item, count)
-                : takeFurnaceSlot(furnaceSnapshot, slot, item, count);
-        if (!transferred) {
-            return ToolResult.rejected("furnace_transfer_preconditions_failed");
-        }
-        restoreContainer(furnace, furnaceSnapshot);
-        if (npcSnapshot.size() != entity.inventorySnapshot().size()) {
-            return ToolResult.failed("inventory_snapshot_changed_unexpectedly");
-        }
-        return ToolResult.success(tool + " accepted", Map.of("itemType", BuiltInRegistries.ITEM.getKey(item).toString(), "count", Integer.toString(count)));
-    }
-
-    private boolean putFurnaceSlot(List<ItemStack> furnaceStacks, int slot, Item item, int count) {
-        List<ItemStack> singleSlot = new ArrayList<>(List.of(furnaceStacks.get(slot).copy()));
-        if (!entity.depositInventoryItemTo(singleSlot, item, count)) {
-            return false;
-        }
-        furnaceStacks.set(slot, singleSlot.get(0).copy());
-        return true;
-    }
-
-    private boolean takeFurnaceSlot(List<ItemStack> furnaceStacks, int slot, Item item, int count) {
-        List<ItemStack> singleSlot = new ArrayList<>(List.of(furnaceStacks.get(slot).copy()));
-        if (!entity.withdrawInventoryItemFrom(singleSlot, item, count)) {
-            return false;
-        }
-        furnaceStacks.set(slot, singleSlot.get(0).copy());
-        return true;
-    }
-
-    private ToolResult isBed(ToolCall call) {
-        ServerLevel level = serverLevel();
-        if (level == null) {
-            return ToolResult.failed("server_level_unavailable");
-        }
-        BlockPos pos = blockPos(call.arguments().values());
-        if (!level.hasChunkAt(pos)) {
-            return ToolResult.failed("target_chunk_unloaded");
-        }
-        boolean bed = level.getBlockState(pos).getBlock() instanceof BedBlock;
-        return ToolResult.success("is_bed=" + bed, Map.of("isBed", Boolean.toString(bed)));
     }
 
     private ToolResult look(ToolCall call) {
@@ -689,19 +570,6 @@ public final class AICoreNpcToolExecutor implements ToolExecutor {
         return pos == null ? null : containerAt(level, pos);
     }
 
-    private Container currentFurnace(ServerLevel level) {
-        BlockPos pos = entity.aicoreSessionState().furnacePos();
-        Container container = pos == null ? null : containerAt(level, pos);
-        return container instanceof AbstractFurnaceBlockEntity ? container : null;
-    }
-
-    private boolean isSmeltableInput(ServerLevel level, Item item) {
-        if (level == null || item == null) {
-            return false;
-        }
-        return level.getRecipeManager().getRecipeFor(RecipeType.SMELTING, new SimpleContainer(new ItemStack(item)), level).isPresent();
-    }
-
     private static List<ItemStack> containerSnapshot(Container container) {
         ArrayList<ItemStack> stacks = new ArrayList<>(container.getContainerSize());
         for (int slot = 0; slot < container.getContainerSize(); slot++) {
@@ -720,13 +588,6 @@ public final class AICoreNpcToolExecutor implements ToolExecutor {
     private static Item item(String itemType) {
         ResourceLocation itemId = ResourceLocation.tryParse(itemType == null ? "" : itemType);
         return itemId != null && BuiltInRegistries.ITEM.containsKey(itemId) ? BuiltInRegistries.ITEM.get(itemId) : null;
-    }
-
-    private static String stackSummary(ItemStack stack) {
-        if (stack == null || stack.isEmpty()) {
-            return "empty";
-        }
-        return BuiltInRegistries.ITEM.getKey(stack.getItem()) + " x" + stack.getCount();
     }
 
     private static String goalInstruction(String goalJson) {

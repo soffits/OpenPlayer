@@ -33,7 +33,7 @@ public final class AICoreToolCatalog {
                 new CapabilityModule("minecraft-core", "Server-side Minecraft state, query, and primitive action surface.", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS),
                 new CapabilityModule("pathfinder", "Loaded-area navigation goal facade with truthful path diagnostics.", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS),
                 new CapabilityModule("inventory", "Inventory and equipment primitives with no-loss validation contracts.", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS),
-                new CapabilityModule("containers", "Loaded block-entity container and furnace sessions with no-loss transfer boundaries.", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS),
+                new CapabilityModule("containers", "Loaded block-entity container sessions with no-loss transfer boundaries.", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS),
                 new CapabilityModule("crafting", "Datapack-aware recipe query surface without resource acquisition chains.", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS),
                 new CapabilityModule("combat", "Combat primitives gated by hostile-only default policy.", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS),
                 new CapabilityModule("events", "Bounded sanitized session event ring buffer.", CapabilityStatus.IMPLEMENTED),
@@ -95,7 +95,6 @@ public final class AICoreToolCatalog {
         add(defs, "activate_item", "item_entity_combat", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Activate held item when the selected item is policy-safe for local NPC use.", bool("offHand", false));
         add(defs, "deactivate_item", "item_entity_combat", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Deactivate held item use if the NPC is currently using one.");
         add(defs, "consume", "item_entity_combat", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Consume a selected safe edible item with no container remainder.");
-        add(defs, "fish", "item_entity_combat", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, "unsupported_missing_npc_fishing_hook_adapter", "Fish only when a real NPC-owned hook adapter exists.");
         add(defs, "use_on_entity", "item_entity_combat", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Use held item on a target entity through the reviewed interaction primitive.", text("entityId"));
         add(defs, "activate_entity", "item_entity_combat", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Activate an entity through the reviewed interaction primitive.", text("entityId"));
         add(defs, "activate_entity_at", "item_entity_combat", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Activate an entity at a relative position through the reviewed interaction primitive.", text("entityId"), object("position"));
@@ -103,14 +102,9 @@ public final class AICoreToolCatalog {
         add(defs, "attack_nearest", "item_entity_combat", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Legacy nearest hostile attack bridge.", integer("maxDistance", false));
         add(defs, "attack_target", "item_entity_combat", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Legacy explicit hostile attack bridge.", text("entityId"));
         add(defs, "swing_arm", "item_entity_combat", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Swing the NPC main hand for visible ordinary-player-like feedback.", text("hand", false), bool("showHand", false));
-        add(defs, "mount", "item_entity_combat", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, "unsupported_missing_mount_adapter", "Mount a rideable entity after policy validation.", text("entityId"));
-        add(defs, "dismount", "item_entity_combat", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, false, "unsupported_missing_mount_adapter", "Dismount current vehicle.");
-        add(defs, "move_vehicle", "item_entity_combat", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, "unsupported_missing_vehicle_adapter", "Move current vehicle with bounded inputs.", number("left"), number("forward"));
-        add(defs, "elytra_fly", "item_entity_combat", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, "unsupported_missing_server_side_elytra_physics_adapter", "Start elytra flight only with real server-side physics support.");
-
         addInventory(defs);
         addCraftingAndContainers(defs);
-        addChatBedEventsPluginsAndAdmin(defs);
+        addChatEventsPluginsAndAdmin(defs);
         addEcosystem(defs);
 
         return Collections.unmodifiableList(defs);
@@ -146,27 +140,13 @@ public final class AICoreToolCatalog {
         add(defs, "recipes_all", "recipes_crafting", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Query all server recipes for one output item.", text("itemType"), text("metadata", false), object("craftingTable", false));
         add(defs, "craft", "recipes_crafting", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, "unsupported_missing_no_loss_crafting_adapter", "Craft a known recipe without acquiring missing resources.", text("recipe"), integer("count"), object("craftingTable", false));
 
-        String windowReason = "unsupported_missing_container_session_adapter";
-        String workstationReason = "unsupported_missing_workstation_adapter";
         add(defs, "open_container", "containers_workstations", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Open a loaded reachable block-entity container session.", object("target"));
-        add(defs, "open_chest", "containers_workstations", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Open a loaded reachable chest container session.", object("target"));
-        add(defs, "open_furnace", "containers_workstations", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Open a loaded reachable furnace-like block session.", integer("x"), integer("y"), integer("z"));
-        add(defs, "open_dispenser", "containers_workstations", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, workstationReason, "Open a dispenser block after validation.", integer("x"), integer("y"), integer("z"));
-        add(defs, "open_enchantment_table", "containers_workstations", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, workstationReason, "Open an enchantment table after validation.", integer("x"), integer("y"), integer("z"));
-        add(defs, "open_anvil", "containers_workstations", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, workstationReason, "Open an anvil after validation.", integer("x"), integer("y"), integer("z"));
-        add(defs, "open_villager", "containers_workstations", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, workstationReason, "Open villager trade window after validation.", text("entityId"));
-        add(defs, "window_deposit", "containers_workstations", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Deposit items into current non-furnace block-entity container with no-loss semantics.", text("itemType"), text("metadata", false), integer("count"));
-        add(defs, "window_withdraw", "containers_workstations", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Withdraw items from current non-furnace block-entity container with no-loss semantics.", text("itemType"), text("metadata", false), integer("count"));
-        add(defs, "window_close", "containers_workstations", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Close current bounded container or furnace session.");
-        for (String name : List.of("furnace_take_input", "furnace_take_fuel", "furnace_take_output", "furnace_put_input", "furnace_put_fuel", "furnace_status")) {
-            add(defs, name, "containers_workstations", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, !name.equals("furnace_status"), "", "Furnace session slot transfer/status without fake smelting completion.", text("target", false), text("itemType", false), integer("count", false));
-        }
-        for (String name : List.of("enchantment_table_status", "enchant", "enchantment_take_target", "enchantment_put_target", "enchantment_put_lapis", "anvil_combine", "villager_trades", "villager_trade")) {
-            add(defs, name, "containers_workstations", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, name.contains("status") || name.equals("villager_trades") ? false : true, workstationReason, "Workstation parity surface requiring a real session adapter.", text("target", false), integer("count", false));
-        }
+        add(defs, "window_deposit", "containers_workstations", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Deposit items into current generic block-entity container with no-loss semantics.", text("itemType"), text("metadata", false), integer("count"));
+        add(defs, "window_withdraw", "containers_workstations", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Withdraw items from current generic block-entity container with no-loss semantics.", text("itemType"), text("metadata", false), integer("count"));
+        add(defs, "window_close", "containers_workstations", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Close current bounded container session.");
     }
 
-    private static void addChatBedEventsPluginsAndAdmin(List<AICoreToolDefinition> defs) {
+    private static void addChatEventsPluginsAndAdmin(List<AICoreToolDefinition> defs) {
         add(defs, "chat", "chat_settings", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Emit companion speech through the OpenPlayer chat/speech layer.", text("message"));
         add(defs, "whisper", "chat_settings", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, false, "unsupported_missing_safe_whisper_adapter", "Send direct message only when a safe adapter exists.", text("username"), text("message"));
         add(defs, "tab_complete", "chat_settings", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, false, "unsupported_missing_permission_aware_tab_complete_adapter", "Permission-aware read-only tab completion.", text("input"), bool("assumeCommand", false));
@@ -174,12 +154,8 @@ public final class AICoreToolCatalog {
             add(defs, name, "chat_settings", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, false, "unsupported_missing_bounded_chat_pattern_adapter", "Bounded session-scoped chat pattern or setting parity surface.", text("name", false), text("pattern", false));
         }
 
-        add(defs, "sleep", "bed_respawn_resource_pack", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, "unsupported_missing_sleep_adapter", "Sleep through a real bed interaction.", integer("x"), integer("y"), integer("z"));
-        add(defs, "is_bed", "bed_respawn_resource_pack", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Return whether a loaded block is a bed.", integer("x"), integer("y"), integer("z"));
-        add(defs, "wake", "bed_respawn_resource_pack", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, false, "unsupported_missing_sleep_adapter", "Wake from a real sleeping state.");
-        add(defs, "respawn", "bed_respawn_resource_pack", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, false, "unsupported_missing_npc_respawn_adapter", "Map respawn to NPC lifecycle recovery when available.");
-        add(defs, "accept_resource_pack", "bed_respawn_resource_pack", CapabilityStatus.NOT_APPLICABLE_SERVER_SIDE_NPC, false, "unsupported_server_side_npc_no_client_resource_pack_flow", "Resource pack client flow is not applicable to server-side NPCs.");
-        add(defs, "deny_resource_pack", "bed_respawn_resource_pack", CapabilityStatus.NOT_APPLICABLE_SERVER_SIDE_NPC, false, "unsupported_server_side_npc_no_client_resource_pack_flow", "Resource pack client flow is not applicable to server-side NPCs.");
+        add(defs, "accept_resource_pack", "resource_pack", CapabilityStatus.NOT_APPLICABLE_SERVER_SIDE_NPC, false, "unsupported_server_side_npc_no_client_resource_pack_flow", "Resource pack client flow is not applicable to server-side NPCs.");
+        add(defs, "deny_resource_pack", "resource_pack", CapabilityStatus.NOT_APPLICABLE_SERVER_SIDE_NPC, false, "unsupported_server_side_npc_no_client_resource_pack_flow", "Resource pack client flow is not applicable to server-side NPCs.");
 
         add(defs, "observe_events", "events", CapabilityStatus.IMPLEMENTED, false, "", "Read sanitized bounded events after a cursor.", text("cursor", false), integer("limit", false));
         add(defs, "wait_for_event", "events", CapabilityStatus.IMPLEMENTED, false, "", "Wait for a bounded event type and timeout.", text("eventType"), integer("timeoutTicks"));
@@ -193,18 +169,10 @@ public final class AICoreToolCatalog {
     }
 
     private static void addEcosystem(List<AICoreToolDefinition> defs) {
-        add(defs, "collectblock_collect", "ecosystem_collectblock", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, "unsupported_missing_collectblock_adapter", "Transparent collectblock facade requiring step diagnostics; not a hidden get-item macro.", object("targets"));
-        add(defs, "collectblock_cancel", "ecosystem_collectblock", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, false, "unsupported_missing_collectblock_adapter", "Cancel collectblock facade work.");
-        add(defs, "collectblock_status", "ecosystem_collectblock", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, false, "unsupported_missing_collectblock_adapter", "Return collectblock facade diagnostics.");
         add(defs, "pvp_attack", "ecosystem_pvp", CapabilityStatus.POLICY_REJECTED, true, "policy_rejected_hostile_allowlist_required", "PVP facade attack requires explicit hostile policy and never targets players by default.", text("entityId"));
         add(defs, "pvp_stop", "ecosystem_pvp", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Stop PVP facade or bridged attack automation.");
         add(defs, "pvp_force_stop", "ecosystem_pvp", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Force stop PVP facade or bridged attack automation.");
         add(defs, "pvp_status", "ecosystem_pvp", CapabilityStatus.IMPLEMENTED, false, "", "Return PVP facade status.");
-        add(defs, "auto_eat_enable", "ecosystem_auto_eat_armor", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, false, "unsupported_missing_auto_eat_adapter", "Enable bounded visible auto-eat mode.");
-        add(defs, "auto_eat_disable", "ecosystem_auto_eat_armor", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, false, "unsupported_missing_auto_eat_adapter", "Disable auto-eat mode.");
-        add(defs, "auto_eat_status", "ecosystem_auto_eat_armor", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, false, "unsupported_missing_auto_eat_adapter", "Return auto-eat mode status.");
-        add(defs, "armor_manager_equip_best", "ecosystem_auto_eat_armor", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Equip best armor from NPC inventory with no-loss diagnostics.");
-        add(defs, "armor_manager_status", "ecosystem_auto_eat_armor", CapabilityStatus.IMPLEMENTED, false, "", "Return armor manager facade status.");
     }
 
     private static void add(List<AICoreToolDefinition> defs, String name, String group, CapabilityStatus status, boolean mutatesWorld, String reason, String description, ToolParameter... parameters) {

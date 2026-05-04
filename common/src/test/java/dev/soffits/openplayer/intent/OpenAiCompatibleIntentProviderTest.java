@@ -89,6 +89,13 @@ public final class OpenAiCompatibleIntentProviderTest {
         require(!prompt.contains("GIVE_ITEM"), "system prompt must not expose old non-tool enum names");
         require(!prompt.contains("\"kind\""), "system prompt must not expose old kind field");
         require(!prompt.contains("\"instruction\""), "system prompt must not expose old instruction field");
+        String[] removedTools = {
+                "open_furnace", "furnace_status", "open_chest", "is_bed", "armor_manager_equip_best",
+                "collectblock_collect", "auto_eat_status", "open_anvil", "villager_trade", "move_vehicle", "elytra_fly"
+        };
+        for (String removedTool : removedTools) {
+            require(!prompt.contains(removedTool), "system prompt must not expose removed narrow tool: " + removedTool);
+        }
     }
 
     private static void systemPromptIncludesPlannedUnsupportedInstruction() {
