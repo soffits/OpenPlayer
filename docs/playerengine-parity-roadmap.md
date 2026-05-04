@@ -386,6 +386,8 @@ The first twelve phases establish a bounded first-party runtime foundation, but 
 
 ### Phase 17: Universal Resource and Affordance Planner
 
+**Status:** Foundation implemented for `GET_ITEM` exact visible dropped-item acquisition and generic affordance diagnostics. The current layer summarizes exact NPC carried count/capacity, total visible already-loaded LOS matching drops, exact-safe candidate drops with deterministic nearest ordering, loaded crafting-table/furnace workstation capabilities where safe adapters exist, nearby safe container observation, and loaded block-source diagnostics only. `GET_ITEM` may queue bounded targeted dropped-item collection only when exact-safe visible drops can satisfy the missing count and inventory capacity fits; oversized visible stacks are rejected for exact acquisition to avoid over-collection. Completion is based on actual NPC inventory count, not navigation success, and runtime failures may report dropped item unavailable/disappeared before pickup, full inventory, stuck/timeout, missing materials, or unsupported recipes. Generic block breaking, hidden mining, arbitrary resource gathering, buckets, shearing, trading, fishing, portals, and modded machines remain unsupported until separate safe adapters exist.
+
 **Objective:** Move `GET_ITEM` and related resource tasks away from hardcoded per-item scripts toward a universal capability layer. OpenPlayer should implement reusable Minecraft affordances, while the AI/provider may choose goals and high-level strategies only through validated schemas.
 
 **Capabilities:**

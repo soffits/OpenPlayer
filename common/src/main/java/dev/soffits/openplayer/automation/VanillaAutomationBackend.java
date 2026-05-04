@@ -16,6 +16,8 @@ import dev.soffits.openplayer.automation.navigation.LoadedChunkExplorationMemory
 import dev.soffits.openplayer.automation.navigation.NavigationRuntime;
 import dev.soffits.openplayer.automation.navigation.NavigationTarget;
 import dev.soffits.openplayer.automation.resource.GetItemRequest;
+import dev.soffits.openplayer.automation.resource.ResourceAffordanceScanner;
+import dev.soffits.openplayer.automation.resource.ResourceAffordanceSummary;
 import dev.soffits.openplayer.automation.resource.ResourceDependencyPlanner;
 import dev.soffits.openplayer.automation.resource.ResourcePlanningCapabilities;
 import dev.soffits.openplayer.automation.resource.ResourcePlanResult;
@@ -160,6 +162,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private final NavigationRuntime navigationRuntime = new NavigationRuntime(NAVIGATION_MAX_RECOVERIES);
         private final WorkstationLocator workstationLocator = new WorkstationLocator();
         private final LoadedAreaNavigator loadedAreaNavigator = new LoadedAreaNavigator();
+        private final ResourceAffordanceScanner resourceAffordanceScanner = new ResourceAffordanceScanner();
         private final LoadedChunkExplorationMemory loadedChunkExplorationMemory = new LoadedChunkExplorationMemory();
         private QueuedCommand activeCommand;
         private AutomationControllerMonitor activeMonitor;
@@ -555,9 +558,22 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                     return accepted("GET_ITEM accepted: " + parsed.itemId() + " x" + parsed.count()
                             + " already available in NPC inventory");
                 }
+                ResourceAffordanceSummary affordances = resourceAffordanceScanner.summarize(
+                        entity, parsed.itemId().toString(), parsed.item(), parsed.count()
+                );
+                if (affordances.canSatisfyMissingFromVisibleDrops()) {
+                    queuedCommands.add(QueuedCommand.getItem(
+                            parsed.itemId().toString(), parsed.item(), parsed.count(), currentCount,
+                            ResourceAffordanceScanner.DEFAULT_DROP_RADIUS
+                    ));
+                    return accepted("GET_ITEM accepted: collecting visible dropped " + parsed.itemId()
+                            + " x" + affordances.missingCount() + "; "
+                            + affordances.boundedDiagnostics(nearestSafeContainer() != null));
+                }
                 MinecraftServer server = entity.getServer();
                 if (server == null) {
-                    return rejected("GET_ITEM requires server recipe data for inventory crafting");
+                    return rejected("GET_ITEM requires server recipe data for inventory crafting; "
+                            + affordances.boundedDiagnostics(nearestSafeContainer() != null));
                 }
                 ResourceDependencyPlanner resourceDependencyPlanner = new ResourceDependencyPlanner(
                         RuntimeCraftingRecipeIndex.fromServer(server)
@@ -589,10 +605,11 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 }
                 if (plan.status() == ResourcePlanResult.Status.MISSING_MATERIALS) {
                     return rejected("GET_ITEM missing materials for " + parsed.itemId() + " x" + parsed.count()
-                            + ": " + missingItemsSummary(plan));
+                            + ": " + missingItemsSummary(plan) + "; "
+                            + affordances.boundedDiagnostics(nearestSafeContainer() != null));
                 }
                 return rejected("GET_ITEM unsupported for bounded inventory crafting: " + parsed.itemId()
-                        + reasonSuffix(plan));
+                        + reasonSuffix(plan) + "; " + affordances.boundedDiagnostics(nearestSafeContainer() != null));
             }
             if (kind == IntentKind.SMELT_ITEM) {
                 ParsedItemInstruction parsed = InventoryActionInstructionParser.parseItemCountOrNull(intent.instruction(), false);
@@ -1057,6 +1074,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             if (command.kind() == IntentKind.COLLECT_ITEMS
                     || command.kind() == IntentKind.COLLECT_FOOD
+                    || command.kind() == IntentKind.GET_ITEM
                     || command.kind() == IntentKind.FARM_NEARBY
                     || command.kind() == IntentKind.BREAK_BLOCK
                     || command.kind() == IntentKind.PLACE_BLOCK
@@ -1105,6 +1123,10 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             if (activeCommand.kind() == IntentKind.COLLECT_FOOD) {
                 collectFood(activeCommand);
+                return;
+            }
+            if (activeCommand.kind() == IntentKind.GET_ITEM) {
+                collectRequestedItem(activeCommand);
                 return;
             }
             if (activeCommand.kind() == IntentKind.FARM_NEARBY) {
@@ -1621,6 +1643,84 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             );
             return itemEntities.stream()
                     .min(Comparator.comparingDouble((ItemEntity itemEntity) -> entity.distanceToSqr(itemEntity))
+                            .thenComparing(itemEntity -> itemEntity.getUUID().toString()))
+                    .orElse(null);
+        }
+
+        private void collectRequestedItem(QueuedCommand command) {
+            if (!entity.allowWorldActions()) {
+                failActiveCommand("world_actions_disabled_during_get_item");
+                return;
+            }
+            int currentCount = entity.normalInventoryCount(command.targetItem());
+            if (currentCount >= command.targetItemCount()) {
+                stopNavigation();
+                completeActiveCommand("get_item:inventory_verified " + command.targetItemId()
+                        + " x" + command.targetItemCount());
+                return;
+            }
+            if (currentCount > command.targetStartCount()) {
+                command.setTargetStartCount(currentCount);
+                command.resetReachTicks();
+            }
+            ServerLevel serverLevel = serverLevel();
+            if (serverLevel == null) {
+                failActiveCommand("server_level_unavailable");
+                return;
+            }
+            if (!isWithinStartDistance(command, entity.position(), command.radius())) {
+                failActiveCommand("outside_get_item_radius");
+                return;
+            }
+            int missing = command.targetItemCount() - currentCount;
+            if (ResourceAffordanceSummary.normalInventoryCapacityFor(entity.inventorySnapshot(), command.targetItem()) < missing) {
+                failActiveCommand("inventory_full_for_item");
+                return;
+            }
+            ItemEntity itemEntity = nearestRequestedItem(serverLevel, command, missing);
+            if (itemEntity == null) {
+                failActiveCommand("visible_dropped_item_unavailable");
+                return;
+            }
+            entity.getLookControl().setLookAt(itemEntity);
+            if (entity.distanceToSqr(itemEntity) > COLLECT_REACH_DISTANCE * COLLECT_REACH_DISTANCE) {
+                if (!moveToEntity(itemEntity, NavigationTarget.entity(entityTypeId(itemEntity)))) {
+                    return;
+                }
+                command.resetReachTicks();
+                return;
+            }
+            stopNavigation();
+            command.incrementReachTicks();
+            if (command.reachTicks() >= COLLECT_REACH_TICKS) {
+                int current = entity.normalInventoryCount(command.targetItem());
+                if (current <= command.targetStartCount()) {
+                    failActiveCommand("item_pickup_not_observed");
+                } else {
+                    command.setTargetStartCount(current);
+                    command.resetReachTicks();
+                }
+            }
+        }
+
+        private ItemEntity nearestRequestedItem(ServerLevel serverLevel, QueuedCommand command, int missingCount) {
+            List<ItemEntity> itemEntities = serverLevel.getEntitiesOfClass(
+                    ItemEntity.class,
+                    entity.getBoundingBox().inflate(command.radius()),
+                    itemEntity -> itemEntity.isAlive()
+                            && !itemEntity.hasPickUpDelay()
+                            && !itemEntity.getItem().isEmpty()
+                            && itemEntity.getItem().is(command.targetItem())
+                            && itemEntity.getItem().getCount() <= missingCount
+                            && serverLevel.hasChunkAt(itemEntity.blockPosition())
+                            && entity.hasLineOfSight(itemEntity)
+                            && isWithinStartDistance(command, itemEntity.position(), command.radius())
+            );
+            return itemEntities.stream()
+                    .min(Comparator.comparingDouble((ItemEntity itemEntity) -> entity.distanceToSqr(itemEntity))
+                            .thenComparingInt(itemEntity -> itemEntity.blockPosition().getX())
+                            .thenComparingInt(itemEntity -> itemEntity.blockPosition().getY())
+                            .thenComparingInt(itemEntity -> itemEntity.blockPosition().getZ())
                             .thenComparing(itemEntity -> itemEntity.getUUID().toString()))
                     .orElse(null);
         }
@@ -2577,6 +2677,23 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 }
                 return;
             }
+            if (kind == IntentKind.GET_ITEM) {
+                if (!entity.allowWorldActions()) {
+                    failActiveCommand("world_actions_disabled_during_get_item");
+                    return;
+                }
+                ServerLevel serverLevel = serverLevel();
+                if (serverLevel == null) {
+                    failActiveCommand("server_level_unavailable");
+                    return;
+                }
+                int missing = activeCommand.targetItemCount() - entity.normalInventoryCount(activeCommand.targetItem());
+                ItemEntity target = nearestRequestedItem(serverLevel, activeCommand, missing);
+                if (target != null) {
+                    moveToEntity(target, NavigationTarget.entity(entityTypeId(target)));
+                }
+                return;
+            }
             if (kind == IntentKind.PATROL) {
                 if (activeCommand.returningToStart() && activeCommand.startPosition() != null) {
                     moveToBlock(activeCommand.startPosition());
@@ -2719,7 +2836,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (kind == IntentKind.MOVE || kind == IntentKind.GOTO || kind == IntentKind.EXPLORE_CHUNKS) {
                 return MOVE_MAX_TICKS;
             }
-            if (kind == IntentKind.COLLECT_ITEMS || kind == IntentKind.COLLECT_FOOD) {
+            if (kind == IntentKind.COLLECT_ITEMS || kind == IntentKind.COLLECT_FOOD || kind == IntentKind.GET_ITEM) {
                 return COLLECT_MAX_TICKS;
             }
             if (kind == IntentKind.BUILD_STRUCTURE) {
@@ -2938,6 +3055,10 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             private BlockPos explorationTarget;
             private int explorationChunkX;
             private int explorationChunkZ;
+            private String targetItemId;
+            private Item targetItem;
+            private int targetItemCount;
+            private int targetStartCount;
             private int reachTicks;
             private boolean patrolReturn;
             private boolean smeltStarted;
@@ -3001,6 +3122,15 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
             private static QueuedCommand collectFood(double radius) {
                 return new QueuedCommand(IntentKind.COLLECT_FOOD, null, radius);
+            }
+
+            private static QueuedCommand getItem(String itemId, Item item, int targetCount, int startCount, double radius) {
+                QueuedCommand command = new QueuedCommand(IntentKind.GET_ITEM, null, radius);
+                command.targetItemId = itemId;
+                command.targetItem = item;
+                command.targetItemCount = targetCount;
+                command.targetStartCount = startCount;
+                return command;
             }
 
             private static QueuedCommand farmNearby(double radius, int repeatCount) {
@@ -3112,6 +3242,26 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
             private BlockPos furnacePos() {
                 return furnacePos;
+            }
+
+            private String targetItemId() {
+                return targetItemId;
+            }
+
+            private Item targetItem() {
+                return targetItem;
+            }
+
+            private int targetItemCount() {
+                return targetItemCount;
+            }
+
+            private int targetStartCount() {
+                return targetStartCount;
+            }
+
+            private void setTargetStartCount(int targetStartCount) {
+                this.targetStartCount = targetStartCount;
             }
 
             private SmeltingPlan smeltingPlan() {

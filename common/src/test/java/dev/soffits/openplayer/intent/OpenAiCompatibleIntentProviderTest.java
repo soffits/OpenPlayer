@@ -103,8 +103,12 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must prevent providers from putting GET_ITEM in the instruction field");
         require(!prompt.contains("GET_ITEM <item_id> [count]"),
                 "system prompt must not include misleading GET_ITEM instruction syntax");
-        require(prompt.contains("bounded one-stack local inventory/crafting"),
+        require(prompt.contains("bounded one-stack local inventory/crafting plus exact visible dropped-item acquisition"),
                 "system prompt must document bounded GET_ITEM scope");
+        require(prompt.contains("already-loaded nearby LOS only"),
+                "system prompt must document visible loaded dropped-item limits");
+        require(prompt.contains("verifies NPC inventory count before completion"),
+                "system prompt must document no-fake-completion policy");
         require(prompt.contains("server recipe data for supported simple recipes"),
                 "system prompt must document dynamic GET_ITEM recipe data");
         require(prompt.contains("simple datapack/mod recipes visible to the server"),
@@ -113,11 +117,11 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must document finite tag-backed alternative support");
         require(prompt.contains("Crafting-table recipes require a loaded nearby crafting table capability gate"),
                 "system prompt must document crafting table capability gate");
-        require(prompt.contains("special/custom, NBT-bearing ingredient/result, and crafting remainder recipes may be rejected with a reason"),
+        require(prompt.contains("special/custom, NBT-bearing ingredient/result, crafting remainder recipes"),
                 "system prompt must document GET_ITEM recipe support limits");
         require(!prompt.contains("NBT/tag"),
                 "system prompt must not group finite tag-backed ingredients with unsupported NBT");
-        require(prompt.contains("reports missing materials instead of searching indefinitely"),
+        require(prompt.contains("reports dropped item unavailable/disappeared before pickup, full inventory, stuck/timeout, missing materials, or unsupported recipes instead of searching indefinitely"),
                 "system prompt must document GET_ITEM missing material behavior");
         require(prompt.contains("For SMELT_ITEM, instruction must contain only exact item id syntax <output_item_id> [count]"),
                 "system prompt must document smelt output syntax");
