@@ -9,6 +9,12 @@ public record WorkstationCapability(WorkstationKind kind, boolean supportsCrafti
     public static final WorkstationCapability VANILLA_FURNACE = new WorkstationCapability(
             WorkstationKind.FURNACE, false, true, true, "vanilla_furnace"
     );
+    public static final WorkstationCapability SMOKER = new WorkstationCapability(
+            WorkstationKind.SMOKER, false, true, true, "vanilla_smoker"
+    );
+    public static final WorkstationCapability BLAST_FURNACE = new WorkstationCapability(
+            WorkstationKind.BLAST_FURNACE, false, true, true, "vanilla_blast_furnace"
+    );
     public static final WorkstationCapability SMOKER_UNAVAILABLE = unavailable(WorkstationKind.SMOKER);
     public static final WorkstationCapability BLAST_FURNACE_UNAVAILABLE = unavailable(WorkstationKind.BLAST_FURNACE);
     public static final WorkstationCapability CAMPFIRE_UNAVAILABLE = unavailable(WorkstationKind.CAMPFIRE);

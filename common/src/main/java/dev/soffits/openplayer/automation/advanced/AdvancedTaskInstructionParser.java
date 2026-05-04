@@ -13,8 +13,14 @@ public final class AdvancedTaskInstructionParser {
             "LOCATE_STRUCTURE requires instruction: <structure_id> [radius] [source=loaded]";
     public static final String EXPLORE_CHUNKS_USAGE =
             "EXPLORE_CHUNKS requires blank, reset, clear, or instruction: radius=<blocks> steps=<count>";
+    public static final String USE_PORTAL_USAGE =
+            "USE_PORTAL requires blank or instruction: radius=<blocks> target=<minecraft:the_nether|minecraft:overworld> build=<true|false>";
+    public static final String TRAVEL_NETHER_USAGE =
+            "TRAVEL_NETHER requires blank or instruction: radius=<blocks> build=<true|false>";
     public static final double DEFAULT_RADIUS = 16.0D;
     public static final double MAX_RADIUS = 32.0D;
+    public static final double PORTAL_DEFAULT_RADIUS = 16.0D;
+    public static final double PORTAL_MAX_RADIUS = 24.0D;
     public static final double EXPLORE_DEFAULT_RADIUS = 32.0D;
     public static final double EXPLORE_MAX_RADIUS = 64.0D;
     public static final double STRUCTURE_DEFAULT_RADIUS = 32.0D;
@@ -122,6 +128,88 @@ public final class AdvancedTaskInstructionParser {
         return new LocateStructureInstruction(parts[0], radius);
     }
 
+    public static PortalTravelInstruction parseUsePortalOrNull(String instruction) {
+        return parsePortalTravelOrNull(instruction, false);
+    }
+
+    public static PortalTravelInstruction parseTravelNetherOrNull(String instruction) {
+        return parsePortalTravelOrNull(instruction, true);
+    }
+
+    private static PortalTravelInstruction parsePortalTravelOrNull(String instruction, boolean travelNether) {
+        double radius = PORTAL_DEFAULT_RADIUS;
+        String targetDimensionId = travelNether ? "minecraft:the_nether" : null;
+        Boolean build = travelNether ? null : Boolean.FALSE;
+        boolean radiusSeen = false;
+        boolean targetSeen = false;
+        boolean buildSeen = false;
+        if (instruction != null && !instruction.trim().isEmpty()) {
+            String[] parts = instruction.trim().split("\\s+");
+            for (String part : parts) {
+                int separator = part.indexOf('=');
+                if (separator <= 0 || separator == part.length() - 1) {
+                    return null;
+                }
+                String key = part.substring(0, separator);
+                String value = part.substring(separator + 1);
+                if (key.equals("radius")) {
+                    if (radiusSeen) {
+                        return null;
+                    }
+                    radius = parsePortalRadiusOrNegative(value);
+                    if (radius < 0.0D) {
+                        return null;
+                    }
+                    radiusSeen = true;
+                } else if (key.equals("target") && !travelNether) {
+                    if (targetSeen || !isSupportedPortalDimension(value)) {
+                        return null;
+                    }
+                    targetDimensionId = value;
+                    targetSeen = true;
+                } else if (key.equals("build")) {
+                    if (buildSeen) {
+                        return null;
+                    }
+                    build = parseBooleanOrNull(value);
+                    if (build == null) {
+                        return null;
+                    }
+                    buildSeen = true;
+                } else {
+                    return null;
+                }
+            }
+        }
+        return new PortalTravelInstruction(radius, targetDimensionId, targetSeen, build, buildSeen, travelNether);
+    }
+
+    private static boolean isSupportedPortalDimension(String value) {
+        return value.equals("minecraft:the_nether") || value.equals("minecraft:overworld");
+    }
+
+    private static Boolean parseBooleanOrNull(String value) {
+        if (value.equals("true")) {
+            return Boolean.TRUE;
+        }
+        if (value.equals("false")) {
+            return Boolean.FALSE;
+        }
+        return null;
+    }
+
+    private static double parsePortalRadiusOrNegative(String value) {
+        try {
+            double parsed = Double.parseDouble(value);
+            if (!Double.isFinite(parsed) || parsed <= 0.0D || parsed > PORTAL_MAX_RADIUS) {
+                return -1.0D;
+            }
+            return parsed;
+        } catch (NumberFormatException exception) {
+            return -1.0D;
+        }
+    }
+
     private static int parseStepsOrNegative(String value) {
         try {
             int parsed = Integer.parseInt(value);
@@ -171,6 +259,24 @@ public final class AdvancedTaskInstructionParser {
             }
             if (!Double.isFinite(radius) || radius <= 0.0D || radius > STRUCTURE_MAX_RADIUS) {
                 throw new IllegalArgumentException("radius must be finite and within loaded structure diagnostic bounds");
+            }
+        }
+    }
+
+    public record PortalTravelInstruction(
+            double radius,
+            String targetDimensionId,
+            boolean explicitTarget,
+            Boolean build,
+            boolean explicitBuild,
+            boolean travelNether
+    ) {
+        public PortalTravelInstruction {
+            if (!Double.isFinite(radius) || radius <= 0.0D || radius > PORTAL_MAX_RADIUS) {
+                throw new IllegalArgumentException("radius must be finite and within portal travel bounds");
+            }
+            if (targetDimensionId != null && !isSupportedPortalDimension(targetDimensionId)) {
+                throw new IllegalArgumentException("targetDimensionId must be a supported portal dimension");
             }
         }
     }

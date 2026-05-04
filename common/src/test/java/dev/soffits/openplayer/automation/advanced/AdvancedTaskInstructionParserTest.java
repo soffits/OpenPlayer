@@ -11,6 +11,8 @@ public final class AdvancedTaskInstructionParserTest {
         rejectsInvalidExploreChunksInstruction();
         parsesLocateStructureInstruction();
         rejectsInvalidLocateStructureInstruction();
+        parsesPortalTravelInstructions();
+        rejectsInvalidPortalTravelInstructions();
     }
 
     private static void parsesStrictLoadedSearchInstruction() {
@@ -108,6 +110,62 @@ public final class AdvancedTaskInstructionParserTest {
                 "Locate structure should reject unsupported sources");
         require(AdvancedTaskInstructionParser.parseLocateStructureOrNull("minecraft:village 16 8") == null,
                 "Locate structure should reject duplicate radii");
+    }
+
+    private static void parsesPortalTravelInstructions() {
+        AdvancedTaskInstructionParser.PortalTravelInstruction blankUse =
+                AdvancedTaskInstructionParser.parseUsePortalOrNull("");
+        require(blankUse != null, "USE_PORTAL should accept blank instruction");
+        require(blankUse.radius() == AdvancedTaskInstructionParser.PORTAL_DEFAULT_RADIUS,
+                "USE_PORTAL should use default portal radius");
+        require(blankUse.targetDimensionId() == null && !blankUse.explicitTarget(),
+                "USE_PORTAL blank target should mean any portal transition");
+        require(Boolean.FALSE.equals(blankUse.build()) && !blankUse.explicitBuild(),
+                "USE_PORTAL should default build=false");
+
+        AdvancedTaskInstructionParser.PortalTravelInstruction explicitUse =
+                AdvancedTaskInstructionParser.parseUsePortalOrNull(
+                        "radius=12 target=minecraft:the_nether build=true"
+                );
+        require(explicitUse != null, "USE_PORTAL should accept strict key/value syntax");
+        require(explicitUse.radius() == 12.0D, "USE_PORTAL should preserve bounded radius");
+        require(explicitUse.targetDimensionId().equals("minecraft:the_nether") && explicitUse.explicitTarget(),
+                "USE_PORTAL should preserve supported target dimension");
+        require(Boolean.TRUE.equals(explicitUse.build()) && explicitUse.explicitBuild(),
+                "USE_PORTAL should preserve explicit build=true");
+
+        AdvancedTaskInstructionParser.PortalTravelInstruction blankTravel =
+                AdvancedTaskInstructionParser.parseTravelNetherOrNull(" ");
+        require(blankTravel != null, "TRAVEL_NETHER should accept blank instruction");
+        require(blankTravel.targetDimensionId().equals("minecraft:the_nether"),
+                "TRAVEL_NETHER parser should default target to Nether");
+        require(blankTravel.build() == null && !blankTravel.explicitBuild(),
+                "TRAVEL_NETHER omitted build should remain inventory-dependent");
+
+        AdvancedTaskInstructionParser.PortalTravelInstruction explicitTravel =
+                AdvancedTaskInstructionParser.parseTravelNetherOrNull("build=false radius=24");
+        require(explicitTravel != null && explicitTravel.radius() == 24.0D,
+                "TRAVEL_NETHER should accept bounded key/value radius");
+        require(Boolean.FALSE.equals(explicitTravel.build()), "TRAVEL_NETHER should preserve explicit build=false");
+    }
+
+    private static void rejectsInvalidPortalTravelInstructions() {
+        require(AdvancedTaskInstructionParser.parseUsePortalOrNull("go to the nether") == null,
+                "USE_PORTAL should reject free-form prose");
+        require(AdvancedTaskInstructionParser.parseUsePortalOrNull("radius=25") == null,
+                "USE_PORTAL should reject huge radius instead of capping");
+        require(AdvancedTaskInstructionParser.parseUsePortalOrNull("radius=-1") == null,
+                "USE_PORTAL should reject negative radius");
+        require(AdvancedTaskInstructionParser.parseUsePortalOrNull("target=minecraft:the_end") == null,
+                "USE_PORTAL should reject unsupported dimensions");
+        require(AdvancedTaskInstructionParser.parseUsePortalOrNull("build=yes") == null,
+                "USE_PORTAL should reject non-boolean build");
+        require(AdvancedTaskInstructionParser.parseUsePortalOrNull("radius=12 speed=fast") == null,
+                "USE_PORTAL should reject unknown keys");
+        require(AdvancedTaskInstructionParser.parseTravelNetherOrNull("target=minecraft:overworld") == null,
+                "TRAVEL_NETHER should reject target key");
+        require(AdvancedTaskInstructionParser.parseTravelNetherOrNull("radius=0") == null,
+                "TRAVEL_NETHER should reject zero radius");
     }
 
     private static void require(boolean condition, String message) {

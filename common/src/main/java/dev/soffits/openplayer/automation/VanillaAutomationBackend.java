@@ -9,8 +9,11 @@ import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser;
 import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser.ExploreChunksInstruction;
 import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser.LoadedSearchInstruction;
 import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser.LocateStructureInstruction;
+import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser.PortalTravelInstruction;
 import dev.soffits.openplayer.automation.advanced.AdvancedTaskPolicy;
 import dev.soffits.openplayer.automation.advanced.LoadedStructureDiagnosticScanner;
+import dev.soffits.openplayer.automation.advanced.PortalFramePlan;
+import dev.soffits.openplayer.automation.advanced.PortalFramePlanner;
 import dev.soffits.openplayer.automation.building.BuildPlan;
 import dev.soffits.openplayer.automation.building.BuildPlanParser;
 import dev.soffits.openplayer.automation.navigation.LoadedAreaNavigator;
@@ -52,8 +55,10 @@ import dev.soffits.openplayer.runtime.validation.RuntimeIntentPolicies;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Queue;
+import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.Direction;
 import net.minecraft.core.BlockPos;
@@ -64,7 +69,11 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.animal.Cow;
+import net.minecraft.world.entity.animal.MushroomCow;
+import net.minecraft.world.entity.animal.Sheep;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.EntityType;
@@ -72,9 +81,17 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.BarrelBlock;
+import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.BellBlock;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.ButtonBlock;
+import net.minecraft.world.level.block.CraftingTableBlock;
+import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.FurnaceBlock;
 import net.minecraft.world.level.block.LeverBlock;
+import net.minecraft.world.level.block.NoteBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.shapes.CollisionContext;
@@ -82,9 +99,12 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.portal.PortalShape;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.sounds.SoundSource;
 
 public final class VanillaAutomationBackend implements AutomationBackend {
     public static final String NAME = "vanilla";
@@ -137,6 +157,10 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private static final double GOTO_MAX_RADIUS = LoadedAreaNavigator.MAX_RADIUS;
         private static final double GOTO_REACH_DISTANCE = 2.0D;
         private static final double EXPLORE_CHUNK_REACH_DISTANCE = 2.0D;
+        private static final double PORTAL_REACH_DISTANCE = 1.8D;
+        private static final String OVERWORLD_DIMENSION_ID = "minecraft:overworld";
+        private static final String NETHER_DIMENSION_ID = "minecraft:the_nether";
+        private static final String PORTAL_IGNITION_ADAPTER_UNAVAILABLE = "portal_ignition_adapter_unavailable";
         private static final int EXPLORE_MAX_CANDIDATE_CHUNKS = 81;
         private static final int MOVE_MAX_TICKS = 20 * 60;
         private static final int SHORT_TASK_MAX_TICKS = 20 * 30;
@@ -475,7 +499,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 }
                 SafeContainerTarget target = kind == IntentKind.STASH_ITEM ? preferredStashContainer() : nearestSafeContainer();
                 if (target == null) {
-                    return rejected(kind.name() + " requires a loaded nearby vanilla chest or barrel");
+                    return rejected(kind.name() + " requires a loaded nearby safe Container block entity adapter");
                 }
                 if (!canAcquireInteractionCooldown()) {
                     return rejected(interactionCooldownMessage());
@@ -535,7 +559,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 }
                 SafeContainerTarget target = preferredStashContainer();
                 if (target == null) {
-                    return rejected("WITHDRAW_ITEM requires a loaded nearby vanilla chest or barrel");
+                    return rejected("WITHDRAW_ITEM requires a loaded nearby safe Container block entity adapter");
                 }
                 if (!canAcquireInteractionCooldown()) {
                     return rejected(interactionCooldownMessage());
@@ -642,8 +666,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 if (target == null) {
                     return rejected("SMELT_ITEM requires workstation adapter: "
                             + WorkstationDiagnostics.noLoadedTarget(WorkstationCapability.VANILLA_FURNACE)
-                            + "; " + WorkstationDiagnostics.adapterUnavailable(WorkstationKind.SMOKER, "minecraft:smelting")
-                            + "; " + WorkstationDiagnostics.adapterUnavailable(WorkstationKind.BLAST_FURNACE, "minecraft:smelting"));
+                            + "; smoker/blast_furnace adapters require matching loaded nearby furnace block entities");
                 }
                 Container furnace = WorkstationLocator.requireContainerAdapter(target);
                 List<ItemStack> furnaceStacks = containerSnapshot(furnace);
@@ -754,6 +777,12 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (kind == IntentKind.LOCATE_STRUCTURE) {
                 return reportLoadedStructure(intent.instruction());
             }
+            if (kind == IntentKind.USE_PORTAL) {
+                return submitPortalTravel(intent.instruction(), false);
+            }
+            if (kind == IntentKind.TRAVEL_NETHER) {
+                return submitPortalTravel(intent.instruction(), true);
+            }
             if (AdvancedTaskPolicy.isUnsupportedAdvancedKind(kind)) {
                 return rejected(AdvancedTaskPolicy.unsupportedReason(kind));
             }
@@ -808,13 +837,96 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                     + " blocks=" + plan.blockCount() + " material=" + plan.materialId());
         }
 
+        private AutomationCommandResult submitPortalTravel(String instruction, boolean travelNether) {
+            PortalTravelInstruction portalInstruction = travelNether
+                    ? AdvancedTaskInstructionParser.parseTravelNetherOrNull(instruction)
+                    : AdvancedTaskInstructionParser.parseUsePortalOrNull(instruction);
+            if (portalInstruction == null) {
+                return rejected(travelNether
+                        ? AdvancedTaskInstructionParser.TRAVEL_NETHER_USAGE
+                        : AdvancedTaskInstructionParser.USE_PORTAL_USAGE);
+            }
+            ServerLevel serverLevel = serverLevel();
+            if (serverLevel == null) {
+                return rejected("portal_travel requires a server level");
+            }
+            String currentDimension = dimensionId(serverLevel);
+            String targetDimension = targetPortalDimension(portalInstruction, currentDimension);
+            PortalSearchResult searchResult = nearestLoadedPortal(serverLevel, portalInstruction.radius());
+            if (searchResult.portalPos() != null) {
+                queuedCommands.add(QueuedCommand.portalTravel(
+                        travelNether ? IntentKind.TRAVEL_NETHER : IntentKind.USE_PORTAL,
+                        portalInstruction.radius(), targetDimension, searchResult.portalPos(),
+                        null, "existing_portal", searchResult.diagnostics()
+                ));
+                return accepted("portal_travel accepted: mode=existing_portal target_dimension="
+                        + targetDimensionSummary(targetDimension) + " current_dimension=" + currentDimension
+                        + " source=loaded_scan radius=" + formatRadius(portalInstruction.radius())
+                        + " portal=" + searchResult.portalPos().toShortString() + " " + searchResult.diagnostics());
+            }
+            boolean hasMaterials = hasPortalBuildMaterials();
+            boolean build = portalInstruction.build() == null ? hasMaterials : portalInstruction.build();
+            if (!build) {
+                return rejected("portal_travel failed: mode=existing_portal target_dimension="
+                        + targetDimensionSummary(targetDimension) + " current_dimension=" + currentDimension
+                        + " source=loaded_scan radius=" + formatRadius(portalInstruction.radius())
+                        + " failure=no_loaded_portal " + searchResult.diagnostics());
+            }
+            if (!currentDimension.equals(OVERWORLD_DIMENSION_ID) || !targetDimensionSummary(targetDimension).equals(NETHER_DIMENSION_ID)) {
+                return rejected("portal_travel failed: mode=build_portal target_dimension="
+                        + targetDimensionSummary(targetDimension) + " current_dimension=" + currentDimension
+                        + " failure=portal_build_supported_only_overworld_to_nether " + searchResult.diagnostics());
+            }
+            int carriedObsidian = untaggedNormalInventoryCount(entity.inventorySnapshot(), Items.OBSIDIAN);
+            boolean hasFlintAndSteel = entity.normalInventoryCount(Items.FLINT_AND_STEEL) > 0;
+            if (carriedObsidian < PortalFramePlan.REQUIRED_OBSIDIAN || !hasFlintAndSteel) {
+                return rejected("portal_travel failed: mode=build_portal target_dimension=" + NETHER_DIMENSION_ID
+                        + " current_dimension=" + currentDimension + " required_obsidian="
+                        + PortalFramePlan.REQUIRED_OBSIDIAN + " carried_obsidian=" + carriedObsidian
+                        + " has_flint_and_steel=" + hasFlintAndSteel + " failure=missing_carried_portal_materials "
+                        + searchResult.diagnostics());
+            }
+            PortalBuildPlanResult buildPlanResult = nearestSafePortalFramePlan(serverLevel, portalInstruction.radius());
+            if (buildPlanResult.plan() == null) {
+                return rejected("portal_travel failed: mode=build_portal target_dimension=" + NETHER_DIMENSION_ID
+                        + " current_dimension=" + currentDimension + " source=player_like_build radius="
+                        + formatRadius(portalInstruction.radius()) + " required_obsidian="
+                        + PortalFramePlan.REQUIRED_OBSIDIAN + " has_flint_and_steel=" + hasFlintAndSteel
+                        + " failure=no_safe_frame_footprint " + buildPlanResult.diagnostics());
+            }
+            queuedCommands.add(QueuedCommand.portalTravel(
+                    travelNether ? IntentKind.TRAVEL_NETHER : IntentKind.USE_PORTAL,
+                    portalInstruction.radius(), targetDimension, null,
+                    buildPlanResult.plan(), "build_portal", buildPlanResult.diagnostics()
+            ));
+            return accepted("portal_travel accepted: mode=build_portal target_dimension=" + NETHER_DIMENSION_ID
+                    + " current_dimension=" + currentDimension + " source=player_like_build radius="
+                    + formatRadius(portalInstruction.radius()) + " frame="
+                    + buildPlanResult.plan().origin().toShortString() + " required_obsidian="
+                    + PortalFramePlan.REQUIRED_OBSIDIAN + " has_flint_and_steel=" + hasFlintAndSteel
+                    + " " + buildPlanResult.diagnostics());
+        }
+
         private AutomationCommandResult submitInteract(String instruction) {
             InteractionInstruction interaction = InteractionInstructionParser.parseOrNull(instruction);
             if (interaction == null) {
                 return rejected(InteractionInstructionParser.USAGE);
             }
             if (interaction.kind() == InteractionTargetKind.ENTITY) {
-                return rejected("INTERACT entity is unsupported: safe non-destructive entity adapters are not implemented");
+                ServerLevel serverLevel = serverLevel();
+                if (serverLevel == null) {
+                    return rejected("INTERACT entity requires a server level");
+                }
+                Entity target = resolveInteractionTarget(serverLevel, interaction, entity.position());
+                if (target == null) {
+                    return rejected("INTERACT entity found no loaded safe reachable target or adapter: " + interaction.targetId());
+                }
+                EntityInteractionCapability capability = entityInteractionCapability(target);
+                if (capability == EntityInteractionCapability.UNAVAILABLE) {
+                    return rejected("INTERACT entity capability_unavailable: " + entityTypeId(target));
+                }
+                queuedCommands.add(QueuedCommand.interactEntity(target, interaction.radius()));
+                return accepted("INTERACT accepted: entity " + entityTypeId(target) + " capability=" + capability.id());
             }
             BlockPos blockPos = BlockPos.containing(
                     interaction.coordinate().x(), interaction.coordinate().y(), interaction.coordinate().z()
@@ -827,11 +939,12 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return rejected("INTERACT target is outside the start distance");
             }
             BlockState state = serverLevel.getBlockState(blockPos);
-            if (!isSupportedSafeInteractBlock(state)) {
-                return rejected("INTERACT unsupported block: " + blockId(state.getBlock()));
+            BlockInteractionCapability capability = blockInteractionCapability(state);
+            if (capability == BlockInteractionCapability.UNAVAILABLE) {
+                return rejected("INTERACT block capability_unavailable: " + blockId(state.getBlock()));
             }
             queuedCommands.add(QueuedCommand.interactBlock(blockPos));
-            return accepted("INTERACT accepted: block " + blockPos.toShortString());
+            return accepted("INTERACT accepted: block " + blockPos.toShortString() + " capability=" + capability.id());
         }
 
         private AutomationCommandResult submitAttackTarget(String instruction) {
@@ -1096,6 +1209,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                     || command.kind() == IntentKind.BREAK_BLOCK
                     || command.kind() == IntentKind.PLACE_BLOCK
                     || command.kind() == IntentKind.BUILD_STRUCTURE
+                    || command.kind() == IntentKind.USE_PORTAL
+                    || command.kind() == IntentKind.TRAVEL_NETHER
                     || command.kind() == IntentKind.INTERACT
                     || command.kind() == IntentKind.SMELT_ITEM
                     || command.kind() == IntentKind.ATTACK_NEAREST
@@ -1104,6 +1219,10 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                     || command.kind() == IntentKind.DEFEND_OWNER
                     || command.kind() == IntentKind.PATROL) {
                 command.setStartPosition(entity.blockPosition());
+                if (command.kind() == IntentKind.USE_PORTAL || command.kind() == IntentKind.TRAVEL_NETHER) {
+                    ServerLevel serverLevel = serverLevel();
+                    command.setPortalStartDimensionId(serverLevel == null ? "unknown" : dimensionId(serverLevel));
+                }
             }
             if (command.kind() == IntentKind.PATROL) {
                 Coordinate coordinate = command.coordinate();
@@ -1166,12 +1285,20 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 buildStructure(activeCommand);
                 return;
             }
+            if (activeCommand.kind() == IntentKind.USE_PORTAL || activeCommand.kind() == IntentKind.TRAVEL_NETHER) {
+                useOrBuildPortal(activeCommand);
+                return;
+            }
             if (activeCommand.kind() == IntentKind.SMELT_ITEM) {
                 smeltItem(activeCommand);
                 return;
             }
             if (activeCommand.kind() == IntentKind.INTERACT) {
-                interactBlock(activeCommand);
+                if (activeCommand.entityTarget() != null) {
+                    interactEntity(activeCommand);
+                } else {
+                    interactBlock(activeCommand);
+                }
                 return;
             }
             if (activeCommand.kind() == IntentKind.ATTACK_NEAREST) {
@@ -1951,6 +2078,132 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
         }
 
+        private void useOrBuildPortal(QueuedCommand command) {
+            if (!entity.allowWorldActions()) {
+                failActiveCommand("world_actions_disabled_during_portal_travel " + portalCommandSummary(command, false,
+                        "world_actions_disabled"));
+                return;
+            }
+            ServerLevel serverLevel = serverLevel();
+            if (serverLevel == null) {
+                failActiveCommand("server_level_unavailable " + portalCommandSummary(command, false, "server_level_unavailable"));
+                return;
+            }
+            String currentDimension = dimensionId(serverLevel);
+            if (hasObservedPortalTransition(command, currentDimension)) {
+                stopNavigation();
+                completeActiveCommand(portalCommandSummary(command, true, "completed"));
+                return;
+            }
+            if (command.portalFramePlan() != null) {
+                buildPortalFrame(command, serverLevel, currentDimension);
+                return;
+            }
+            BlockPos portalPos = command.portalPos();
+            if (portalPos == null || !serverLevel.hasChunkAt(portalPos)
+                    || !serverLevel.getBlockState(portalPos).is(Blocks.NETHER_PORTAL)) {
+                failActiveCommand(portalCommandSummary(command, false, "portal_disappeared"));
+                return;
+            }
+            lookAtBlock(portalPos);
+            navigationRuntime.updateDistance(distanceTo(portalPos));
+            if (entity.distanceToSqr(Vec3.atCenterOf(portalPos)) > PORTAL_REACH_DISTANCE * PORTAL_REACH_DISTANCE) {
+                moveToBlock(portalPos);
+                return;
+            }
+            if (!entity.getBoundingBox().intersects(new AABB(portalPos))) {
+                moveToBlock(portalPos);
+                return;
+            }
+            if (activeMonitor != null) {
+                activeMonitor.note(portalCommandSummary(command, false, "waiting_for_dimension_transition"));
+            }
+        }
+
+        private void buildPortalFrame(QueuedCommand command, ServerLevel serverLevel, String currentDimension) {
+            PortalFramePlan plan = command.portalFramePlan();
+            if (command.portalPlacedBlocks() >= plan.framePositions().size()) {
+                igniteBuiltPortalFrame(command, serverLevel, currentDimension);
+                return;
+            }
+            BlockPos blockPos = plan.framePositions().get(command.portalPlacedBlocks());
+            if (!isWithinStartDistance(command, Vec3.atCenterOf(blockPos), command.radius())) {
+                failActiveCommand(portalCommandSummary(command, false, "frame_position_outside_radius"));
+                return;
+            }
+            String rejection = portalFrameTargetRejection(serverLevel, blockPos, Blocks.OBSIDIAN.defaultBlockState());
+            if (rejection != null) {
+                failActiveCommand(portalCommandSummary(command, false, "partial_progress_" + rejection));
+                return;
+            }
+            if (untaggedNormalInventoryCount(entity.inventorySnapshot(), Items.OBSIDIAN) < 1) {
+                failActiveCommand(portalCommandSummary(command, false, "partial_progress_missing_obsidian"));
+                return;
+            }
+            lookAtBlock(blockPos);
+            if (!isWithinInteractionDistance(blockPos)) {
+                moveNearBlock(blockPos);
+                notePortalProgress(command, currentDimension, "placing_frame");
+                return;
+            }
+            stopNavigation();
+            if (!serverLevel.setBlock(blockPos, Blocks.OBSIDIAN.defaultBlockState(), Block.UPDATE_ALL)) {
+                failActiveCommand(portalCommandSummary(command, false, "partial_progress_place_failed"));
+                return;
+            }
+            if (!consumeOneUntaggedNormalInventoryItem(Items.OBSIDIAN)) {
+                failActiveCommand(portalCommandSummary(command, false, "partial_progress_consume_failed"));
+                return;
+            }
+            entity.swingMainHandAction();
+            command.incrementPortalPlacedBlocks();
+            notePortalProgress(command, currentDimension, "placing_frame");
+            if (command.portalPlacedBlocks() >= plan.framePositions().size()) {
+                igniteBuiltPortalFrame(command, serverLevel, currentDimension);
+            }
+        }
+
+        private void igniteBuiltPortalFrame(QueuedCommand command, ServerLevel serverLevel, String currentDimension) {
+            PortalFramePlan plan = command.portalFramePlan();
+            String rejection = portalIgnitionRejection(serverLevel, plan);
+            if (rejection != null) {
+                failActiveCommand(portalCommandSummary(command, false, rejection));
+                return;
+            }
+            BlockPos ignitionPos = plan.interiorPositions().get(0);
+            lookAtBlock(ignitionPos);
+            if (!isWithinInteractionDistance(ignitionPos)) {
+                moveNearBlock(ignitionPos);
+                notePortalProgress(command, currentDimension, "moving_to_ignite_frame");
+                return;
+            }
+            stopNavigation();
+            if (!hasLineOfSightToBlock(serverLevel, ignitionPos)) {
+                failActiveCommand(portalCommandSummary(command, false, "portal_ignition_no_line_of_sight"));
+                return;
+            }
+            if (!canAcquireInteractionCooldown()) {
+                return;
+            }
+            if (!acquireInteractionCooldown()) {
+                return;
+            }
+            if (!entity.selectOrMoveNormalItemToHotbar(Items.FLINT_AND_STEEL)) {
+                rollbackInteractionCooldown();
+                failActiveCommand(portalCommandSummary(command, false, "portal_ignition_missing_flint_and_steel"));
+                return;
+            }
+            if (!createPortalFromFrame(serverLevel, plan, ignitionPos)) {
+                rollbackInteractionCooldown();
+                failActiveCommand(portalCommandSummary(command, false, "portal_ignition_failed_no_portal_created"));
+                return;
+            }
+            damageSelectedFlintAndSteelOnce();
+            entity.swingMainHandAction();
+            command.setPortalPos(ignitionPos);
+            notePortalProgress(command, currentDimension, "portal_ignited_waiting_for_transition");
+        }
+
         private void smeltItem(QueuedCommand command) {
             ServerLevel serverLevel = serverLevel();
             if (serverLevel == null) {
@@ -2097,8 +2350,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return;
             }
             BlockState state = serverLevel.getBlockState(blockPos);
-            if (!isSupportedSafeInteractBlock(state)) {
-                failActiveCommand("interact_unsupported_block=" + blockId(state.getBlock()));
+            BlockInteractionCapability capability = blockInteractionCapability(state);
+            if (capability == BlockInteractionCapability.UNAVAILABLE) {
+                failActiveCommand("interact_capability_unavailable=" + blockId(state.getBlock()));
                 return;
             }
             lookAtBlock(blockPos);
@@ -2107,10 +2361,6 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return;
             }
             stopNavigation();
-            if (!entity.getMainHandItem().isEmpty()) {
-                failActiveCommand("interact_requires_empty_main_hand");
-                return;
-            }
             if (!hasLineOfSightToBlock(serverLevel, blockPos)) {
                 failActiveCommand("interact_no_line_of_sight");
                 return;
@@ -2118,13 +2368,56 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (!canAcquireInteractionCooldown()) {
                 return;
             }
-            if (!acquireInteractionCooldown() || !toggleSafeInteractBlock(serverLevel, blockPos, state)) {
+            if (!acquireInteractionCooldown() || !applyBlockInteraction(serverLevel, blockPos, state, capability)) {
                 rollbackInteractionCooldown();
                 failActiveCommand("interact_state_change_failed");
                 return;
             }
             entity.swingMainHandAction();
-            completeActiveCommand();
+            completeActiveCommand("interact:block capability=" + capability.id());
+        }
+
+        private void interactEntity(QueuedCommand command) {
+            ServerLevel serverLevel = serverLevel();
+            if (serverLevel == null) {
+                failActiveCommand("server_level_unavailable");
+                return;
+            }
+            Entity target = command.entityTarget();
+            if (target == null || !target.isAlive() || !target.level().dimension().equals(serverLevel.dimension())
+                    || !isBlockLoaded(target.blockPosition())) {
+                failActiveCommand("interact_entity_unavailable");
+                return;
+            }
+            if (!isSafeEntityInteractionTarget(target) || !isWithinStartDistance(command, target.position(), command.radius())) {
+                failActiveCommand("interact_entity_unsafe_or_outside_radius");
+                return;
+            }
+            EntityInteractionCapability capability = entityInteractionCapability(target);
+            if (capability == EntityInteractionCapability.UNAVAILABLE) {
+                failActiveCommand("interact_entity_capability_unavailable=" + entityTypeId(target));
+                return;
+            }
+            entity.getLookControl().setLookAt(target);
+            if (entity.distanceToSqr(target) > BLOCK_INTERACTION_DISTANCE * BLOCK_INTERACTION_DISTANCE) {
+                moveToEntity(target, NavigationTarget.entity(entityTypeId(target)));
+                return;
+            }
+            stopNavigation();
+            if (!entity.hasLineOfSight(target)) {
+                failActiveCommand("interact_entity_no_line_of_sight");
+                return;
+            }
+            if (!canAcquireInteractionCooldown()) {
+                return;
+            }
+            if (!acquireInteractionCooldown() || !applyEntityInteraction(serverLevel, target, capability)) {
+                rollbackInteractionCooldown();
+                failActiveCommand("interact_entity_state_change_failed=" + capability.id());
+                return;
+            }
+            entity.swingMainHandAction();
+            completeActiveCommand("interact:entity capability=" + capability.id());
         }
 
         private LivingEntity nearestAttackTarget(ServerLevel serverLevel, double radius, Vec3 center) {
@@ -2159,8 +2452,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         }
 
         private LivingEntity resolveAttackTarget(ServerLevel serverLevel,
-                                                 TargetAttackInstruction instruction,
-                                                 Vec3 center) {
+                                                  TargetAttackInstruction instruction,
+                                                  Vec3 center) {
             if (instruction.targetsUuid()) {
                 List<LivingEntity> targets = serverLevel.getEntitiesOfClass(
                         LivingEntity.class,
@@ -2189,6 +2482,48 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                     .min(Comparator.comparingDouble((LivingEntity target) -> entity.distanceToSqr(target))
                             .thenComparing(target -> target.getUUID().toString()))
                     .orElse(null);
+        }
+
+        private Entity resolveInteractionTarget(ServerLevel serverLevel,
+                                                InteractionInstruction instruction,
+                                                Vec3 center) {
+            if (instruction.targetsUuid()) {
+                List<Entity> targets = serverLevel.getEntities(
+                        entity,
+                        entity.getBoundingBox().inflate(instruction.radius()),
+                        target -> target.getUUID().equals(instruction.targetUuid())
+                                && isSafeEntityInteractionTarget(target)
+                                && center.distanceToSqr(target.position()) <= instruction.radius() * instruction.radius()
+                                && entity.hasLineOfSight(target)
+                );
+                return targets.stream().findFirst().orElse(null);
+            }
+            ResourceLocation id = ResourceLocation.tryParse(instruction.targetId());
+            if (id == null || !BuiltInRegistries.ENTITY_TYPE.containsKey(id)) {
+                return null;
+            }
+            EntityType<?> entityType = BuiltInRegistries.ENTITY_TYPE.get(id);
+            List<Entity> targets = serverLevel.getEntities(
+                    entity,
+                    entity.getBoundingBox().inflate(instruction.radius()),
+                    target -> target.getType() == entityType
+                            && isSafeEntityInteractionTarget(target)
+                            && center.distanceToSqr(target.position()) <= instruction.radius() * instruction.radius()
+                            && entity.hasLineOfSight(target)
+            );
+            return targets.stream()
+                    .min(Comparator.comparingDouble((Entity target) -> entity.distanceToSqr(target))
+                            .thenComparing(target -> target.getUUID().toString()))
+                    .orElse(null);
+        }
+
+        private boolean isSafeEntityInteractionTarget(Entity target) {
+            if (target == null || !target.isAlive() || target == entity || target instanceof Player
+                    || target instanceof OpenPlayerNpcEntity) {
+                return false;
+            }
+            ServerPlayer owner = owner();
+            return owner == null || !target.getUUID().equals(owner.getUUID());
         }
 
         private boolean isSafeAttackTarget(LivingEntity target) {
@@ -2402,17 +2737,43 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (serverLevel == null) {
                 return null;
             }
-            return workstationLocator.nearestLoaded(
+            List<WorkstationTarget> targets = new ArrayList<>();
+            targets.addAll(workstationLocator.loadedNearby(
                     serverLevel, entity.position(), FURNACE_SCAN_RADIUS, WorkstationCapability.VANILLA_FURNACE
-            );
+            ));
+            targets.addAll(workstationLocator.loadedNearby(
+                    serverLevel, entity.position(), FURNACE_SCAN_RADIUS, WorkstationCapability.SMOKER
+            ));
+            targets.addAll(workstationLocator.loadedNearby(
+                    serverLevel, entity.position(), FURNACE_SCAN_RADIUS, WorkstationCapability.BLAST_FURNACE
+            ));
+            return targets.stream()
+                    .min(Comparator
+                            .comparingDouble((WorkstationTarget target) -> target.blockPos().distSqr(entity.blockPosition()))
+                            .thenComparingInt(target -> target.blockPos().getX())
+                            .thenComparingInt(target -> target.blockPos().getY())
+                            .thenComparingInt(target -> target.blockPos().getZ()))
+                    .orElse(null);
         }
 
         private WorkstationTarget furnaceAt(ServerLevel serverLevel, BlockPos blockPos) {
             if (serverLevel == null || blockPos == null) {
                 return null;
             }
-            return workstationLocator.targetAt(
+            WorkstationTarget target = workstationLocator.targetAt(
                     serverLevel, entity.position(), FURNACE_SCAN_RADIUS, blockPos, WorkstationCapability.VANILLA_FURNACE
+            );
+            if (target != null) {
+                return target;
+            }
+            target = workstationLocator.targetAt(
+                    serverLevel, entity.position(), FURNACE_SCAN_RADIUS, blockPos, WorkstationCapability.SMOKER
+            );
+            if (target != null) {
+                return target;
+            }
+            return workstationLocator.targetAt(
+                    serverLevel, entity.position(), FURNACE_SCAN_RADIUS, blockPos, WorkstationCapability.BLAST_FURNACE
             );
         }
 
@@ -2461,12 +2822,11 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (entity.distanceToSqr(Vec3.atCenterOf(blockPos)) > CONTAINER_SCAN_RADIUS * CONTAINER_SCAN_RADIUS) {
                 return null;
             }
-            BlockState blockState = serverLevel.getBlockState(blockPos);
-            if (!blockState.is(Blocks.CHEST) && !blockState.is(Blocks.BARREL)) {
-                return null;
-            }
             BlockEntity blockEntity = serverLevel.getBlockEntity(blockPos);
             if (!(blockEntity instanceof Container container)) {
+                return null;
+            }
+            if (container.isEmpty() && container.getContainerSize() <= 0) {
                 return null;
             }
             return new SafeContainerTarget(blockPos.immutable(), container);
@@ -2498,6 +2858,230 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
         private static String dimensionId(ServerLevel serverLevel) {
             return serverLevel.dimension().location().toString();
+        }
+
+        private String targetPortalDimension(PortalTravelInstruction instruction, String currentDimension) {
+            if (instruction.travelNether() && currentDimension.equals(NETHER_DIMENSION_ID)) {
+                return OVERWORLD_DIMENSION_ID;
+            }
+            return instruction.targetDimensionId();
+        }
+
+        private static String targetDimensionSummary(String targetDimension) {
+            return targetDimension == null ? "any" : targetDimension;
+        }
+
+        private boolean hasObservedPortalTransition(QueuedCommand command, String currentDimension) {
+            String targetDimension = command.portalTargetDimensionId();
+            if (targetDimension == null) {
+                return !currentDimension.equals(command.portalStartDimensionId());
+            }
+            return currentDimension.equals(targetDimension);
+        }
+
+        private boolean hasPortalBuildMaterials() {
+            return untaggedNormalInventoryCount(entity.inventorySnapshot(), Items.OBSIDIAN) >= PortalFramePlan.REQUIRED_OBSIDIAN
+                    && entity.normalInventoryCount(Items.FLINT_AND_STEEL) > 0;
+        }
+
+        private PortalSearchResult nearestLoadedPortal(ServerLevel serverLevel, double radius) {
+            int boundedRadius = (int) Math.ceil(radius);
+            BlockPos origin = entity.blockPosition();
+            BlockPos bestPos = null;
+            double bestDistance = Double.MAX_VALUE;
+            int checked = 0;
+            int inspectedLoaded = 0;
+            int skippedUnloaded = 0;
+            Set<Long> loadedChunks = new HashSet<>();
+            for (BlockPos candidate : BlockPos.betweenClosed(
+                    origin.offset(-boundedRadius, -boundedRadius, -boundedRadius),
+                    origin.offset(boundedRadius, boundedRadius, boundedRadius)
+            )) {
+                checked++;
+                if (!serverLevel.hasChunkAt(candidate)) {
+                    skippedUnloaded++;
+                    continue;
+                }
+                inspectedLoaded++;
+                loadedChunks.add((((long) candidate.getX() >> 4) << 32) ^ ((long) candidate.getZ() >> 4));
+                if (!isWithinHorizontalAndVerticalRadius(origin, candidate, radius)) {
+                    continue;
+                }
+                if (!serverLevel.getBlockState(candidate).is(Blocks.NETHER_PORTAL)) {
+                    continue;
+                }
+                double distance = distanceTo(candidate);
+                if (distance < bestDistance || (distance == bestDistance && compareBlockPos(candidate, bestPos) < 0)) {
+                    bestDistance = distance;
+                    bestPos = candidate.immutable();
+                }
+            }
+            return new PortalSearchResult(bestPos, "checked_positions=" + checked
+                    + " inspected_loaded_positions=" + inspectedLoaded + " inspected_loaded_chunks=" + loadedChunks.size()
+                    + " skipped_unloaded=" + skippedUnloaded + " capped=false transition_observed=false");
+        }
+
+        private PortalBuildPlanResult nearestSafePortalFramePlan(ServerLevel serverLevel, double radius) {
+            int boundedRadius = (int) Math.ceil(radius);
+            BlockPos origin = entity.blockPosition();
+            int checked = 0;
+            int skippedUnloaded = 0;
+            for (int distance = 2; distance <= boundedRadius; distance++) {
+                for (Direction direction : Direction.Plane.HORIZONTAL) {
+                    BlockPos base = origin.relative(direction, distance);
+                    for (Direction.Axis axis : List.of(Direction.Axis.X, Direction.Axis.Z)) {
+                        PortalFramePlan plan = PortalFramePlanner.plan(base, axis);
+                        checked++;
+                        String rejection = portalFramePlanRejection(serverLevel, origin, plan, radius);
+                        if (rejection == null) {
+                            return new PortalBuildPlanResult(plan, "checked_positions=" + checked
+                                    + " skipped_unloaded=" + skippedUnloaded + " capped=false transition_observed=false");
+                        }
+                        if (rejection.contains("unloaded")) {
+                            skippedUnloaded++;
+                        }
+                    }
+                }
+            }
+            return new PortalBuildPlanResult(null, "checked_positions=" + checked
+                    + " skipped_unloaded=" + skippedUnloaded + " capped=false transition_observed=false");
+        }
+
+        private String portalFramePlanRejection(ServerLevel serverLevel, BlockPos origin, PortalFramePlan plan, double radius) {
+            for (BlockPos blockPos : plan.framePositions()) {
+                if (!isWithinHorizontalAndVerticalRadius(origin, blockPos, radius)) {
+                    return "outside_radius";
+                }
+                String rejection = portalFrameTargetRejection(serverLevel, blockPos, Blocks.OBSIDIAN.defaultBlockState());
+                if (rejection != null) {
+                    return rejection;
+                }
+            }
+            for (BlockPos blockPos : plan.interiorPositions()) {
+                if (!isWithinHorizontalAndVerticalRadius(origin, blockPos, radius)) {
+                    return "outside_radius";
+                }
+                if (!serverLevel.hasChunkAt(blockPos)) {
+                    return "target_chunk_unloaded";
+                }
+                BlockState state = serverLevel.getBlockState(blockPos);
+                if (!state.isAir() || !state.getFluidState().isEmpty() || !serverLevel.getEntities(entity, new AABB(blockPos)).isEmpty()) {
+                    return "interior_not_air";
+                }
+            }
+            return null;
+        }
+
+        private String portalFrameTargetRejection(ServerLevel serverLevel, BlockPos blockPos, BlockState placedState) {
+            if (!serverLevel.hasChunkAt(blockPos)) {
+                return "target_chunk_unloaded";
+            }
+            BlockState current = serverLevel.getBlockState(blockPos);
+            if (!current.isAir() || !current.getFluidState().isEmpty()) {
+                return "target_occupied";
+            }
+            if (!serverLevel.getEntities(entity, new AABB(blockPos)).isEmpty()) {
+                return "target_entity_collision";
+            }
+            if (!placedState.canSurvive(serverLevel, blockPos)
+                    || !serverLevel.isUnobstructed(placedState, blockPos, CollisionContext.empty())) {
+                return "target_collision_or_support";
+            }
+            return null;
+        }
+
+        private String portalIgnitionRejection(ServerLevel serverLevel, PortalFramePlan plan) {
+            if (!entity.allowWorldActions()) {
+                return "world_actions_disabled_before_portal_ignition";
+            }
+            if (entity.normalInventoryCount(Items.FLINT_AND_STEEL) <= 0) {
+                return "portal_ignition_missing_flint_and_steel";
+            }
+            for (BlockPos blockPos : plan.framePositions()) {
+                if (!serverLevel.hasChunkAt(blockPos)) {
+                    return "portal_ignition_frame_unloaded";
+                }
+                if (!serverLevel.getBlockState(blockPos).is(Blocks.OBSIDIAN)) {
+                    return "portal_ignition_frame_not_obsidian";
+                }
+            }
+            for (BlockPos blockPos : plan.interiorPositions()) {
+                if (!serverLevel.hasChunkAt(blockPos)) {
+                    return "portal_ignition_interior_unloaded";
+                }
+                BlockState state = serverLevel.getBlockState(blockPos);
+                if (!state.isAir() && !state.is(Blocks.FIRE) && !state.is(Blocks.NETHER_PORTAL)) {
+                    return "portal_ignition_interior_blocked";
+                }
+            }
+            return null;
+        }
+
+        private boolean createPortalFromFrame(ServerLevel serverLevel, PortalFramePlan plan, BlockPos ignitionPos) {
+            if (PortalShape.findEmptyPortalShape(serverLevel, ignitionPos, plan.horizontalAxis()).isPresent()) {
+                PortalShape.findEmptyPortalShape(serverLevel, ignitionPos, plan.horizontalAxis()).get().createPortalBlocks();
+            } else if (serverLevel.getBlockState(ignitionPos).isAir()
+                    && Blocks.FIRE.defaultBlockState().canSurvive(serverLevel, ignitionPos)) {
+                serverLevel.setBlock(ignitionPos, Blocks.FIRE.defaultBlockState(), Block.UPDATE_ALL);
+            }
+            for (BlockPos blockPos : plan.interiorPositions()) {
+                if (serverLevel.getBlockState(blockPos).is(Blocks.NETHER_PORTAL)) {
+                    return true;
+                }
+            }
+            PortalShape.findEmptyPortalShape(serverLevel, ignitionPos, plan.horizontalAxis())
+                    .ifPresent(PortalShape::createPortalBlocks);
+            for (BlockPos blockPos : plan.interiorPositions()) {
+                if (serverLevel.getBlockState(blockPos).is(Blocks.NETHER_PORTAL)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private void damageSelectedFlintAndSteelOnce() {
+            ItemStack selectedStack = entity.getMainHandItem();
+            if (!selectedStack.is(Items.FLINT_AND_STEEL)) {
+                return;
+            }
+            selectedStack.hurtAndBreak(1, entity, ignored -> { });
+        }
+
+        private static boolean isWithinHorizontalAndVerticalRadius(BlockPos origin, BlockPos candidate, double radius) {
+            int deltaX = origin.getX() - candidate.getX();
+            int deltaY = origin.getY() - candidate.getY();
+            int deltaZ = origin.getZ() - candidate.getZ();
+            return deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ <= radius * radius;
+        }
+
+        private String portalCommandSummary(QueuedCommand command, boolean transitionObserved, String reason) {
+            String currentDimension = serverLevel() == null ? "unknown" : dimensionId(serverLevel());
+            BlockPos frame = command.portalFramePlan() == null ? null : command.portalFramePlan().origin();
+            String position = command.portalPos() == null
+                    ? frame == null ? "none" : frame.toShortString()
+                    : command.portalPos().toShortString();
+            return "mode=" + command.portalMode() + " target_dimension="
+                    + targetDimensionSummary(command.portalTargetDimensionId()) + " current_dimension=" + currentDimension
+                    + " source=" + (command.portalFramePlan() == null ? "loaded_scan" : "player_like_build")
+                    + " radius=" + formatRadius(command.radius()) + " portal_frame_position=" + position
+                    + " placed_blocks=" + command.portalPlacedBlocks() + " required_obsidian="
+                    + PortalFramePlan.REQUIRED_OBSIDIAN + " has_flint_and_steel="
+                    + (entity.normalInventoryCount(Items.FLINT_AND_STEEL) > 0)
+                    + " " + command.portalDiagnostics() + " transition_observed=" + transitionObserved
+                    + " failure=" + reason;
+        }
+
+        private void notePortalProgress(QueuedCommand command, String currentDimension, String reason) {
+            if (activeMonitor == null) {
+                return;
+            }
+            activeMonitor.note("mode=" + command.portalMode() + " target_dimension="
+                    + targetDimensionSummary(command.portalTargetDimensionId()) + " current_dimension=" + currentDimension
+                    + " source=player_like_build radius=" + formatRadius(command.radius())
+                    + " frame=" + command.portalFramePlan().origin().toShortString()
+                    + " placed_blocks=" + command.portalPlacedBlocks() + " required_obsidian="
+                    + PortalFramePlan.REQUIRED_OBSIDIAN + " has_flint_and_steel="
+                    + (entity.normalInventoryCount(Items.FLINT_AND_STEEL) > 0) + " status=" + reason);
         }
 
         private String statusSummary() {
@@ -2728,6 +3312,19 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 moveNearBlock(activeCommand.buildPlan().positions().get(activeCommand.buildIndex()));
                 return;
             }
+            if ((kind == IntentKind.USE_PORTAL || kind == IntentKind.TRAVEL_NETHER)) {
+                if (!entity.allowWorldActions()) {
+                    failActiveCommand("world_actions_disabled_during_portal_travel");
+                    return;
+                }
+                if (activeCommand.portalFramePlan() != null
+                        && activeCommand.portalPlacedBlocks() < activeCommand.portalFramePlan().framePositions().size()) {
+                    moveNearBlock(activeCommand.portalFramePlan().framePositions().get(activeCommand.portalPlacedBlocks()));
+                } else if (activeCommand.portalPos() != null) {
+                    moveToBlock(activeCommand.portalPos());
+                }
+                return;
+            }
             if (kind == IntentKind.FARM_NEARBY) {
                 ServerLevel serverLevel = serverLevel();
                 if (serverLevel == null) {
@@ -2856,7 +3453,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (kind == IntentKind.COLLECT_ITEMS || kind == IntentKind.COLLECT_FOOD || kind == IntentKind.GET_ITEM) {
                 return COLLECT_MAX_TICKS;
             }
-            if (kind == IntentKind.BUILD_STRUCTURE) {
+            if (kind == IntentKind.BUILD_STRUCTURE || kind == IntentKind.USE_PORTAL || kind == IntentKind.TRAVEL_NETHER) {
                 return LONG_TASK_MAX_TICKS;
             }
             if (kind == IntentKind.FOLLOW_OWNER || kind == IntentKind.GUARD_OWNER || kind == IntentKind.PATROL) {
@@ -2976,23 +3573,152 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             return result.getType() == HitResult.Type.MISS || result.getBlockPos().equals(blockPos);
         }
 
-        private static boolean isSupportedSafeInteractBlock(BlockState state) {
-            return PhaseFourteenSafetyPolicy.isSafeEmptyHandInteractBlock(state.getBlock());
+        static BlockInteractionCapability blockInteractionCapability(BlockState state) {
+            if (state == null) {
+                return BlockInteractionCapability.UNAVAILABLE;
+            }
+            Block block = state.getBlock();
+            if (block instanceof LeverBlock) {
+                return BlockInteractionCapability.LEVER;
+            }
+            if (block instanceof ButtonBlock) {
+                return BlockInteractionCapability.BUTTON;
+            }
+            if (block instanceof DoorBlock) {
+                return BlockInteractionCapability.DOOR;
+            }
+            if (block instanceof TrapDoorBlock) {
+                return BlockInteractionCapability.TRAPDOOR;
+            }
+            if (block instanceof FenceGateBlock) {
+                return BlockInteractionCapability.FENCE_GATE;
+            }
+            if (block instanceof BellBlock) {
+                return BlockInteractionCapability.BELL;
+            }
+            if (block instanceof NoteBlock) {
+                return BlockInteractionCapability.NOTE_BLOCK;
+            }
+            if (block instanceof BedBlock) {
+                return BlockInteractionCapability.BED_STATUS;
+            }
+            if (block instanceof CraftingTableBlock) {
+                return BlockInteractionCapability.CRAFTING_TABLE_SURFACE;
+            }
+            if (block instanceof FurnaceBlock || state.is(Blocks.SMOKER) || state.is(Blocks.BLAST_FURNACE)) {
+                return BlockInteractionCapability.FURNACE_SURFACE;
+            }
+            if (block instanceof BarrelBlock || state.is(Blocks.CHEST) || state.is(Blocks.TRAPPED_CHEST)) {
+                return BlockInteractionCapability.CONTAINER_SURFACE;
+            }
+            return BlockInteractionCapability.UNAVAILABLE;
         }
 
-        private static boolean toggleSafeInteractBlock(ServerLevel serverLevel, BlockPos blockPos, BlockState state) {
+        private static boolean applyBlockInteraction(ServerLevel serverLevel, BlockPos blockPos, BlockState state,
+                                                     BlockInteractionCapability capability) {
             Block block = state.getBlock();
-            BlockState updatedState;
             if (block instanceof LeverBlock) {
-                updatedState = state.setValue(LeverBlock.POWERED, !state.getValue(LeverBlock.POWERED));
-            } else if (block instanceof TrapDoorBlock) {
-                updatedState = state.setValue(TrapDoorBlock.OPEN, !state.getValue(TrapDoorBlock.OPEN));
-            } else if (block instanceof FenceGateBlock) {
-                updatedState = state.setValue(FenceGateBlock.OPEN, !state.getValue(FenceGateBlock.OPEN));
-            } else {
-                return false;
+                return serverLevel.setBlock(blockPos, state.setValue(LeverBlock.POWERED, !state.getValue(LeverBlock.POWERED)), Block.UPDATE_ALL);
             }
-            return serverLevel.setBlock(blockPos, updatedState, Block.UPDATE_ALL);
+            if (block instanceof TrapDoorBlock) {
+                return serverLevel.setBlock(blockPos, state.setValue(TrapDoorBlock.OPEN, !state.getValue(TrapDoorBlock.OPEN)), Block.UPDATE_ALL);
+            }
+            if (block instanceof FenceGateBlock) {
+                return serverLevel.setBlock(blockPos, state.setValue(FenceGateBlock.OPEN, !state.getValue(FenceGateBlock.OPEN)), Block.UPDATE_ALL);
+            }
+            if (block instanceof DoorBlock) {
+                return serverLevel.setBlock(blockPos, state.cycle(DoorBlock.OPEN), Block.UPDATE_ALL);
+            }
+            if (block instanceof ButtonBlock) {
+                return serverLevel.setBlock(blockPos, state.setValue(ButtonBlock.POWERED, true), Block.UPDATE_ALL);
+            }
+            if (capability == BlockInteractionCapability.BELL || capability == BlockInteractionCapability.NOTE_BLOCK
+                    || capability == BlockInteractionCapability.BED_STATUS
+                    || capability == BlockInteractionCapability.CRAFTING_TABLE_SURFACE
+                    || capability == BlockInteractionCapability.FURNACE_SURFACE
+                    || capability == BlockInteractionCapability.CONTAINER_SURFACE) {
+                return true;
+            }
+            return false;
+        }
+
+        private EntityInteractionCapability entityInteractionCapability(Entity target) {
+            if (target instanceof Sheep sheep && sheep.readyForShearing()
+                    && entity.normalInventoryCount(Items.SHEARS) > 0) {
+                return EntityInteractionCapability.SHEAR_SHEEP;
+            }
+            if ((target instanceof Cow || target instanceof MushroomCow)
+                    && entity.normalInventoryCount(Items.BUCKET) > 0
+                    && canInsertOneNormalInventoryItem(Items.MILK_BUCKET)) {
+                return EntityInteractionCapability.MILK_COW;
+            }
+            if (target instanceof net.minecraft.world.entity.npc.Villager) {
+                return EntityInteractionCapability.UNAVAILABLE;
+            }
+            return EntityInteractionCapability.UNAVAILABLE;
+        }
+
+        private boolean applyEntityInteraction(ServerLevel serverLevel, Entity target, EntityInteractionCapability capability) {
+            if (capability == EntityInteractionCapability.SHEAR_SHEEP && target instanceof Sheep sheep) {
+                if (!entity.selectOrMoveNormalItemToHotbar(Items.SHEARS) || !sheep.readyForShearing()) {
+                    return false;
+                }
+                sheep.shear(SoundSource.PLAYERS);
+                damageSelectedToolOnce(Items.SHEARS);
+                return !sheep.readyForShearing();
+            }
+            if (capability == EntityInteractionCapability.MILK_COW && (target instanceof Cow || target instanceof MushroomCow)) {
+                if (entity.normalInventoryCount(Items.BUCKET) <= 0 || !canInsertOneNormalInventoryItem(Items.MILK_BUCKET)) {
+                    return false;
+                }
+                List<ItemStack> snapshot = entity.inventorySnapshot();
+                if (!entity.consumeOneNormalInventoryItem(Items.BUCKET) || !insertOneNormalInventoryItem(Items.MILK_BUCKET)) {
+                    restoreEntityInventory(snapshot);
+                    return false;
+                }
+                return true;
+            }
+            return false;
+        }
+
+        private void damageSelectedToolOnce(Item item) {
+            ItemStack selectedStack = entity.getMainHandItem();
+            if (selectedStack.is(item)) {
+                selectedStack.hurtAndBreak(1, entity, ignored -> { });
+            }
+        }
+
+        private boolean canInsertOneNormalInventoryItem(Item item) {
+            return NpcInventoryTransfer.canInsertAll(
+                    entity.inventorySnapshot(), new ItemStack(item),
+                    NpcInventoryTransfer.FIRST_NORMAL_SLOT, NpcInventoryTransfer.FIRST_EQUIPMENT_SLOT
+            );
+        }
+
+        private boolean insertOneNormalInventoryItem(Item item) {
+            List<ItemStack> inventory = entity.inventorySnapshot();
+            ItemStack inserted = new ItemStack(item);
+            for (int slot = NpcInventoryTransfer.FIRST_NORMAL_SLOT;
+                 slot < Math.min(NpcInventoryTransfer.FIRST_EQUIPMENT_SLOT, inventory.size()); slot++) {
+                ItemStack stack = inventory.get(slot);
+                if (!stack.isEmpty() && ItemStack.isSameItemSameTags(stack, inserted) && stack.getCount() < stack.getMaxStackSize()) {
+                    stack.grow(1);
+                    return entity.setInventoryItem(slot, stack);
+                }
+            }
+            for (int slot = NpcInventoryTransfer.FIRST_NORMAL_SLOT;
+                 slot < Math.min(NpcInventoryTransfer.FIRST_EQUIPMENT_SLOT, inventory.size()); slot++) {
+                if (inventory.get(slot).isEmpty()) {
+                    return entity.setInventoryItem(slot, inserted);
+                }
+            }
+            return false;
+        }
+
+        private void restoreEntityInventory(List<ItemStack> snapshot) {
+            for (int slot = 0; slot < snapshot.size(); slot++) {
+                entity.setInventoryItem(slot, snapshot.get(slot));
+            }
         }
 
         private static Item itemByIdOrNull(ResourceLocation id) {
@@ -3036,6 +3762,47 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             return ": " + plan.reason();
         }
 
+        enum BlockInteractionCapability {
+            LEVER("lever"),
+            BUTTON("button"),
+            DOOR("door"),
+            TRAPDOOR("trapdoor"),
+            FENCE_GATE("fence_gate"),
+            BELL("bell"),
+            NOTE_BLOCK("note_block"),
+            BED_STATUS("bed_status"),
+            CRAFTING_TABLE_SURFACE("crafting_table_surface"),
+            FURNACE_SURFACE("furnace_surface"),
+            CONTAINER_SURFACE("container_surface"),
+            UNAVAILABLE("capability_unavailable");
+
+            private final String id;
+
+            BlockInteractionCapability(String id) {
+                this.id = id;
+            }
+
+            String id() {
+                return id;
+            }
+        }
+
+        enum EntityInteractionCapability {
+            SHEAR_SHEEP("shear_sheep"),
+            MILK_COW("milk_cow"),
+            UNAVAILABLE("capability_unavailable");
+
+            private final String id;
+
+            EntityInteractionCapability(String id) {
+                this.id = id;
+            }
+
+            String id() {
+                return id;
+            }
+        }
+
         private record SafeContainerTarget(BlockPos blockPos, Container container) {
         }
 
@@ -3050,6 +3817,12 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 boolean visited,
                 int recency
         ) {
+        }
+
+        private record PortalSearchResult(BlockPos portalPos, String diagnostics) {
+        }
+
+        private record PortalBuildPlanResult(PortalFramePlan plan, String diagnostics) {
         }
 
         private static final class QueuedCommand {
@@ -3079,6 +3852,13 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             private int reachTicks;
             private boolean patrolReturn;
             private boolean smeltStarted;
+            private String portalTargetDimensionId;
+            private String portalStartDimensionId;
+            private BlockPos portalPos;
+            private PortalFramePlan portalFramePlan;
+            private String portalMode;
+            private String portalDiagnostics;
+            private int portalPlacedBlocks;
 
             private QueuedCommand(IntentKind kind, Coordinate coordinate, double radius) {
                 this(kind, coordinate, radius, null, null, false, null, null, null, 0, false, 1);
@@ -3170,10 +3950,29 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return command;
             }
 
+            private static QueuedCommand portalTravel(IntentKind kind, double radius, String targetDimensionId,
+                                                      BlockPos portalPos,
+                                                      PortalFramePlan portalFramePlan, String mode,
+                                                      String diagnostics) {
+                QueuedCommand command = new QueuedCommand(kind, null, radius);
+                command.portalTargetDimensionId = targetDimensionId;
+                command.portalPos = portalPos == null ? null : portalPos.immutable();
+                command.portalFramePlan = portalFramePlan;
+                command.portalMode = mode;
+                command.portalDiagnostics = diagnostics;
+                return command;
+            }
+
             private static QueuedCommand interactBlock(BlockPos blockPos) {
                 return new QueuedCommand(
                         IntentKind.INTERACT, null, 0.0D, blockPos.immutable(), null, false, null, null, null, 0,
                         false, 1
+                );
+            }
+
+            private static QueuedCommand interactEntity(Entity target, double radius) {
+                return new QueuedCommand(
+                        IntentKind.INTERACT, null, radius, null, target, false, null, null, null, 0, false, 1
                 );
             }
 
@@ -3345,6 +4144,10 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 this.startPosition = startPosition;
             }
 
+            private void setPortalStartDimensionId(String portalStartDimensionId) {
+                this.portalStartDimensionId = portalStartDimensionId;
+            }
+
             private BlockPos explorationTarget() {
                 return explorationTarget;
             }
@@ -3368,6 +4171,42 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
             private boolean returningToStart() {
                 return patrolReturn;
+            }
+
+            private String portalTargetDimensionId() {
+                return portalTargetDimensionId;
+            }
+
+            private String portalStartDimensionId() {
+                return portalStartDimensionId == null ? "" : portalStartDimensionId;
+            }
+
+            private BlockPos portalPos() {
+                return portalPos;
+            }
+
+            private void setPortalPos(BlockPos portalPos) {
+                this.portalPos = portalPos == null ? null : portalPos.immutable();
+            }
+
+            private PortalFramePlan portalFramePlan() {
+                return portalFramePlan;
+            }
+
+            private String portalMode() {
+                return portalMode == null ? "existing_portal" : portalMode;
+            }
+
+            private String portalDiagnostics() {
+                return portalDiagnostics == null ? "" : portalDiagnostics;
+            }
+
+            private int portalPlacedBlocks() {
+                return portalPlacedBlocks;
+            }
+
+            private void incrementPortalPlacedBlocks() {
+                portalPlacedBlocks++;
             }
 
             private void togglePatrolReturn() {

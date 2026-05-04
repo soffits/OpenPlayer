@@ -25,7 +25,7 @@ public final class WorkstationCapabilityTest {
         Bootstrap.bootStrap();
         dynamicSmeltingRecipeIsSeparateFromAdapterAvailability();
         diagnosticsAreBoundedAndDeterministic();
-        unsupportedAdaptersHaveDeterministicDiagnostics();
+        unavailableAdaptersHaveDeterministicDiagnostics();
     }
 
     private static void dynamicSmeltingRecipeIsSeparateFromAdapterAvailability() {
@@ -48,11 +48,11 @@ public final class WorkstationCapabilityTest {
         require(plan != null, "dynamic smelting recipe lookup must still plan safe recipes");
         require(WorkstationCapability.VANILLA_FURNACE.supportsVanillaSmelting(),
                 "vanilla furnace adapter must expose smelting capability");
-        require(!WorkstationCapability.SMOKER_UNAVAILABLE.hasSafeAdapter(),
-                "smoker execution must stay unavailable until a safe adapter exists");
-        require(WorkstationDiagnostics.adapterUnavailable(WorkstationKind.SMOKER, "minecraft:smelting")
-                        .contains("adapter unavailable"),
-                "unsupported workstation diagnostic must identify adapter availability, not recipe lookup");
+        require(WorkstationCapability.SMOKER.hasSafeAdapter() && WorkstationCapability.SMOKER.supportsVanillaSmelting(),
+                "smoker execution should expose the reviewed furnace-compatible adapter");
+        require(WorkstationCapability.BLAST_FURNACE.hasSafeAdapter()
+                        && WorkstationCapability.BLAST_FURNACE.supportsVanillaSmelting(),
+                "blast furnace execution should expose the reviewed furnace-compatible adapter");
     }
 
     private static void diagnosticsAreBoundedAndDeterministic() {
@@ -71,7 +71,7 @@ public final class WorkstationCapabilityTest {
                 "summary must be deterministic and bounded");
     }
 
-    private static void unsupportedAdaptersHaveDeterministicDiagnostics() {
+    private static void unavailableAdaptersHaveDeterministicDiagnostics() {
         require("no loaded nearby furnace workstation with vanilla_furnace adapter".equals(
                         WorkstationDiagnostics.noLoadedTarget(WorkstationCapability.VANILLA_FURNACE)),
                 "missing vanilla furnace diagnostic must be deterministic");

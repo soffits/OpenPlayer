@@ -1,6 +1,6 @@
 # PlayerEngine-Style Parity Roadmap
 
-> **For Hermes:** Use `subagent-driven-development` and OpenCode for implementation. Keep each phase small, reviewed, and verified before moving to the next phase.
+> **For Hermes:** Use `subagent-driven-development` and OpenCode for implementation. Keep each phase reviewed and verified, but group related player-like capabilities into coherent adapter clusters instead of splitting every small adapter into its own phase.
 
 **Goal:** Build a legally clean, local/offline, open-source PlayerEngine-style Minecraft agent runtime for OpenPlayer, excluding Player2 commercial/online service features while pursuing broad runtime behavior parity.
 
@@ -179,13 +179,13 @@ OpenPlayer already has:
 
 ### Phase 7: Container, Stash, and Smelting
 
-**Status:** Phase 7B implements bounded server-side `DEPOSIT_ITEM`, `STASH_ITEM`, and `WITHDRAW_ITEM` for exact item/count and deposit-all normal inventory transfers against loaded nearby vanilla chests and barrels only, plus asynchronous `SMELT_ITEM <output_item_id> [count]` execution through the vanilla furnace workstation adapter. Transfers are gated by `allowWorldActions`, ignore armor/offhand, use deterministic nearest-container/workstation ordering, and apply all-or-nothing snapshots for NPC inventory plus container/furnace slots. `STASH_ITEM` stores one local dimension/block-position stash memory on the NPC and `WITHDRAW_ITEM` prefers that valid stash before falling back nearby. `GET_ITEM` can now plan table-required crafting steps only when a loaded nearby crafting table capability is present; steps preserve table metadata so inventory-only execution rejects them. Recipes are still queried dynamically through the server `RecipeManager`, but workstation execution is capability-based: smoker, blast furnace, campfire, and custom mod machines need explicit safe adapters before execution is claimed. `SMELT_ITEM` uses NPC-carried input and non-container fuel, and completes only after requested output is collected into NPC normal inventory.
+**Status:** Phase 7B implements bounded server-side `DEPOSIT_ITEM`, `STASH_ITEM`, and `WITHDRAW_ITEM` for exact item/count and deposit-all normal inventory transfers against remembered stash or loaded nearby safe container adapters / `Container` block entities where snapshot/restore no-loss semantics apply; vanilla chests and barrels are examples, not the only supported container surface. Unsupported, locked, or custom containers may reject with deterministic missing-adapter/state diagnostics, and providers must not use arbitrary inventory API calls or claim fake success. Transfers are gated by `allowWorldActions`, ignore armor/offhand, use deterministic nearest-container/workstation ordering, and apply all-or-nothing snapshots for NPC inventory plus container/furnace slots. `STASH_ITEM` stores one local dimension/block-position stash memory on the NPC and `WITHDRAW_ITEM` prefers that valid stash before falling back nearby. `GET_ITEM` can now plan table-required crafting steps only when a loaded nearby crafting table capability is present; steps preserve table metadata so inventory-only execution rejects them. Recipes are still queried dynamically through the server `RecipeManager`, but workstation execution is capability-based: smoker, blast furnace, campfire, and custom mod machines need explicit safe adapters before execution is claimed. `SMELT_ITEM` uses NPC-carried input and non-container fuel, and completes only after requested output is collected into NPC normal inventory.
 
 **Objective:** Add chest/barrel/furnace/smoker/crafting-table interactions.
 
 **Capabilities:**
 
-- Find nearby safe loaded vanilla chest/barrel containers.
+- Find remembered stash or nearby safe loaded container adapters / `Container` block entities with snapshot/restore no-loss semantics; vanilla chests and barrels are examples, while unsupported, locked, or custom containers may reject deterministically.
 - Deposit all normal inventory or exact item/count atomically.
 - Withdraw exact item/count atomically.
 - Remember one local stash location on the NPC entity.
@@ -300,13 +300,13 @@ OpenPlayer already has:
 
 **Acceptance Criteria:**
 
-- Each task must be added as a separate reviewed phase with explicit safety and cancellation semantics.
+- Related tasks should be added as reviewed capability clusters with explicit safety and cancellation semantics.
 
 ---
 
 ## Remaining Post-12 Parity Phases
 
-The first twelve phases establish a bounded first-party runtime foundation, but PlayerEngine/AltoClef also exposes broader task families such as command control, body-language movement, real fishing, chunk search, structure location, portal/dimension travel, richer resource gathering, and speedrun/endgame tasks. These require separate clean-room phases because they can mutate world state, run for a long time, load or inspect chunks, cross dimensions, or imply success when vanilla NPC support is incomplete.
+The first twelve phases establish a bounded first-party runtime foundation, but PlayerEngine/AltoClef also exposes broader task families such as command control, body-language movement, real fishing, chunk search, structure location, portal/dimension travel, richer resource gathering, and speedrun/endgame tasks. These require clean-room reviewed capability clusters because they can mutate world state, run for a long time, load or inspect chunks, cross dimensions, or imply success when vanilla NPC support is incomplete.
 
 ### Phase 13: Control, Memory, and Expression Commands
 
@@ -329,16 +329,16 @@ The first twelve phases establish a bounded first-party runtime foundation, but 
 
 ### Phase 14: Interaction and Targeted Combat Refinement
 
-**Status:** Implemented as a safe subset. `INTERACT block <x> <y> <z>` queues loaded, nearby, empty-hand, line-of-sight/reach-bounded toggles for explicit vanilla levers, wooden trapdoors, and wooden fence gates only; doors, buttons, iron trapdoors, powered-only blocks, and modded/custom blocks are out of scope. `INTERACT entity ...` parser schema remains deterministic, but runtime validation rejects entity interaction until a reviewed non-destructive entity adapter exists. `ATTACK_TARGET [entity] <entity_type_or_uuid> [radius]` resolves loaded in-range targets by UUID or entity type and attacks only explicitly allowlisted hostile/danger vanilla entity types. Trading, breeding, buckets, item-use-on-block, villager/container UI, modded/custom interaction, generic item interaction, players, owners, OpenPlayer NPCs, passive/friendly/neutral entities, and arbitrary non-hostile combat remain unsupported.
+**Status:** Implemented as a capability-gated subset. `INTERACT block <x> <y> <z>` queues loaded, nearby, line-of-sight/reach-bounded reviewed adapters for common vanilla block interactions including levers, buttons, doors, trapdoors, fence gates, bells, note blocks, bed status checks, crafting tables, furnaces, chests, and barrels; unsupported/custom blocks return deterministic missing-adapter diagnostics. `INTERACT entity ...` is runtime-validated and supports initial safe adapters such as shearing sheep with carried shears and milking cows/mooshrooms with carried buckets and inventory capacity. `ATTACK_TARGET [entity] <entity_type_or_uuid> [radius]` resolves loaded in-range targets by UUID or entity type and attacks only explicitly allowlisted hostile/danger vanilla entity types. Trading, breeding/taming without a safe adapter, villager UI, modded/custom interaction, players, owners, OpenPlayer NPCs, passive/friendly/neutral combat, and arbitrary non-hostile combat remain missing adapters or explicit combat-policy exclusions.
 
 **Objective:** Implement safe `INTERACT` and richer `ATTACK_TARGET` semantics without arbitrary entity/block use.
 
 **Capabilities:**
 
-- `INTERACT block <x> <y> <z>` for loaded nearby whitelisted empty-hand vanilla lever, wooden trapdoor, and wooden fence gate toggles where no inventory loss can occur.
-- `INTERACT entity <entity_type_or_uuid> [radius]` remains parser-recognized only; runtime validation rejects it until safe non-destructive entity interactions are reviewed.
+- `INTERACT block <x> <y> <z>` for loaded nearby reviewed vanilla block capability adapters where no fake success is reported.
+- `INTERACT entity <entity_type_or_uuid> [radius]` for loaded nearby safe entity adapters such as sheep shearing and cow/mooshroom milking where carried tools/items and inventory deltas can be verified.
 - `ATTACK_TARGET <entity_type_or_uuid> [radius]` with owner/same-dimension checks and hostile/explicit-target policy.
-- Clear rejection for villagers, trading, animal breeding, buckets, item-use-on-block, or modded interactions until specific adapters exist.
+- Clear missing-adapter diagnostics for villagers/trading, animal breeding/taming, unsupported item-use-on-block, or modded interactions until specific adapters exist.
 
 **Acceptance Criteria:**
 
@@ -426,12 +426,14 @@ The first twelve phases establish a bounded first-party runtime foundation, but 
 
 ### Phase 19: Portal and Dimension Travel
 
+**Status:** Phase 19 plus the broad player-like capability expansion implements a player-like MVP for `USE_PORTAL` and `TRAVEL_NETHER`. Instructions are strict key/value syntax with bounded radius and supported dimensions only. The runtime scans only already-loaded nearby blocks for existing Nether portal blocks, navigates to/into a loaded portal, and completes only after observing the NPC dimension change. If requested or inventory-afforded for `TRAVEL_NETHER`, the runtime can build a simple 4x5 obsidian frame from NPC-carried obsidian in loaded air-only space with collision checks and real inventory consumption after each successful placement, then attempts flint-and-steel ignition through a reviewed first-party player-like capability adapter and waits for an observed transition. The phase does not use commands, teleportation, locate APIs, creative placement, bucket-flow portal construction, container materials, hidden services, PlayerEngine/Baritone/AltoClef dependencies, or forced dimension changes.
+
 **Objective:** Implement `USE_PORTAL` and `TRAVEL_NETHER` through reviewed portal/dimension safety semantics.
 
 **Capabilities:**
 
 - Detect nearby loaded existing portals and use them when pathable and safe.
-- Optionally build simple portals only from carried/available obsidian or bucket-flow adapter after separate safety review.
+- Optionally build and ignite simple portals only from carried/available obsidian and flint_and_steel through reviewed first-party player-like capability adapters; bucket-flow construction remains a missing adapter.
 - Track dimension transition, timeout, owner relation, return path, and hazard recovery.
 
 **Acceptance Criteria:**
@@ -484,4 +486,4 @@ For action/runtime phases:
 
 ## Immediate Next Step
 
-Review the next advanced family as its own bounded phase, starting with explicit safety/cancellation semantics before any chunk exploration, structure location, portal, Nether, stronghold, or End behavior is implemented.
+Review the next advanced capability cluster with explicit safety/cancellation semantics before any stronghold, End, or speedrun behavior is implemented.

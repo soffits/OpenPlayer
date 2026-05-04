@@ -141,7 +141,7 @@ Immediate player-like interaction intents use a deterministic NPC-ticked cooldow
 
 `OpenPlayerNpcEntity` exposes focused server-side helpers for the current selected hotbar slot, inventory item access, held and equipment slots, selected-stack offhand swapping, best-available armor upgrades, selected eat/drink item use, selecting a hotbar tool for block breaking, selecting hotbar block items for placement, and visible main-hand swing actions. The selected main-hand slot is now constrained to the nine-slot hotbar; invalid persisted selections fall back to slot `0`.
 
-The interaction layer intentionally avoids broad player emulation. Vanilla APIs that require a real `Player` instance, full item cooldown managers, container menus, or client authority are left as explicit gaps until a safe NPC-backed adapter exists.
+The interaction layer translates agent intent into normal Minecraft player-like actions where reviewed first-party adapters can preserve authority, cooldown, reach/LOS, real inventory/world-state mutation, and truthful completion. Vanilla APIs that require a real `Player` instance, full item cooldown managers, container menus, or client authority are treated as missing adapters until a safe NPC-backed implementation exists, not as permanent product restrictions.
 
 ## Roadmap
 

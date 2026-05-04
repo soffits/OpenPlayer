@@ -65,6 +65,18 @@ public final class WorkstationLocator {
                 return new WorkstationTarget(blockPos, capability, furnace);
             }
         }
+        if (capability.kind() == WorkstationKind.SMOKER && blockState.is(Blocks.SMOKER)) {
+            BlockEntity blockEntity = serverLevel.getBlockEntity(blockPos);
+            if (blockEntity instanceof AbstractFurnaceBlockEntity furnace) {
+                return new WorkstationTarget(blockPos, capability, furnace);
+            }
+        }
+        if (capability.kind() == WorkstationKind.BLAST_FURNACE && blockState.is(Blocks.BLAST_FURNACE)) {
+            BlockEntity blockEntity = serverLevel.getBlockEntity(blockPos);
+            if (blockEntity instanceof AbstractFurnaceBlockEntity furnace) {
+                return new WorkstationTarget(blockPos, capability, furnace);
+            }
+        }
         return null;
     }
 

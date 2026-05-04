@@ -93,8 +93,14 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must document deposit and stash syntax");
         require(prompt.contains("WITHDRAW_ITEM, instruction must contain only exact item id syntax <item_id> [count]"),
                 "system prompt must document withdraw syntax");
-        require(prompt.contains("loaded nearby vanilla chests or barrels"),
-                "system prompt must document bounded container limits");
+        require(prompt.contains("remembered stash or loaded nearby safe container adapters / Container block entities"),
+                "system prompt must document broadened bounded container capability limits");
+        require(prompt.contains("vanilla chests and barrels are examples, not the only supported container surface"),
+                "system prompt must document vanilla containers as examples only");
+        require(prompt.contains("unsupported/locked/custom containers may reject with deterministic missing-adapter/state diagnostics"),
+                "system prompt must document deterministic container rejection diagnostics");
+        require(prompt.contains("must not use arbitrary inventory API calls or claim fake success"),
+                "system prompt must prevent arbitrary provider inventory calls and fake success");
         require(prompt.contains("STASH_ITEM remembers a successful local stash container"),
                 "system prompt must document stash memory");
         require(prompt.contains("For kind GET_ITEM, instruction must contain only exact item id syntax <item_id> [count]"),
@@ -127,8 +133,8 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must document smelt output syntax");
         require(!prompt.contains("SMELT_ITEM <output_item_id> [count]"),
                 "system prompt must not tell providers to include the literal SMELT_ITEM token in instruction");
-        require(prompt.contains("loaded nearby vanilla furnace block"),
-                "system prompt must document nearby loaded furnace limitation");
+        require(prompt.contains("loaded nearby vanilla furnace, smoker, or blast furnace block entity adapter"),
+                "system prompt must document nearby loaded furnace/smoker/blast furnace adapters");
         require(prompt.contains("NPC-carried recipe input plus NPC-carried fuel"),
                 "system prompt must document carried input and fuel requirement");
         require(prompt.contains("For PAUSE, UNPAUSE, and RESET_MEMORY, instruction must be blank"),
@@ -147,10 +153,10 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must document status observation for smelting");
         require(prompt.contains("completion is only after requested output is transferred into NPC normal inventory"),
                 "system prompt must prevent fake smelting success");
-        require(prompt.contains("explicit vanilla levers, wooden trapdoors, and wooden fence gates"),
-                "system prompt must document narrow Phase 14 interaction block scope");
-        require(prompt.contains("doors, buttons, iron trapdoors"),
-                "system prompt must document unsupported interaction semantics");
+        require(prompt.contains("common vanilla blocks such as levers, buttons, doors, trapdoors, fence gates"),
+                "system prompt must document expanded block interaction capability scope");
+        require(prompt.contains("shearing sheep with carried shears and milking cows/mooshrooms with carried buckets"),
+                "system prompt must document initial entity interaction adapters");
         require(prompt.contains("friendly mobs, neutral mobs, or arbitrary non-hostile entities"),
                 "system prompt must document narrow explicit attack target scope");
         require(prompt.contains("For COLLECT_FOOD, instruction must be blank or only a positive radius number"),
@@ -181,6 +187,16 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must avoid ownership, loot, and membership guarantees");
         require(prompt.contains("never uses server locate APIs, never loads chunks, never teleports, never moves items, and never auto-loots"),
                 "system prompt must document LOCATE_STRUCTURE safety boundaries");
+        require(prompt.contains("USE_PORTAL and TRAVEL_NETHER are player-like portal tasks"),
+                "system prompt must document portal tasks as player-like actions");
+        require(prompt.contains("radius=<blocks> target=<minecraft:the_nether|minecraft:overworld> build=<true|false>"),
+                "system prompt must document USE_PORTAL strict syntax");
+        require(prompt.contains("NPC-carried obsidian plus flint_and_steel"),
+                "system prompt must document carried portal materials");
+        require(prompt.contains("must not use OP/admin commands, teleport, /locate, /give, forced dimension changes"),
+                "system prompt must document portal anti-cheat boundaries");
+        require(prompt.contains("completion requires an observed dimension transition"),
+                "system prompt must prevent fake portal success");
         require(prompt.contains("never generates chunks, never teleports"),
                 "system prompt must not overclaim unsafe exploration behavior");
         require(!prompt.contains("COLLECT_FOOD <"),

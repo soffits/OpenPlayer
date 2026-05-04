@@ -62,9 +62,9 @@ public final class RuntimeIntentValidator {
             );
             case EXPLORE_CHUNKS -> requireExploreChunksInstruction(intent);
             case LOCATE_STRUCTURE -> requireLocateStructureInstruction(intent);
-            case USE_PORTAL,
-                    TRAVEL_NETHER,
-                    LOCATE_STRONGHOLD,
+            case USE_PORTAL -> requireUsePortalInstruction(intent);
+            case TRAVEL_NETHER -> requireTravelNetherInstruction(intent);
+            case LOCATE_STRONGHOLD,
                     END_GAME_TASK -> RuntimeIntentValidationResult.rejected(AdvancedTaskPolicy.unsupportedReason(kind));
             case FISH -> requireFishInstruction(intent);
             case DEFEND_OWNER -> requireBlankOrPositiveRadius(intent, "DEFEND_OWNER");
@@ -202,9 +202,6 @@ public final class RuntimeIntentValidator {
         if (instruction == null) {
             return RuntimeIntentValidationResult.rejected(InteractionInstructionParser.USAGE);
         }
-        if (instruction.kind() != InteractionInstruction.InteractionTargetKind.BLOCK) {
-            return RuntimeIntentValidationResult.rejected("INTERACT supports only block <x> <y> <z> in the vanilla runtime");
-        }
         return RuntimeIntentValidationResult.accepted();
     }
 
@@ -239,6 +236,20 @@ public final class RuntimeIntentValidator {
     private static RuntimeIntentValidationResult requireLocateStructureInstruction(CommandIntent intent) {
         if (AdvancedTaskInstructionParser.parseLocateStructureOrNull(intent.instruction()) == null) {
             return RuntimeIntentValidationResult.rejected(AdvancedTaskInstructionParser.LOCATE_STRUCTURE_USAGE);
+        }
+        return RuntimeIntentValidationResult.accepted();
+    }
+
+    private static RuntimeIntentValidationResult requireUsePortalInstruction(CommandIntent intent) {
+        if (AdvancedTaskInstructionParser.parseUsePortalOrNull(intent.instruction()) == null) {
+            return RuntimeIntentValidationResult.rejected(AdvancedTaskInstructionParser.USE_PORTAL_USAGE);
+        }
+        return RuntimeIntentValidationResult.accepted();
+    }
+
+    private static RuntimeIntentValidationResult requireTravelNetherInstruction(CommandIntent intent) {
+        if (AdvancedTaskInstructionParser.parseTravelNetherOrNull(intent.instruction()) == null) {
+            return RuntimeIntentValidationResult.rejected(AdvancedTaskInstructionParser.TRAVEL_NETHER_USAGE);
         }
         return RuntimeIntentValidationResult.accepted();
     }

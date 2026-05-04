@@ -33,6 +33,7 @@ public final class RuntimeIntentValidatorTest {
         validatesPhaseFourteenInteractionInstructions();
         validatesPhaseFourteenTargetAttackInstructions();
         validatesAdvancedLoadedReconnaissanceInstructions();
+        validatesPortalTravelInstructions();
         rejectsUnsupportedAdvancedInstructionsWithDeterministicReasons();
         rejectsPlannedIntentKinds();
         gatesPlannedWorldActionKindsBeforeUnimplementedRejection();
@@ -319,8 +320,6 @@ public final class RuntimeIntentValidatorTest {
         for (IntentKind kind : plannedKinds()) {
             String expectedMessage = switch (kind) {
                 case LOCATE_STRUCTURE -> "LOCATE_STRUCTURE is unsupported: vanilla runtime does not run long-range structure search or load chunks";
-                case USE_PORTAL -> "USE_PORTAL is unsupported: portal construction/use needs a separate reviewed safe phase";
-                case TRAVEL_NETHER -> "TRAVEL_NETHER is unsupported: Nether travel needs a separate reviewed safe phase";
                 case LOCATE_STRONGHOLD -> "LOCATE_STRONGHOLD is unsupported: stronghold location needs a separate reviewed safe phase";
                 case END_GAME_TASK -> "END_GAME_TASK is unsupported: End/dragon/speedrun tasks need separate reviewed safe phases";
                 default -> kind.name() + " is not implemented by the vanilla runtime";
@@ -392,11 +391,36 @@ public final class RuntimeIntentValidatorTest {
                 "World actions are disabled for this OpenPlayer character");
     }
 
+    private static void validatesPortalTravelInstructions() {
+        require(RuntimeIntentValidator.validate(intent(IntentKind.USE_PORTAL, ""), true).isAccepted(),
+                "USE_PORTAL should accept blank instruction");
+        require(RuntimeIntentValidator.validate(
+                intent(IntentKind.USE_PORTAL, "radius=12 target=minecraft:the_nether build=true"), true
+        ).isAccepted(), "USE_PORTAL should accept strict portal key/value syntax");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.TRAVEL_NETHER, ""), true).isAccepted(),
+                "TRAVEL_NETHER should accept blank instruction");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.TRAVEL_NETHER, "radius=24 build=false"), true).isAccepted(),
+                "TRAVEL_NETHER should accept bounded radius/build syntax");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.USE_PORTAL, "nether"), true),
+                "USE_PORTAL requires blank or instruction: radius=<blocks> target=<minecraft:the_nether|minecraft:overworld> build=<true|false>");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.USE_PORTAL, "radius=128"), true),
+                "USE_PORTAL requires blank or instruction: radius=<blocks> target=<minecraft:the_nether|minecraft:overworld> build=<true|false>");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.USE_PORTAL, "target=minecraft:the_end"), true),
+                "USE_PORTAL requires blank or instruction: radius=<blocks> target=<minecraft:the_nether|minecraft:overworld> build=<true|false>");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.TRAVEL_NETHER, "target=minecraft:overworld"), true),
+                "TRAVEL_NETHER requires blank or instruction: radius=<blocks> build=<true|false>");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.TRAVEL_NETHER, ""), false),
+                "World actions are disabled for this OpenPlayer character");
+    }
+
     private static void validatesPhaseFourteenInteractionInstructions() {
         require(RuntimeIntentValidator.validate(intent(IntentKind.INTERACT, "block 1 64 -2"), true).isAccepted(),
                 "INTERACT should accept safe block coordinate syntax");
-        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.INTERACT, "entity minecraft:villager 4"), true),
-                "INTERACT supports only block <x> <y> <z> in the vanilla runtime");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.INTERACT, "entity minecraft:sheep 4"), true).isAccepted(),
+                "INTERACT should accept entity capability syntax");
+        require(RuntimeIntentValidator.validate(
+                intent(IntentKind.INTERACT, "entity 123e4567-e89b-12d3-a456-426614174000 4"), true
+        ).isAccepted(), "INTERACT should accept entity UUID syntax");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.INTERACT, "right_click minecraft:lever"), true),
                 "INTERACT requires instruction: block <x> <y> <z> or entity <entity_type_or_uuid> [radius]");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.INTERACT, "block 1 64 -2 use_item"), true),
@@ -423,15 +447,11 @@ public final class RuntimeIntentValidatorTest {
 
 
     private static void rejectsUnsupportedAdvancedInstructionsWithDeterministicReasons() {
-        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.USE_PORTAL, "nether"), true),
-                "USE_PORTAL is unsupported: portal construction/use needs a separate reviewed safe phase");
-        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.TRAVEL_NETHER, ""), true),
-                "TRAVEL_NETHER is unsupported: Nether travel needs a separate reviewed safe phase");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_STRONGHOLD, ""), true),
                 "LOCATE_STRONGHOLD is unsupported: stronghold location needs a separate reviewed safe phase");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.END_GAME_TASK, "dragon"), true),
                 "END_GAME_TASK is unsupported: End/dragon/speedrun tasks need separate reviewed safe phases");
-        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.TRAVEL_NETHER, ""), false),
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_STRONGHOLD, ""), false),
                 "World actions are disabled for this OpenPlayer character");
     }
 
@@ -485,9 +505,8 @@ public final class RuntimeIntentValidatorTest {
             case FIND_LOADED_BIOME -> "minecraft:plains";
             case LOCATE_STRUCTURE -> "minecraft:village";
             case EXPLORE_CHUNKS -> "";
-            case USE_PORTAL -> "nether";
-            case TRAVEL_NETHER,
-                    LOCATE_STRONGHOLD,
+            case USE_PORTAL, TRAVEL_NETHER -> "";
+            case LOCATE_STRONGHOLD,
                     END_GAME_TASK -> "";
             case ATTACK_TARGET -> "minecraft:zombie";
             case DEFEND_OWNER -> "";
@@ -517,8 +536,6 @@ public final class RuntimeIntentValidatorTest {
 
     private static EnumSet<IntentKind> plannedGatedKinds() {
         return EnumSet.of(
-                IntentKind.USE_PORTAL,
-                IntentKind.TRAVEL_NETHER,
                 IntentKind.LOCATE_STRONGHOLD,
                 IntentKind.END_GAME_TASK
         );

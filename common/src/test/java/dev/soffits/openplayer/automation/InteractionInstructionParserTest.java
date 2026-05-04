@@ -6,7 +6,7 @@ public final class InteractionInstructionParserTest {
 
     public static void main(String[] args) {
         parsesSafeBlockSyntax();
-        parsesEntitySyntaxButOnlyAsSchemaForValidatorRejection();
+        parsesEntitySyntaxForCapabilityAdapters();
         rejectsUnsupportedFreeFormSyntax();
     }
 
@@ -20,15 +20,17 @@ public final class InteractionInstructionParserTest {
                 "block action suffix must stay unsupported until an adapter needs it");
     }
 
-    private static void parsesEntitySyntaxButOnlyAsSchemaForValidatorRejection() {
+    private static void parsesEntitySyntaxForCapabilityAdapters() {
         InteractionInstruction byType = InteractionInstructionParser.parseOrNull("entity minecraft:villager 4");
-        require(byType != null, "entity type syntax should parse for deterministic validator/backend rejection");
+        require(byType != null, "entity type syntax should parse for capability adapters");
         require(byType.kind() == InteractionInstruction.InteractionTargetKind.ENTITY,
                 "entity type syntax should produce an entity target");
+        require(!byType.targetsUuid(), "entity type syntax should not be treated as UUID targeting");
         InteractionInstruction byUuid = InteractionInstructionParser.parseOrNull(
                 "entity 123e4567-e89b-12d3-a456-426614174000"
         );
-        require(byUuid != null, "entity UUID syntax should parse for deterministic validator/backend rejection");
+        require(byUuid != null, "entity UUID syntax should parse for capability adapters");
+        require(byUuid.targetsUuid(), "entity UUID syntax should expose UUID targeting");
     }
 
     private static void rejectsUnsupportedFreeFormSyntax() {

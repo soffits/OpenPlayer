@@ -11,9 +11,7 @@ public final class AdvancedTaskPolicy {
             throw new IllegalArgumentException("kind cannot be null");
         }
         return switch (kind) {
-            case USE_PORTAL,
-                    TRAVEL_NETHER,
-                    LOCATE_STRONGHOLD,
+            case LOCATE_STRONGHOLD,
                     END_GAME_TASK -> true;
             case UNAVAILABLE,
                     OBSERVE,
@@ -54,6 +52,8 @@ public final class AdvancedTaskPolicy {
                     RESET_MEMORY,
                     BODY_LANGUAGE,
                     BUILD_STRUCTURE,
+                    USE_PORTAL,
+                    TRAVEL_NETHER,
                     LOCATE_STRUCTURE,
                     LOCATE_LOADED_BLOCK,
                     LOCATE_LOADED_ENTITY,
