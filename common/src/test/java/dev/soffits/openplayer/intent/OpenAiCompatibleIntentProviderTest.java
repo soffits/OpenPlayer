@@ -12,7 +12,7 @@ public final class OpenAiCompatibleIntentProviderTest {
         preservesOtherExplicitEndpoints();
         preservesQueryWhenResolvingV1BaseEndpoint();
         systemPromptConstrainConversationReplies();
-        systemPromptContainsEveryIntentKind();
+        systemPromptContainsRecommendedIntentKindsOnly();
         systemPromptIncludesPhaseFiveSyntax();
         systemPromptIncludesPlannedUnsupportedInstruction();
     }
@@ -59,7 +59,7 @@ public final class OpenAiCompatibleIntentProviderTest {
         require(prompt.contains("no secrets"), "system prompt must prohibit secrets");
     }
 
-    private static void systemPromptContainsEveryIntentKind() {
+    private static void systemPromptContainsRecommendedIntentKindsOnly() {
         String prompt = OpenAiCompatibleIntentProvider.systemPrompt();
         for (IntentKind kind : IntentKind.values()) {
             require(prompt.contains(kind.name()), "system prompt must list " + kind.name());
@@ -70,8 +70,8 @@ public final class OpenAiCompatibleIntentProviderTest {
         String prompt = OpenAiCompatibleIntentProvider.systemPrompt();
         require(prompt.contains("Online/commercial-service features are unavailable"),
                 "system prompt must include deterministic unavailable feature instruction");
-        require(prompt.contains("use UNAVAILABLE when the vanilla runtime cannot perform the requested action"),
-                "system prompt must tell providers not to overclaim unsupported planned actions");
+        require(prompt.contains("use UNAVAILABLE when a required reviewed primitive or capability adapter is absent"),
+                "system prompt must tell providers not to overclaim missing adapters");
     }
 
     private static void systemPromptIncludesPhaseFiveSyntax() {
@@ -201,26 +201,24 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must document portal anti-cheat boundaries");
         require(prompt.contains("completion requires an observed dimension transition"),
                 "system prompt must prevent fake portal success");
-        require(prompt.contains("LOCATE_STRONGHOLD instruction must be blank or source=diagnostic"),
-                "system prompt must document stronghold diagnostic syntax");
-        require(prompt.contains("must not claim triangulation until a reviewed eye-of-ender observation adapter exists"),
-                "system prompt must prevent fake stronghold triangulation");
-        require(prompt.contains("END_GAME_TASK instruction must be blank or one of plan, prepare, stronghold, portal, travel, dragon, or recovery"),
-                "system prompt must document endgame task tree diagnostic syntax");
-        require(prompt.contains("returns the visible vanilla endgame task-tree diagnostic plus current-dimension recovery instead of monolithic speedrun success"),
-                "system prompt must prevent monolithic speedrun success claims");
-        require(prompt.contains("returns a vanilla stronghold task-tree diagnostic only"),
-                "system prompt must keep stronghold output diagnostic-only");
-        require(prompt.contains("REPORT_STATUS exposes portal origin dimension, target dimension, portal/frame position"),
-                "system prompt must document portal recovery state");
+        require(prompt.contains("Plan in natural Minecraft goal terms, but emit only supported generic primitives"),
+                "system prompt must tell providers to plan naturally but emit generic primitives");
+        require(prompt.contains("Do not follow a hardcoded vanilla walkthrough or route tree"),
+                "system prompt must forbid hardcoded walkthroughs");
+        require(prompt.contains("Local strategy/meta pack text, when explicitly supplied by local context or character text, is advisory reference only"),
+                "system prompt must keep strategy/meta packs advisory");
+        require(prompt.contains("REPORT_STATUS exposes runtime, current dimension, portal progress, resource affordances, and bounded capability diagnostics"),
+                "system prompt must document generic status and capability diagnostics");
+        require(prompt.contains("does not expose a hardcoded stronghold, End portal, dragon, or speedrun route tree"),
+                "system prompt must reject hardcoded endgame route trees");
+        require(prompt.contains("if a needed primitive is absent, return UNAVAILABLE or use REPORT_STATUS/capability diagnostics"),
+                "system prompt must direct missing primitives to unavailable/status diagnostics");
         require(prompt.contains("Unknown or modded dimensions should use observation/status/exploration"),
                 "system prompt must not assume vanilla dimensions are exhaustive");
         require(prompt.contains("Vanilla Nether return travel may be requested through USE_PORTAL target=minecraft:overworld or TRAVEL_NETHER rather than teleport"),
                 "system prompt must document player-like return travel affordance");
-        require(prompt.contains("Endgame preparation is a vanilla task tree over visible primitives"),
-                "system prompt must document endgame preparation as task-tree primitives");
-        require(prompt.contains("report missing primitives such as fortress search, barter/trade, or End orchestration instead of claiming success"),
-                "system prompt must prevent overclaiming missing endgame primitives");
+        require(!prompt.contains("endgame task-tree") && !prompt.contains("task tree over visible primitives"),
+                "system prompt must not recommend an endgame task tree");
         require(!prompt.contains("speedrun_success") && !prompt.contains("dragon_success"),
                 "system prompt must not encode speedrun or dragon success states");
         require(!prompt.contains("recognized only to return deterministic unsupported status"),

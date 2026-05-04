@@ -28,14 +28,14 @@ public final class OpenPlayerLanguageParityTest {
             require(placeholderCount(french.get(key)) == expectedPlaceholders,
                     "fr_fr placeholder count must match en_us for " + key);
         }
-        require(english.containsKey("screen.openplayer.controls.task_tree_status"),
-                "task-tree status UI key must be localized");
-        require(english.containsKey("screen.openplayer.controls.no_task_tree_status"),
-                "empty task-tree status UI key must be localized");
-        String taskTreeStatus = english.get("screen.openplayer.controls.task_tree_status").toLowerCase(java.util.Locale.ROOT);
-        require(taskTreeStatus.contains("viewer") && taskTreeStatus.contains("world"),
+        require(english.containsKey("screen.openplayer.controls.capability_status"),
+                "capability status UI key must be localized");
+        require(english.containsKey("screen.openplayer.controls.no_capability_status"),
+                "empty capability status UI key must be localized");
+        String capabilityStatus = english.get("screen.openplayer.controls.capability_status").toLowerCase(java.util.Locale.ROOT);
+        require(capabilityStatus.contains("viewer") && capabilityStatus.contains("world"),
                 "status UI must label ServerPlayer-derived lines as viewer/world diagnostics");
-        require(!taskTreeStatus.contains("npc"),
+        require(!capabilityStatus.contains("npc"),
                 "status UI must not label ServerPlayer-derived lines as NPC diagnostics");
     }
 

@@ -62,7 +62,7 @@ public final class OpenPlayerControlScreen extends Screen {
     @Override
     protected void init() {
         rebuildControlWidgets(true);
-        OpenPlayerRequestSender.sendStatusRequest();
+        requestStatusForSelection();
         OpenPlayerRequestSender.sendCharacterListRequest();
     }
 
@@ -127,6 +127,7 @@ public final class OpenPlayerControlScreen extends Screen {
             this.addRenderableWidget(Button.builder(Component.literal(fit(galleryButtonLabel(character), listWidth - 12)), button -> {
                         selectedAssignmentId = character.assignmentId();
                         pageIndex = OpenPlayerGalleryPage.pageForItemIndex(characterIndex, visibleAssignments);
+                        requestStatusForSelection();
                         rebuildControlWidgetsPreservingCommandText(true);
                     })
                     .bounds(margin, y, listWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
@@ -428,14 +429,14 @@ public final class OpenPlayerControlScreen extends Screen {
         drawFitted(graphics, tr("screen.openplayer.controls.status_api_key", OpenPlayerClientStatus.apiKeyStatus()), left, top + 56, width, 0xC0C0C0);
         drawFitted(graphics, tr("screen.openplayer.controls.provider_test_status", OpenPlayerClientStatus.providerTestStatus()), left, top + 70, width, 0xC0C0C0);
         drawFitted(graphics, tr("screen.openplayer.controls.status_character_files", OpenPlayerClientStatus.characterFileOperationStatus()), left, top + 84, width, 0xC0C0C0);
-        drawFitted(graphics, tr("screen.openplayer.controls.task_tree_status"), left, top + 106, width, 0xFFFFFF);
-        List<String> taskTreeLines = OpenPlayerClientStatus.taskTreeStatusLines();
-        int taskTreeTop = top + 120;
-        if (taskTreeLines.isEmpty()) {
-            drawFitted(graphics, tr("screen.openplayer.controls.no_task_tree_status"), left, taskTreeTop, width, 0xA0A0A0);
+        drawFitted(graphics, tr("screen.openplayer.controls.capability_status"), left, top + 106, width, 0xFFFFFF);
+        List<String> capabilityLines = OpenPlayerClientStatus.capabilityStatusLines();
+        int capabilityTop = top + 120;
+        if (capabilityLines.isEmpty()) {
+            drawFitted(graphics, tr("screen.openplayer.controls.no_capability_status"), left, capabilityTop, width, 0xA0A0A0);
         } else {
-            for (int index = 0; index < Math.min(taskTreeLines.size(), 5); index++) {
-                drawFitted(graphics, taskTreeLines.get(index), left, taskTreeTop + index * 10, width, 0xA0A0A0);
+            for (int index = 0; index < Math.min(capabilityLines.size(), 5); index++) {
+                drawFitted(graphics, capabilityLines.get(index), left, capabilityTop + index * 10, width, 0xA0A0A0);
             }
         }
         drawFitted(graphics, tr("screen.openplayer.controls.debug_events"), left, top + 178, width, 0xFFFFFF);
@@ -516,6 +517,7 @@ public final class OpenPlayerControlScreen extends Screen {
         LocalCharacterListEntry selected = selectedCharacter();
         if (selected != null) {
             OpenPlayerRequestSender.sendSpawnRequest(selected.assignmentId());
+            requestStatusForSelection();
         }
     }
 
@@ -523,6 +525,7 @@ public final class OpenPlayerControlScreen extends Screen {
         LocalCharacterListEntry selected = selectedCharacter();
         if (selected != null) {
             OpenPlayerRequestSender.sendDespawnRequest(selected.assignmentId());
+            requestStatusForSelection();
         }
     }
 
@@ -536,12 +539,14 @@ public final class OpenPlayerControlScreen extends Screen {
         } else {
             OpenPlayerRequestSender.sendFollowOwnerRequest(selected.assignmentId());
         }
+        requestStatusForSelection();
     }
 
     private void sendStop() {
         LocalCharacterListEntry selected = selectedCharacter();
         if (selected != null) {
             OpenPlayerRequestSender.sendStopRequest(selected.assignmentId());
+            requestStatusForSelection();
         }
     }
 
@@ -551,6 +556,7 @@ public final class OpenPlayerControlScreen extends Screen {
             LocalCharacterListEntry selected = selectedCharacter();
             if (selected != null) {
                 OpenPlayerRequestSender.sendCommandTextRequest(selected.assignmentId(), value);
+                requestStatusForSelection();
                 commandInput.setValue("");
                 commandDraft = "";
             }
@@ -657,6 +663,10 @@ public final class OpenPlayerControlScreen extends Screen {
         }
         selectedAssignmentId = null;
         return null;
+    }
+
+    private void requestStatusForSelection() {
+        OpenPlayerRequestSender.sendStatusRequest(selectedAssignmentId);
     }
 
     private String characterKey() {

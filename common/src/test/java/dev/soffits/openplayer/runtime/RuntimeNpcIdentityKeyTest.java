@@ -17,7 +17,7 @@ public final class RuntimeNpcIdentityKeyTest {
     public static void main(String[] args) {
         localCharacterIdentityIgnoresDisplayName();
         localAssignmentIdentityIgnoresProfileName();
-        legacyIdentityIncludesProfileName();
+        defaultNetworkIdentityIncludesProfileName();
     }
 
     private static void localCharacterIdentityIgnoresDisplayName() {
@@ -44,7 +44,7 @@ public final class RuntimeNpcIdentityKeyTest {
         require(first.equals(renamed), "local assignment runtime identity must be stable across profileName changes");
     }
 
-    private static void legacyIdentityIncludesProfileName() {
+    private static void defaultNetworkIdentityIncludesProfileName() {
         RuntimeNpcIdentityKey first = RuntimeNpcIdentityKey.from(spec(
                 OpenPlayerConstants.DEFAULT_NETWORK_NPC_ROLE_ID,
                 "Alex OpenPlayer NPC"
@@ -53,7 +53,7 @@ public final class RuntimeNpcIdentityKeyTest {
                 OpenPlayerConstants.DEFAULT_NETWORK_NPC_ROLE_ID,
                 "Other OpenPlayer NPC"
         ));
-        require(!first.equals(renamed), "legacy runtime identity must keep profile name matching behavior");
+        require(!first.equals(renamed), "default runtime identity must keep profile name matching behavior");
     }
 
     private static AiPlayerNpcSpec spec(String roleId, String profileName) {

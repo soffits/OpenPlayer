@@ -269,6 +269,25 @@ public final class CompanionLifecycleManager {
         return conversationStatusRepository.eventLines(ownerId, assignment.id());
     }
 
+    public List<String> selectedRuntimeStatusLines(UUID ownerId, String assignmentId) {
+        Optional<ResolvedAssignment> resolvedAssignment = findAssignment(assignmentId);
+        if (resolvedAssignment.isEmpty()) {
+            return List.of("selected_assignment=unknown source=selected_npc status=unknown_assignment active=idle queued=0");
+        }
+        String safeAssignmentId = safeStatusToken(resolvedAssignment.get().assignment().id());
+        Optional<AiPlayerNpcSession> session = findActiveSession(ownerId, resolvedAssignment.get());
+        if (session.isEmpty()) {
+            return List.of("selected_assignment=" + safeAssignmentId
+                    + " source=selected_npc status=despawned active=idle queued=0");
+        }
+        AiPlayerNpcService service = npcService();
+        if (service instanceof RuntimeAiPlayerNpcService runtimeService) {
+            return runtimeService.selectedRuntimeStatusLines(session.get().sessionId(), safeAssignmentId);
+        }
+        return List.of("selected_assignment=" + safeAssignmentId
+                + " source=selected_npc status=runtime_snapshot_unavailable active=unknown queued=unknown");
+    }
+
     public String lifecycleStatus(UUID ownerId, LocalCharacterDefinition character) {
         if (ownerId == null) {
             throw new IllegalArgumentException("ownerId cannot be null");
@@ -460,6 +479,25 @@ public final class CompanionLifecycleManager {
             assignments.add(LocalAssignmentDefinition.defaultFor(character));
         }
         return new LocalAssignmentRepositoryResult(assignments, characterResult.characters(), characterResult.errors());
+    }
+
+    private static String safeStatusToken(String value) {
+        if (value == null || value.isBlank()) {
+            return "unknown";
+        }
+        StringBuilder builder = new StringBuilder();
+        String trimmed = value.trim();
+        for (int index = 0; index < trimmed.length() && builder.length() < 48; index++) {
+            char character = trimmed.charAt(index);
+            if ((character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z')
+                    || (character >= '0' && character <= '9') || character == '_' || character == '-'
+                    || character == ':' || character == '.') {
+                builder.append(character);
+            } else {
+                builder.append('_');
+            }
+        }
+        return builder.isEmpty() ? "unknown" : builder.toString();
     }
 
     private record ResolvedAssignment(LocalAssignmentDefinition assignment, LocalCharacterDefinition character) {

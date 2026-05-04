@@ -38,9 +38,7 @@ public final class AutomationWorldActionPolicyTest {
                 IntentKind.LOCATE_STRUCTURE,
                 IntentKind.EXPLORE_CHUNKS,
                 IntentKind.USE_PORTAL,
-                IntentKind.TRAVEL_NETHER,
-                IntentKind.LOCATE_STRONGHOLD,
-                IntentKind.END_GAME_TASK
+                IntentKind.TRAVEL_NETHER
         );
 
         for (IntentKind kind : IntentKind.values()) {

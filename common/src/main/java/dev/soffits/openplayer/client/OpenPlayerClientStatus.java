@@ -19,7 +19,7 @@ public final class OpenPlayerClientStatus {
     private static LocalCharacterListView characterList = new LocalCharacterListView(List.of(), List.of());
     private static List<String> importFileNames = List.of();
     private static List<String> debugEvents = List.of();
-    private static List<String> taskTreeStatusLines = List.of();
+    private static List<String> capabilityStatusLines = List.of();
 
     private OpenPlayerClientStatus() {
     }
@@ -35,7 +35,7 @@ public final class OpenPlayerClientStatus {
             String automationName,
             String automationState,
             List<String> debugEvents,
-            List<String> taskTreeStatusLines
+            List<String> capabilityStatusLines
     ) {
         OpenPlayerClientStatus.parserAvailable = parserAvailable;
         parserStatus = parserAvailable ? "enabled" : "disabled";
@@ -44,7 +44,7 @@ public final class OpenPlayerClientStatus {
         apiKeyStatus = (apiKeyPresent ? "present" : "not present") + " [" + apiKeySource + "]";
         automationStatus = automationName + " (" + automationState.toLowerCase(java.util.Locale.ROOT) + ")";
         OpenPlayerClientStatus.debugEvents = debugEvents == null ? List.of() : List.copyOf(debugEvents);
-        OpenPlayerClientStatus.taskTreeStatusLines = taskTreeStatusLines == null ? List.of() : List.copyOf(taskTreeStatusLines);
+        OpenPlayerClientStatus.capabilityStatusLines = capabilityStatusLines == null ? List.of() : List.copyOf(capabilityStatusLines);
     }
 
     public static String parserStatus() {
@@ -127,7 +127,7 @@ public final class OpenPlayerClientStatus {
         return debugEvents;
     }
 
-    public static List<String> taskTreeStatusLines() {
-        return taskTreeStatusLines;
+    public static List<String> capabilityStatusLines() {
+        return capabilityStatusLines;
     }
 }

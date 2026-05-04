@@ -8,6 +8,7 @@ import dev.soffits.openplayer.api.NpcOwnerId;
 import dev.soffits.openplayer.automation.AutomationCommandResult;
 import dev.soffits.openplayer.automation.AutomationCommandStatus;
 import dev.soffits.openplayer.automation.AutomationController;
+import dev.soffits.openplayer.automation.AutomationControllerSnapshot;
 import dev.soffits.openplayer.debug.OpenPlayerDebugEvents;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.runtime.validation.RuntimeIntentValidationResult;
@@ -57,6 +58,10 @@ final class RuntimeCommandExecutor {
 
     void tick() {
         automationController.tick();
+    }
+
+    AutomationControllerSnapshot snapshot() {
+        return automationController.snapshot();
     }
 
     void stopAll() {

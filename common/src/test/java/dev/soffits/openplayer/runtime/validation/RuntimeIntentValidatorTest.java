@@ -34,7 +34,6 @@ public final class RuntimeIntentValidatorTest {
         validatesPhaseFourteenTargetAttackInstructions();
         validatesAdvancedLoadedReconnaissanceInstructions();
         validatesPortalTravelInstructions();
-        validatesEndgameDiagnosticInstructions();
         rejectsPlannedIntentKinds();
         gatesPlannedWorldActionKindsBeforeUnimplementedRejection();
         rejectsPlannedNonGatedKindsAsUnimplemented();
@@ -320,8 +319,6 @@ public final class RuntimeIntentValidatorTest {
         for (IntentKind kind : plannedKinds()) {
             String expectedMessage = switch (kind) {
                 case LOCATE_STRUCTURE -> "LOCATE_STRUCTURE is unsupported: vanilla runtime does not run long-range structure search or load chunks";
-                case LOCATE_STRONGHOLD -> "LOCATE_STRONGHOLD is unsupported: stronghold location needs a separate reviewed safe phase";
-                case END_GAME_TASK -> "END_GAME_TASK is unsupported: End/dragon/speedrun tasks need separate reviewed safe phases";
                 default -> kind.name() + " is not implemented by the vanilla runtime";
             };
             requireRejected(RuntimeIntentValidator.validate(validIntent(kind), true), expectedMessage);
@@ -448,31 +445,6 @@ public final class RuntimeIntentValidatorTest {
                 "World actions are disabled for this OpenPlayer character");
     }
 
-
-    private static void validatesEndgameDiagnosticInstructions() {
-        require(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_STRONGHOLD, ""), true).isAccepted(),
-                "LOCATE_STRONGHOLD should accept blank diagnostic instruction");
-        require(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_STRONGHOLD, "source=diagnostic"), true).isAccepted(),
-                "LOCATE_STRONGHOLD should accept explicit diagnostic source");
-        require(RuntimeIntentValidator.validate(intent(IntentKind.END_GAME_TASK, "dragon"), true).isAccepted(),
-                "END_GAME_TASK should accept diagnostic dragon phase");
-        require(RuntimeIntentValidator.validate(intent(IntentKind.END_GAME_TASK, ""), true).isAccepted(),
-                "END_GAME_TASK should accept blank plan diagnostic");
-        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_STRONGHOLD, "source=locate"), true),
-                "LOCATE_STRONGHOLD requires blank or instruction: source=diagnostic");
-        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.END_GAME_TASK, "speedrun"), true),
-                "END_GAME_TASK requires blank or instruction: plan, prepare, stronghold, portal, travel, dragon, or recovery");
-        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.END_GAME_TASK, "phase=dragon"), true),
-                "END_GAME_TASK requires blank or instruction: plan, prepare, stronghold, portal, travel, dragon, or recovery");
-        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.END_GAME_TASK, "dragon now"), true),
-                "END_GAME_TASK requires blank or instruction: plan, prepare, stronghold, portal, travel, dragon, or recovery");
-        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_STRONGHOLD, "source=diagnostic /locate"), true),
-                "LOCATE_STRONGHOLD requires blank or instruction: source=diagnostic");
-        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_STRONGHOLD, ""), false),
-                "World actions are disabled for this OpenPlayer character");
-    }
-
-
     private static void gatesPlannedWorldActionKindsBeforeUnimplementedRejection() {
         for (IntentKind kind : plannedGatedKinds()) {
             requireRejected(RuntimeIntentValidator.validate(validIntent(kind), false),
@@ -523,8 +495,6 @@ public final class RuntimeIntentValidatorTest {
             case LOCATE_STRUCTURE -> "minecraft:village";
             case EXPLORE_CHUNKS -> "";
             case USE_PORTAL, TRAVEL_NETHER -> "";
-            case LOCATE_STRONGHOLD,
-                    END_GAME_TASK -> "";
             case ATTACK_TARGET -> "minecraft:zombie";
             case DEFEND_OWNER -> "";
             case PAUSE,

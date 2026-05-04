@@ -54,12 +54,13 @@ Use this checklist before publishing a local/offline OpenPlayer release candidat
 - Send command text to that selected assignment and confirm it reports parser disabled rather than executing raw free-form model text.
 - Confirm status lines show bounded player text, deterministic greetings, or safe failure messages only.
 - Confirm no API keys, endpoint secrets, raw provider responses, stack traces, or absolute paths appear in the UI.
+- Confirm strategy/meta pack examples under `docs/strategy-packs` are documented as advisory docs-only reference and are not auto-loaded or executed by the runtime.
 
 ## Automation Intents
 
 - With default settings, submit basic allowed intents such as follow, move, look, stop, collect items, patrol, and report status.
 - Confirm accepted movement/navigation tasks are server-authoritative, bounded, and visible through safe status text.
-- Confirm `REPORT_STATUS` returns bounded health, selected slot, active task, queue, and controller status text.
+- Confirm `REPORT_STATUS` returns bounded health, selected slot, active task, queue, controller status, and generic capability diagnostics without an endgame route tree.
 - Submit malformed coordinates, too-distant targets, and unloaded target chunks; confirm they reject without crashing.
 - Confirm `STOP` interrupts active and queued tasks, stops navigation, and resets controller status.
 
@@ -68,6 +69,9 @@ Use this checklist before publishing a local/offline OpenPlayer release candidat
 - Send a reachable move or patrol command and confirm it completes or remains active with sane status.
 - Send an unreachable or obstructed movement target and confirm timeout or stuck detection stops the task.
 - Confirm repeated status checks do not reveal hidden filesystem data, secrets, raw provider text, or unexpected coordinates beyond normal local UI needs.
+- Confirm the Status tab labels capability diagnostics as viewer/world status and does not label viewer inventory or dimension state as selected-NPC inventory.
+- Confirm stronghold, End, dragon, and speedrun-like requests decompose to generic primitives or report `UNAVAILABLE`/missing-adapter capability diagnostics rather than special Java route commands.
+- Confirm unknown or modded dimension/item/block requests use observed registry-backed primitives where possible or report missing adapters, not a blanket product-level unsupported principle.
 
 ## Interaction Helpers
 
@@ -75,7 +79,7 @@ Use this checklist before publishing a local/offline OpenPlayer release candidat
 - Confirm each disabled world or inventory action rejects without mutating the world, inventory, or nearby entities.
 - Enable local world actions only in a throwaway test world by spawning a selected character whose local character file has `allowWorldActions=true`.
 - Confirm armor equip, offhand swap, selected edible item use, selected stack drop, block break, block place, attack nearest, and guard owner follow documented preconditions and cooldowns.
-- Confirm unsupported player-only, container, crafting, trading, and arbitrary block-entity interactions reject safely.
+- Confirm player-only, container, crafting, trading, and arbitrary block-entity interactions without reviewed adapters reject safely as missing adapters or policy/state failures.
 - Watch for item duplication, owner targeting, player targeting, unloaded-chunk mutation, or permission bypasses; treat any occurrence as a release blocker.
 
 ## Multiplayer And Restart Basics

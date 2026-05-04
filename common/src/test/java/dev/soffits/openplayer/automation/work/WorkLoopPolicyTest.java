@@ -102,11 +102,11 @@ public final class WorkLoopPolicyTest {
         require(blankFarm != null && blankFarm.value() == FarmingWorkPolicy.DEFAULT_RADIUS
                 && blankFarm.repeatCount() == 1, "blank farm instruction should use defaults");
 
-        WorkInstruction legacyFarm = WorkRepeatPolicy.parseRadiusInstructionOrNull(
+        WorkInstruction positionalFarm = WorkRepeatPolicy.parseRadiusInstructionOrNull(
                 "8", FarmingWorkPolicy.DEFAULT_RADIUS, FarmingWorkPolicy.MAX_RADIUS
         );
-        require(legacyFarm != null && legacyFarm.value() == 8.0D && legacyFarm.repeatCount() == 1,
-                "legacy farm radius should stay compatible");
+        require(positionalFarm != null && positionalFarm.value() == 8.0D && positionalFarm.repeatCount() == 1,
+                "positional farm radius should parse");
 
         WorkInstruction namedFarm = WorkRepeatPolicy.parseRadiusInstructionOrNull(
                 "radius=8 repeat=3", FarmingWorkPolicy.DEFAULT_RADIUS, FarmingWorkPolicy.MAX_RADIUS
@@ -125,7 +125,7 @@ public final class WorkLoopPolicyTest {
         ) == null, "repeat above cap should reject");
         require(WorkRepeatPolicy.parseRadiusInstructionOrNull(
                 "8 repeat=2", FarmingWorkPolicy.DEFAULT_RADIUS, FarmingWorkPolicy.MAX_RADIUS
-        ) == null, "legacy numeric radius should not mix with named repeat tokens");
+        ) == null, "positional numeric radius should not mix with named repeat tokens");
 
         WorkInstruction fish = WorkRepeatPolicy.parseDurationSecondsInstructionOrNull(
                 "duration=45 repeat=2",

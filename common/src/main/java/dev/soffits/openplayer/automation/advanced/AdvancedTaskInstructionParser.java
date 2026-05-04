@@ -17,10 +17,6 @@ public final class AdvancedTaskInstructionParser {
             "USE_PORTAL requires blank or instruction: radius=<blocks> target=<dimension_id> build=<true|false>";
     public static final String TRAVEL_NETHER_USAGE =
             "TRAVEL_NETHER requires blank or instruction: radius=<blocks> build=<true|false>";
-    public static final String LOCATE_STRONGHOLD_USAGE =
-            "LOCATE_STRONGHOLD requires blank or instruction: source=diagnostic";
-    public static final String END_GAME_TASK_USAGE =
-            "END_GAME_TASK requires blank or instruction: plan, prepare, stronghold, portal, travel, dragon, or recovery";
     public static final double DEFAULT_RADIUS = 16.0D;
     public static final double MAX_RADIUS = 32.0D;
     public static final double PORTAL_DEFAULT_RADIUS = 16.0D;
@@ -138,25 +134,6 @@ public final class AdvancedTaskInstructionParser {
 
     public static PortalTravelInstruction parseTravelNetherOrNull(String instruction) {
         return parsePortalTravelOrNull(instruction, true);
-    }
-
-    public static StrongholdDiagnosticInstruction parseLocateStrongholdOrNull(String instruction) {
-        if (instruction == null || instruction.trim().isEmpty() || instruction.trim().equals("source=diagnostic")) {
-            return new StrongholdDiagnosticInstruction();
-        }
-        return null;
-    }
-
-    public static EndGameTaskInstruction parseEndGameTaskOrNull(String instruction) {
-        if (instruction == null || instruction.trim().isEmpty()) {
-            return new EndGameTaskInstruction("plan");
-        }
-        String trimmedInstruction = instruction.trim();
-        return switch (trimmedInstruction) {
-            case "plan", "prepare", "stronghold", "portal", "travel", "dragon", "recovery" ->
-                    new EndGameTaskInstruction(trimmedInstruction);
-            default -> null;
-        };
     }
 
     private static PortalTravelInstruction parsePortalTravelOrNull(String instruction, boolean travelNether) {
@@ -300,14 +277,4 @@ public final class AdvancedTaskInstructionParser {
         }
     }
 
-    public record StrongholdDiagnosticInstruction() {
-    }
-
-    public record EndGameTaskInstruction(String phase) {
-        public EndGameTaskInstruction {
-            if (phase == null || phase.isBlank()) {
-                throw new IllegalArgumentException("phase cannot be blank");
-            }
-        }
-    }
 }

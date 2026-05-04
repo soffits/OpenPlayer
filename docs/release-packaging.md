@@ -1,6 +1,6 @@
 # Release Packaging
 
-OpenPlayer releases are local/offline clean-room Minecraft mod artifacts for Minecraft `1.20.1` and Java `17`. Do not describe them as commercial online 1:1 Player2NPC parity. The current scope is a near-parity local/offline Player2NPC-style companion experience.
+OpenPlayer releases are local/offline clean-room Minecraft mod artifacts for Minecraft `1.20.1` and Java `17`. Do not describe them as commercial online 1:1 Player2NPC parity. The project direction is a generic Minecraft AI assistant runtime that attempts ordinary player-like goals through reviewed primitives and capability adapters.
 
 ## Release Channels
 
@@ -79,9 +79,10 @@ Singleplayer hosts and players with sufficient server permission can save the pr
 - Local skin PNGs are client-local. Multiplayer clients without the same local file fall back to configured resource skins or deterministic default skins.
 - Provider-backed conversation is optional and disabled by default. Provider output is treated as untrusted and must parse into constrained intents before any action runs.
 - There is no TTS, speech recognition, persisted conversation memory, raw model response display, per-character provider key support, or online memory service.
-- The vanilla automation layer is bounded NPC-backed behavior, not full PlayerEngine parity.
+- The vanilla automation layer is bounded NPC-backed behavior over reviewed primitives and capability adapters, not a hardcoded gameplay route planner.
 - World, inventory, and combat actions remain disabled unless the selected local character has `allowWorldActions=true`.
-- Full real-player emulation, containers, crafting, trading, arbitrary block entity interaction, and broad inventory transfer are not implemented.
+- Some real-player surfaces still need adapters or richer registry-backed primitives. Missing support should be documented as adapter/interface gaps or policy/world-state failures, not permanent product-level bans on ordinary player-like behavior.
+- Strategy/meta packs are docs-only advisory reference in this release; they are not auto-discovered, loaded, executed, synced, or allowed to bypass runtime validation.
 
 ## License And Source Obligations
 

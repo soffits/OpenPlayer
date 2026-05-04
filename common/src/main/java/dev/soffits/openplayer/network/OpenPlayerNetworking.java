@@ -15,7 +15,7 @@ import dev.soffits.openplayer.api.NpcProfileSpec;
 import dev.soffits.openplayer.api.NpcRoleId;
 import dev.soffits.openplayer.api.NpcSpawnLocation;
 import dev.soffits.openplayer.api.OpenPlayerApi;
-import dev.soffits.openplayer.automation.resource.EndgamePreparationDiagnostics;
+import dev.soffits.openplayer.automation.capability.RuntimeCapabilityRegistry;
 import dev.soffits.openplayer.character.LocalCharacterListEntry;
 import dev.soffits.openplayer.character.LocalCharacterListView;
 import dev.soffits.openplayer.character.LocalCharacterFileOperationResult;
@@ -42,7 +42,6 @@ import java.util.UUID;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.item.Items;
 
 public final class OpenPlayerNetworking {
     private static final int MAX_COMMAND_TEXT_LENGTH = 512;
@@ -178,10 +177,11 @@ public final class OpenPlayerNetworking {
         });
     }
 
-    private static void receiveStatusRequest(FriendlyByteBuf ignoredBuffer, NetworkManager.PacketContext context) {
+    private static void receiveStatusRequest(FriendlyByteBuf buffer, NetworkManager.PacketContext context) {
+        String selectedAssignmentId = buffer.isReadable() ? buffer.readUtf(64).trim() : "";
         context.queue(() -> {
             if (context.getPlayer() instanceof ServerPlayer player) {
-                sendStatusResponse(player);
+                sendStatusResponse(player, selectedAssignmentId);
             }
         });
     }
@@ -325,7 +325,7 @@ public final class OpenPlayerNetworking {
         }
         AiPlayerNpcService service = OpenPlayerApi.npcService();
         for (AiPlayerNpcSession session : service.listSessions()) {
-            if (isLegacyDefaultNetworkNpcSession(sender.getUUID(), sender.getGameProfile().getName(), session)) {
+            if (isDefaultNetworkNpcSession(sender.getUUID(), sender.getGameProfile().getName(), session)) {
                 service.despawn(session.sessionId());
             }
         }
@@ -346,7 +346,7 @@ public final class OpenPlayerNetworking {
             return;
         }
         for (AiPlayerNpcSession session : service.listSessions()) {
-            if (isLegacyDefaultNetworkNpcSession(sender.getUUID(), sender.getGameProfile().getName(), session)) {
+            if (isDefaultNetworkNpcSession(sender.getUUID(), sender.getGameProfile().getName(), session)) {
                 service.submitCommand(session.sessionId(), command);
             }
         }
@@ -372,7 +372,7 @@ public final class OpenPlayerNetworking {
         AiPlayerNpcService service = OpenPlayerApi.npcService();
         boolean submitted = false;
         for (AiPlayerNpcSession session : service.listSessions()) {
-            if (isLegacyDefaultNetworkNpcSession(sender.getUUID(), sender.getGameProfile().getName(), session)) {
+            if (isDefaultNetworkNpcSession(sender.getUUID(), sender.getGameProfile().getName(), session)) {
                 sendCompanionChatEcho(sender, session.spec().profile().name(), commandText.trim());
                 CommandSubmissionResult result = service.submitCommandText(session.sessionId(), commandText);
                 OpenPlayerDebugEvents.record("command_submission", result.status().name(), null, null,
@@ -547,9 +547,7 @@ public final class OpenPlayerNetworking {
                     LOCATE_STRUCTURE,
                     EXPLORE_CHUNKS,
                     USE_PORTAL,
-                    TRAVEL_NETHER,
-                    LOCATE_STRONGHOLD,
-                    END_GAME_TASK -> intentKind.name();
+                    TRAVEL_NETHER -> intentKind.name();
             case GOTO -> "owner";
             case LOCATE_LOADED_BLOCK -> "minecraft:oak_log";
             case LOCATE_LOADED_ENTITY -> "minecraft:zombie";
@@ -650,6 +648,10 @@ public final class OpenPlayerNetworking {
     }
 
     private static void sendStatusResponse(ServerPlayer player) {
+        sendStatusResponse(player, "");
+    }
+
+    private static void sendStatusResponse(ServerPlayer player, String selectedAssignmentId) {
         OpenPlayerRuntimeStatus status = OpenPlayerRuntime.status();
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
         buffer.writeBoolean(status.intentParser().enabled());
@@ -666,27 +668,28 @@ public final class OpenPlayerNetworking {
         for (OpenPlayerDebugEvent debugEvent : debugEvents) {
             buffer.writeUtf(debugEvent.compactLine(), OpenPlayerDebugEvents.MAX_NETWORK_LINE_LENGTH);
         }
-        List<String> taskTreeStatusLines = endgameTaskTreeStatusLines(player);
-        buffer.writeVarInt(taskTreeStatusLines.size());
-        for (String line : taskTreeStatusLines) {
+        List<String> capabilityStatusLines = capabilityStatusLines(player, selectedAssignmentId);
+        buffer.writeVarInt(capabilityStatusLines.size());
+        for (String line : capabilityStatusLines) {
             buffer.writeUtf(line, 128);
         }
         NetworkManager.sendToPlayer(player, OpenPlayerConstants.STATUS_RESPONSE_PACKET_ID, buffer);
     }
 
-    private static List<String> endgameTaskTreeStatusLines(ServerPlayer player) {
-        return EndgamePreparationDiagnostics.visibleViewerStatusLines(
-                player.serverLevel().dimension().location().toString(),
-                new EndgamePreparationDiagnostics.InventoryCounts(
-                        player.getInventory().countItem(Items.ENDER_EYE),
-                        player.getInventory().countItem(Items.BLAZE_POWDER),
-                        player.getInventory().countItem(Items.BLAZE_ROD),
-                        player.getInventory().countItem(Items.ENDER_PEARL),
-                        0,
-                        0,
-                        0
-                )
-        );
+    static List<String> capabilityStatusLines(ServerPlayer player) {
+        return capabilityStatusLines(player, "");
+    }
+
+    static List<String> capabilityStatusLines(ServerPlayer player, String selectedAssignmentId) {
+        String dimensionId = player == null ? "unknown" : player.serverLevel().dimension().location().toString();
+        java.util.ArrayList<String> lines = new java.util.ArrayList<>();
+        lines.add("runtime_status source=current_viewer_world current_dimension=" + dimensionId
+                + " inventory_source=not_reported selected_npc_source=separate_runtime_snapshot");
+        if (player != null && selectedAssignmentId != null && !selectedAssignmentId.isBlank()) {
+            lines.addAll(COMPANION_LIFECYCLE_MANAGER.selectedRuntimeStatusLines(player.getUUID(), selectedAssignmentId));
+        }
+        lines.addAll(RuntimeCapabilityRegistry.reportLines());
+        return List.copyOf(lines.subList(0, Math.min(lines.size(), RuntimeCapabilityRegistry.MAX_REPORT_LINES)));
     }
 
     private static void sendCharacterListResponse(ServerPlayer player) {
@@ -807,7 +810,7 @@ public final class OpenPlayerNetworking {
         sendCharacterListResponse(player);
     }
 
-    static boolean isLegacyDefaultNetworkNpcSession(UUID ownerId, String ownerProfileName, AiPlayerNpcSession session) {
+    static boolean isDefaultNetworkNpcSession(UUID ownerId, String ownerProfileName, AiPlayerNpcSession session) {
         return session.spec().ownerId().value().equals(ownerId)
                 && session.spec().roleId().value().equals(OpenPlayerConstants.DEFAULT_NETWORK_NPC_ROLE_ID)
                 && session.spec().profile().name().equals(defaultNetworkNpcProfileName(ownerProfileName));

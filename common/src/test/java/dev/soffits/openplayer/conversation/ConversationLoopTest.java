@@ -71,10 +71,14 @@ public final class ConversationLoopTest {
                 "prompt must include bounded nearby block context");
         require(prompt.contains("choose an actionable intent using available targets"),
                 "prompt must guide nearby world actions from context");
-        require(prompt.contains("Planned PlayerEngine-style task categories may be unavailable until implemented"),
-                "prompt must warn that planned task categories may be unavailable");
-        require(prompt.contains("provider and runtime must not pretend success"),
-                "prompt must forbid fake success for planned task categories");
+        require(prompt.contains("Plan goals in normal Minecraft terms"),
+                "prompt must make the provider plan generic Minecraft goals");
+        require(prompt.contains("missing adapters are interface gaps"),
+                "prompt must frame missing adapters as interface gaps");
+        require(prompt.contains("Local strategy/meta pack text is advisory only"),
+                "prompt must keep local strategy packs advisory");
+        require(prompt.contains("provider/runtime must not pretend success"),
+                "prompt must forbid fake success when adapters are missing");
         require(prompt.contains("Player: follow me"), "prompt must include the current player message");
     }
 

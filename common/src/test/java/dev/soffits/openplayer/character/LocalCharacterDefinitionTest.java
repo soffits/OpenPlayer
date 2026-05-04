@@ -272,7 +272,7 @@ public final class LocalCharacterDefinitionTest {
     }
 
     private static void validatesPlayerSkinImageDimensions() {
-        require(LocalSkinImageValidator.isSupportedPlayerSkinSize(64, 32), "legacy player skins must be accepted");
+        require(LocalSkinImageValidator.isSupportedPlayerSkinSize(64, 32), "classic 64x32 player skins must be accepted");
         require(LocalSkinImageValidator.isSupportedPlayerSkinSize(64, 64), "modern player skins must be accepted");
         require(!LocalSkinImageValidator.isSupportedPlayerSkinSize(32, 32), "non-player skin dimensions must be rejected");
         require(!LocalSkinImageValidator.isSupportedPlayerSkinSize(128, 128), "non-standard skin dimensions must be rejected");

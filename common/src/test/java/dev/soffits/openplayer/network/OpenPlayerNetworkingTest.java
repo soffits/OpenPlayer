@@ -26,9 +26,9 @@ public final class OpenPlayerNetworkingTest {
     }
 
     public static void main(String[] args) {
-        matchesLegacyDefaultNetworkNpc();
+        matchesDefaultNetworkNpc();
         rejectsCharacterSessionUsingDefaultRole();
-        rejectsOtherOwnerLegacyDefaultNetworkNpc();
+        rejectsOtherOwnerDefaultNetworkNpc();
         acceptsSingleplayerOwnerProviderConfigSave();
         acceptsPermittedProviderConfigSave();
         rejectsUnauthorizedProviderConfigSave();
@@ -37,30 +37,31 @@ public final class OpenPlayerNetworkingTest {
         rejectsUnauthorizedLocalProfileManagement();
         classifiesProviderHttpFailure();
         buildsBlankShortcutInstructions();
+        reportsGenericCapabilityStatusLines();
     }
 
-    private static void matchesLegacyDefaultNetworkNpc() {
-        require(OpenPlayerNetworking.isLegacyDefaultNetworkNpcSession(
+    private static void matchesDefaultNetworkNpc() {
+        require(OpenPlayerNetworking.isDefaultNetworkNpcSession(
                 OWNER_ID,
                 "Alex",
                 session(OWNER_ID, OpenPlayerConstants.DEFAULT_NETWORK_NPC_ROLE_ID, "Alex OpenPlayer NPC")
-        ), "absent character id must target the legacy default network NPC");
+        ), "absent character id must target the default network NPC");
     }
 
     private static void rejectsCharacterSessionUsingDefaultRole() {
-        require(!OpenPlayerNetworking.isLegacyDefaultNetworkNpcSession(
+        require(!OpenPlayerNetworking.isDefaultNetworkNpcSession(
                 OWNER_ID,
                 "Alex",
                 session(OWNER_ID, OpenPlayerConstants.DEFAULT_NETWORK_NPC_ROLE_ID, "Alex Helper")
         ), "absent character id must not target a local character session using the default role");
     }
 
-    private static void rejectsOtherOwnerLegacyDefaultNetworkNpc() {
-        require(!OpenPlayerNetworking.isLegacyDefaultNetworkNpcSession(
+    private static void rejectsOtherOwnerDefaultNetworkNpc() {
+        require(!OpenPlayerNetworking.isDefaultNetworkNpcSession(
                 OWNER_ID,
                 "Alex",
                 session(OTHER_OWNER_ID, OpenPlayerConstants.DEFAULT_NETWORK_NPC_ROLE_ID, "Alex OpenPlayer NPC")
-        ), "absent character id must not target another player's legacy default network NPC");
+        ), "absent character id must not target another player's default network NPC");
     }
 
     private static void acceptsSingleplayerOwnerProviderConfigSave() {
@@ -105,6 +106,17 @@ public final class OpenPlayerNetworkingTest {
                 "STOP shortcut must pass runtime validation");
         require(RuntimeIntentValidator.validate(OpenPlayerNetworking.shortcutIntent(IntentKind.FOLLOW_OWNER), true).isAccepted(),
                 "FOLLOW_OWNER shortcut must pass runtime validation");
+    }
+
+    private static void reportsGenericCapabilityStatusLines() {
+        java.util.List<String> lines = OpenPlayerNetworking.capabilityStatusLines(null);
+        require(!lines.isEmpty(), "capability status lines must not be empty");
+        require(lines.get(0).contains("source=current_viewer_world"),
+                "runtime status must truthfully label viewer/world source");
+        require(lines.get(0).contains("inventory_source=not_reported"),
+                "runtime status must not mislabel viewer inventory as NPC inventory");
+        String joined = String.join("\n", lines).toLowerCase(java.util.Locale.ROOT);
+        require(joined.contains("capability_report"), "status must include capability registry report");
     }
 
     private static AiPlayerNpcSession session(UUID ownerId, String roleId, String profileName) {

@@ -2,11 +2,12 @@
 
 ## Unreleased
 
-- Adds bounded endgame viewer/world diagnostics to the OpenPlayer Controls Status tab, labelled as diagnostic snapshots rather than selected-NPC state or hidden queued execution.
-- Labels material-count diagnostics as `source=viewer_inventory` and current-dimension diagnostics as `source=current_viewer_dimension` because the status packet has no selected assignment/NPC id.
-- Keeps stronghold, End travel, dragon fight, and speedrun flows truthful by surfacing missing primitives and recovery state instead of claiming unsupported completion.
-- Treats the current dimension as an arbitrary ResourceLocation in portal/status diagnostics, with unknown or modded dimensions reported as observed loaded-world state and player-like recovery/exploration options rather than globally unsupported.
-- Hardens release-candidate QA around task-tree status bounds, localization parity, prompt truthfulness, unsafe advanced syntax rejection, and secret/admin-safe status output.
+- Replaces the hardcoded stronghold/End/dragon task-tree diagnostic path with a generic capability registry and bounded status lines.
+- Keeps selected-NPC runtime status separate from viewer/world status so the UI does not mislabel viewer inventory or dimension state as NPC state.
+- Removes abandoned internal endgame-specific intent names from the runtime surface; ordinary goals should decompose through generic primitives, capability diagnostics, and missing-adapter reporting.
+- Treats current and portal target dimensions as arbitrary ResourceLocation ids, while keeping vanilla Nether portal build/ignite as a clearly scoped adapter.
+- Adds docs-only local strategy/meta pack guidance and vanilla sample reference material for advisory LLM planning without Java route logic or runtime execution.
+- Hardens provider prompt and QA around generic reviewed primitives, missing-adapter truthfulness, local advisory strategy text, localization parity, and no OP/admin or fake-success status output.
 
 ## v0.1.0-alpha.8
 
@@ -24,7 +25,7 @@ Artifacts:
 
 - Reattaches valid persisted OpenPlayer NPC entities into runtime sessions on server start so UI and commands can control companions after re-entering a world without spawning duplicates.
 - Shows provider `CHAT` and valid `UNAVAILABLE` conversation responses as visible NPC replies instead of sending them through automation.
-- Adds the canonical `/openplayer` command tree with `chat`, `follow`, `stop`, `spawn`, `despawn`, and `status` subcommands while keeping `/ai` and `/aichat` as legacy chat aliases.
+- Adds the canonical `/openplayer` command tree with `chat`, `follow`, `stop`, `spawn`, `despawn`, and `status` subcommands while keeping `/ai` and `/aichat` as chat aliases.
 - Adds assignment id suggestions for command arguments and includes assignment ids in `/openplayer status` output.
 
 Artifacts:

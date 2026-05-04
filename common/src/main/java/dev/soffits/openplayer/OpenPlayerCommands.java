@@ -66,8 +66,8 @@ public final class OpenPlayerCommands {
     public static void register() {
         CommandRegistrationEvent.EVENT.register((dispatcher, registry, selection) -> {
             dispatcher.register(openPlayerRoot("openplayer"));
-            dispatcher.register(legacyChatRoot("ai"));
-            dispatcher.register(legacyChatRoot("aichat"));
+            dispatcher.register(chatAliasRoot("ai"));
+            dispatcher.register(chatAliasRoot("aichat"));
         });
     }
 
@@ -134,7 +134,7 @@ public final class OpenPlayerCommands {
                         .executes(context -> status(context.getSource().getPlayerOrException())));
     }
 
-    private static LiteralArgumentBuilder<CommandSourceStack> legacyChatRoot(String name) {
+    private static LiteralArgumentBuilder<CommandSourceStack> chatAliasRoot(String name) {
         return Commands.literal(name)
                 .then(Commands.literal("selected")
                         .then(Commands.argument("message", StringArgumentType.greedyString())

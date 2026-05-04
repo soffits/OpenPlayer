@@ -65,6 +65,16 @@ public final class OpenPlayerRequestSender {
         NetworkManager.sendToServer(OpenPlayerConstants.STATUS_REQUEST_PACKET_ID, emptyPayload());
     }
 
+    public static void sendStatusRequest(String selectedAssignmentId) {
+        if (selectedAssignmentId == null || selectedAssignmentId.isBlank()) {
+            sendStatusRequest();
+            return;
+        }
+        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+        buffer.writeUtf(selectedAssignmentId.trim(), 64);
+        NetworkManager.sendToServer(OpenPlayerConstants.STATUS_REQUEST_PACKET_ID, buffer);
+    }
+
     public static void sendCharacterListRequest() {
         NetworkManager.sendToServer(OpenPlayerConstants.CHARACTER_LIST_REQUEST_PACKET_ID, emptyPayload());
     }

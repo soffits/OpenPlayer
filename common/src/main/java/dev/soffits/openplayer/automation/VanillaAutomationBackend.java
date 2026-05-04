@@ -16,11 +16,11 @@ import dev.soffits.openplayer.automation.advanced.PortalFramePlan;
 import dev.soffits.openplayer.automation.advanced.PortalFramePlanner;
 import dev.soffits.openplayer.automation.building.BuildPlan;
 import dev.soffits.openplayer.automation.building.BuildPlanParser;
+import dev.soffits.openplayer.automation.capability.RuntimeCapabilityRegistry;
 import dev.soffits.openplayer.automation.navigation.LoadedAreaNavigator;
 import dev.soffits.openplayer.automation.navigation.LoadedChunkExplorationMemory;
 import dev.soffits.openplayer.automation.navigation.NavigationRuntime;
 import dev.soffits.openplayer.automation.navigation.NavigationTarget;
-import dev.soffits.openplayer.automation.resource.EndgamePreparationDiagnostics;
 import dev.soffits.openplayer.automation.resource.GetItemRequest;
 import dev.soffits.openplayer.automation.resource.ResourceAffordanceScanner;
 import dev.soffits.openplayer.automation.resource.ResourceAffordanceSummary;
@@ -590,7 +590,6 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                         entity, parsed.itemId().toString(), parsed.item(), parsed.count()
                 );
                 String currentDimension = serverLevel() == null ? "unknown" : dimensionId(serverLevel());
-                String endgameHint = EndgamePreparationDiagnostics.hintForItem(parsed.itemId().toString(), currentDimension);
                 if (affordances.canSatisfyMissingFromVisibleDrops()) {
                     queuedCommands.add(QueuedCommand.getItem(
                             parsed.itemId().toString(), parsed.item(), parsed.count(), currentCount,
@@ -598,14 +597,12 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                     ));
                     return accepted("GET_ITEM accepted: collecting visible dropped " + parsed.itemId()
                             + " x" + affordances.missingCount() + "; "
-                            + affordances.boundedDiagnostics(nearestSafeContainer() != null, currentDimension)
-                            + nonBlankSuffix(endgameHint));
+                            + affordances.boundedDiagnostics(nearestSafeContainer() != null, currentDimension));
                 }
                 MinecraftServer server = entity.getServer();
                 if (server == null) {
                     return rejected("GET_ITEM requires server recipe data for inventory crafting; "
-                            + affordances.boundedDiagnostics(nearestSafeContainer() != null, currentDimension)
-                            + nonBlankSuffix(endgameHint));
+                            + affordances.boundedDiagnostics(nearestSafeContainer() != null, currentDimension));
                 }
                 ResourceDependencyPlanner resourceDependencyPlanner = new ResourceDependencyPlanner(
                         RuntimeCraftingRecipeIndex.fromServer(server)
@@ -638,12 +635,10 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 if (plan.status() == ResourcePlanResult.Status.MISSING_MATERIALS) {
                     return rejected("GET_ITEM missing materials for " + parsed.itemId() + " x" + parsed.count()
                             + ": " + missingItemsSummary(plan) + "; "
-                            + affordances.boundedDiagnostics(nearestSafeContainer() != null, currentDimension)
-                            + nonBlankSuffix(endgameHint));
+                            + affordances.boundedDiagnostics(nearestSafeContainer() != null, currentDimension));
                 }
                 return rejected("GET_ITEM unsupported for bounded inventory crafting: " + parsed.itemId()
-                        + reasonSuffix(plan) + "; " + affordances.boundedDiagnostics(nearestSafeContainer() != null, currentDimension)
-                        + nonBlankSuffix(endgameHint));
+                        + reasonSuffix(plan) + "; " + affordances.boundedDiagnostics(nearestSafeContainer() != null, currentDimension));
             }
             if (kind == IntentKind.SMELT_ITEM) {
                 ParsedItemInstruction parsed = InventoryActionInstructionParser.parseItemCountOrNull(intent.instruction(), false);
@@ -789,12 +784,6 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             if (kind == IntentKind.TRAVEL_NETHER) {
                 return submitPortalTravel(intent.instruction(), true);
-            }
-            if (kind == IntentKind.LOCATE_STRONGHOLD) {
-                return reportStrongholdDiagnostic(intent.instruction());
-            }
-            if (kind == IntentKind.END_GAME_TASK) {
-                return reportEndGameTaskDiagnostic(intent.instruction());
             }
             if (AdvancedTaskPolicy.isUnsupportedAdvancedKind(kind)) {
                 return rejected(AdvancedTaskPolicy.unsupportedReason(kind));
@@ -3117,82 +3106,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         }
 
         private String statusSummary() {
-            return snapshot().summary() + " endgame_task_tree=" + endgameTaskTreeSummary();
-        }
-
-        private AutomationCommandResult reportStrongholdDiagnostic(String instruction) {
-            if (AdvancedTaskInstructionParser.parseLocateStrongholdOrNull(instruction) == null) {
-                return rejected(AdvancedTaskInstructionParser.LOCATE_STRONGHOLD_USAGE);
-            }
-            return rejected("LOCATE_STRONGHOLD diagnostic: " + endgameTaskTreeSummary()
-                    + " truth=no_locate_api no_chunk_generation eye_throw_adapter=missing");
-        }
-
-        private AutomationCommandResult reportEndGameTaskDiagnostic(String instruction) {
-            AdvancedTaskInstructionParser.EndGameTaskInstruction parsed =
-                    AdvancedTaskInstructionParser.parseEndGameTaskOrNull(instruction);
-            if (parsed == null) {
-                return rejected(AdvancedTaskInstructionParser.END_GAME_TASK_USAGE);
-            }
-            return rejected("END_GAME_TASK diagnostic phase=" + parsed.phase() + ": " + endgameTaskTreeSummary()
-                    + " truth=task_tree_foundation_only no_end_travel_or_dragon_success_claim");
-        }
-
-        private String endgameTaskTreeSummary() {
-            ServerLevel serverLevel = serverLevel();
-            String dimensionId = serverLevel == null ? "unknown" : dimensionId(serverLevel);
-            return EndgamePreparationDiagnostics.summary(dimensionId, endgameInventoryCounts());
-        }
-
-        private EndgamePreparationDiagnostics.InventoryCounts endgameInventoryCounts() {
-            List<ItemStack> stacks = entity.inventorySnapshot();
-            return new EndgamePreparationDiagnostics.InventoryCounts(
-                    untaggedNormalInventoryCount(stacks, Items.ENDER_EYE),
-                    untaggedNormalInventoryCount(stacks, Items.BLAZE_POWDER),
-                    untaggedNormalInventoryCount(stacks, Items.BLAZE_ROD),
-                    untaggedNormalInventoryCount(stacks, Items.ENDER_PEARL),
-                    normalFoodCount(stacks),
-                    normalBedCount(stacks),
-                    normalBlockItemCount(stacks)
-            );
-        }
-
-        private int normalFoodCount(List<ItemStack> stacks) {
-            int count = 0;
-            int end = Math.min(stacks.size(), NpcInventoryTransfer.FIRST_EQUIPMENT_SLOT);
-            for (int index = NpcInventoryTransfer.FIRST_NORMAL_SLOT; index < end; index++) {
-                ItemStack stack = stacks.get(index);
-                if (!stack.isEmpty() && stack.getItem().isEdible()) {
-                    count += stack.getCount();
-                }
-            }
-            return count;
-        }
-
-        private int normalBedCount(List<ItemStack> stacks) {
-            int count = 0;
-            int end = Math.min(stacks.size(), NpcInventoryTransfer.FIRST_EQUIPMENT_SLOT);
-            for (int index = NpcInventoryTransfer.FIRST_NORMAL_SLOT; index < end; index++) {
-                ItemStack stack = stacks.get(index);
-                if (!stack.isEmpty() && stack.getItem() instanceof BlockItem blockItem
-                        && blockItem.getBlock() instanceof BedBlock) {
-                    count += stack.getCount();
-                }
-            }
-            return count;
-        }
-
-        private int normalBlockItemCount(List<ItemStack> stacks) {
-            int count = 0;
-            int end = Math.min(stacks.size(), NpcInventoryTransfer.FIRST_EQUIPMENT_SLOT);
-            for (int index = NpcInventoryTransfer.FIRST_NORMAL_SLOT; index < end; index++) {
-                ItemStack stack = stacks.get(index);
-                if (!stack.isEmpty() && stack.getItem() instanceof BlockItem blockItem
-                        && !(blockItem.getBlock() instanceof BedBlock)) {
-                    count += stack.getCount();
-                }
-            }
-            return count;
+            List<String> capabilityLines = RuntimeCapabilityRegistry.reportLines();
+            return snapshot().summary() + " capabilities="
+                    + String.join(" | ", capabilityLines.subList(0, Math.min(3, capabilityLines.size())));
         }
 
         private AutomationCommandResult applyBodyLanguage(BodyLanguageInstruction instruction) {
@@ -3872,13 +3788,6 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return "";
             }
             return ": " + plan.reason();
-        }
-
-        private static String nonBlankSuffix(String value) {
-            if (value == null || value.isBlank()) {
-                return "";
-            }
-            return "; " + value;
         }
 
         enum BlockInteractionCapability {

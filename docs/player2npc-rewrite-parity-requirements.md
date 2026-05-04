@@ -29,6 +29,8 @@ Current implementation already includes runtime NPC sessions, duplicate preventi
 - Validate all user-editable text and file paths before using them.
 - Fail closed for invalid config, missing skins, unavailable automation, unavailable parser providers, unsafe actions, or unknown sessions.
 - Preserve single-player and multiplayer server safety: server-authoritative actions, bounded commands, owner checks, and no client-only authority over world mutation.
+- Do not hardcode gameplay route planners in Java. Express ordinary player-like behavior through generic primitives, reviewed capability adapters, validation, monitoring, and truthful status; use local strategy/meta packs only as advisory reference.
+- Missing behavior should be recorded as an adapter/interface gap, policy failure, or world-state failure rather than a permanent product-level prohibition.
 - Add tests at the smallest practical seam before or with implementation work. Prefer pure Java tests for config, validation, and parsing seams; use Minecraft runtime tests only where entity, renderer, or networking behavior requires it.
 
 ## Phase 1: Local Character Config And Repository
@@ -190,7 +192,7 @@ Add a higher-level companion lifecycle manager that coordinates local character 
 
 OpenPlayer now routes selected local-character spawn, despawn, follow, stop, command text, and UI lifecycle status through a server-side `CompanionLifecycleManager`. The manager is intentionally small and sits on top of `RuntimeAiPlayerNpcService` and `OpenPlayerApi`; it resolves local character data from the repository for each action and matches active companions by owner UUID plus the deterministic local-character session role id derived from the stable character id. It does not store transient runtime session ids as long-term character identity.
 
-Spawning the same selected local character calls the runtime service with the same stable identity, so the existing runtime duplicate-prevention path reuses or relocates the current session instead of creating a duplicate. Unknown, invalid, blank, or deleted selected character ids reject safely and do not fall through to legacy NPC sessions. With no selected character id, networking keeps the legacy default OpenPlayer NPC path.
+Spawning the same selected local character calls the runtime service with the same stable identity, so the existing runtime duplicate-prevention path reuses or relocates the current session instead of creating a duplicate. Unknown, invalid, blank, or deleted selected character ids reject safely and do not fall through to default NPC sessions. With no selected character id, networking keeps the default OpenPlayer NPC path.
 
 Lifecycle status shown in the UI comes from the manager and returns the matched runtime session status or `despawned` when no owner plus stable character id session exists. Runtime despawn now stops active commands before discarding the NPC entity, while the existing owner disconnect and server stop hooks continue to stop owner tasks and clear runtime sessions safely. Persisted NPC restore remains owned by `RuntimeAiPlayerNpcService`, which adopts valid persisted identities and uses the same stable local-character identity key for restored selected-character sessions.
 
@@ -228,7 +230,7 @@ OpenPlayer now exposes a focused server-side action seam on `OpenPlayerNpcEntity
 
 The vanilla automation backend uses those helpers without adding dependencies. With world actions enabled, `BREAK_BLOCK` selects the best scored hotbar tool before destroying a loaded, reachable, breakable target block and swings the main hand. `PLACE_BLOCK` keeps selected-slot semantics when the selected hotbar item is a `BlockItem`; otherwise it selects the first hotbar `BlockItem`, then applies the existing simple survival and collision checks before placing and swinging. `ATTACK_NEAREST` also uses the same main-hand swing helper.
 
-This phase remains intentionally narrow. OpenPlayer still does not emulate full player item use, block/entity interaction routing, container transfers, cooldown managers, crafting, inventory rearrangement, PlayerEngine, Automatone, or true Baritone control of `OpenPlayerNpcEntity`.
+This phase implemented a bounded first slice. Broader player item use, block/entity interaction routing, container transfers, cooldown managers, crafting, inventory rearrangement, PlayerEngine, Automatone, or true Baritone control of `OpenPlayerNpcEntity` remain adapter/interface gaps unless a later reviewed phase implements them.
 
 ## Phase 7: Per-Character AI And Conversation Loop
 
@@ -343,7 +345,7 @@ Allow one owner to run multiple selected local companions with explicit local as
 
 OpenPlayer now loads optional local assignment files from `<Minecraft config>/openplayer/assignments/*.properties`. Supported assignment fields are exactly `id`, `characterId`, and optional `displayName`; unknown fields, unsafe ids, secret-like labels, absolute-path-like display names, duplicate explicit ids, deleted character references, and attempts to hijack another character's default assignment id are validation errors. Missing assignment directories are valid and produce no errors.
 
-For backward compatibility, every loaded local character also has a deterministic default assignment with assignment id equal to the character id unless an explicit same-id assignment targets that same character. Client list rows remain character-oriented for display but include both assignment id and character id; selected actions send only the stable assignment id to the server. The legacy default NPC path still runs when no id is selected.
+For default behavior, every loaded local character also has a deterministic default assignment with assignment id equal to the character id unless an explicit same-id assignment targets that same character. Client list rows remain character-oriented for display but include both assignment id and character id; selected actions send only the stable assignment id to the server. The default NPC path still runs when no id is selected.
 
 `CompanionLifecycleManager` now resolves selected ids as assignments, derives selected runtime role ids from assignment ids with the `openplayer-local-assignment-` prefix, and keys conversation history by owner plus assignment id. Existing character-id methods delegate through the default assignment behavior. Each owner can have up to four active local assignments; spawning a fifth distinct assignment rejects safely, while spawning an already-active assignment still reuses or relocates the existing runtime identity through `RuntimeAiPlayerNpcService`.
 
@@ -483,7 +485,7 @@ Expand the clean-room command vocabulary for local companions while keeping ever
 - Extend existing `CommandIntent`, automation backend, and validation seams incrementally.
 - Prefer small action records and explicit target shapes over broad stringly typed payloads.
 - Add pure Java tests for parsing and validation before Minecraft runtime tests.
-- Keep unsupported actions honest in status text rather than silently falling back.
+- Keep missing adapters and unsupported-by-current-policy actions honest in status text rather than silently falling back.
 
 ### Acceptance Criteria
 
@@ -514,7 +516,7 @@ Create a clean NPC-backed movement/controller foundation for OpenPlayer NPCs so 
 
 - Provide a server-side controller abstraction that drives `OpenPlayerNpcEntity` movement, looking, stopping, and task progress directly.
 - Support bounded navigation requests with explicit target, range, timeout, stuck detection, and unloaded-chunk rejection.
-- Keep backend status honest: distinguish vanilla NPC-backed control, optional reflective player-command bridges, unavailable adapters, and unsupported actions.
+- Keep backend status honest: distinguish vanilla NPC-backed control, optional reflective player-command bridges, missing adapters, and policy/state failures.
 - Preserve owner checks and server authority for all movement requests.
 - Avoid hard dependencies or vendored jars.
 
@@ -536,13 +538,13 @@ Create a clean NPC-backed movement/controller foundation for OpenPlayer NPCs so 
 
 - No vendored PlayerEngine, Baritone, Automatone, or opaque pathfinding jar.
 - No claim that stock local-player automation controls server-side NPCs.
-- No advanced parkour, mining routes, or combat navigation beyond explicitly accepted bounded tasks.
+- No hardcoded advanced parkour, mining route, or combat route planner beyond explicitly accepted bounded primitives and adapters.
 
 ### Current Implementation Notes
 
 OpenPlayer now has a focused Phase M controller foundation inside the vanilla automation backend. Long-running queued tasks start an `AutomationControllerMonitor` that tracks elapsed ticks, timeout, repeated missing movement progress, cancellation, completion, and bounded terminal reasons through pure Java state. The backend applies that monitor to vanilla NPC-backed `MOVE`, `FOLLOW_OWNER`, `PATROL`, `COLLECT_ITEMS`, `BREAK_BLOCK`, `PLACE_BLOCK`, `ATTACK_NEAREST`, and `GUARD_OWNER` execution where applicable. When timeout or stuck detection fires, vanilla navigation is stopped and the active task is cleared deterministically.
 
-`STOP` clears queued and active tasks, stops vanilla navigation, zeroes movement, and resets controller status to idle. `REPORT_STATUS` now includes active kind, queued count, controller state, and bounded reason text in addition to existing local health and selected-slot data; it does not expose paths, target coordinates, secrets, or raw provider text. Coordinate-targeted navigation and block tasks reject unloaded target chunks at submission time. This remains simple vanilla navigation only: no Baritone, AltoClef, Automatone, PlayerEngine, external pathfinding dependency, or broad planner has been added.
+`STOP` clears queued and active tasks, stops vanilla navigation, zeroes movement, and resets controller status to idle. `REPORT_STATUS` now includes active kind, queued count, controller state, and bounded reason text in addition to existing local health and selected-slot data; it does not expose paths, target coordinates, secrets, or raw provider text. Coordinate-targeted navigation and block tasks reject unloaded target chunks at submission time. This remains simple vanilla navigation only: no Baritone, AltoClef, Automatone, PlayerEngine, external pathfinding dependency, or hardcoded gameplay route planner has been added.
 
 ## Phase N: Player-Like Interaction Manager Expansion
 
@@ -555,7 +557,7 @@ Expand player-like NPC interactions through a safe manager that centralizes inve
 - Add a server-side interaction manager for selected hotbar slot, equipment changes, item use, block interaction, entity interaction, drops, pickup policy, and inventory transfer where explicitly approved.
 - Respect reach, line-of-sight where practical, loaded chunks, permissions, cooldowns, owner safety, and disabled-by-default world action settings.
 - Keep inventory and equipment persistence compatible with existing NPC entity storage.
-- Reject interactions that require a real `Player` when no safe NPC-backed substitute exists.
+- Reject interactions that require a real `Player` when no safe NPC-backed substitute or capability adapter exists.
 - Report clear accept/reject reasons for UI and conversation surfaces.
 
 ### Implementation Guidance
@@ -568,7 +570,7 @@ Expand player-like NPC interactions through a safe manager that centralizes inve
 ### Acceptance Criteria
 
 - Hotbar selection, equipment changes, drops, pickup behavior, and approved block/entity interactions work through one manager path.
-- Unsafe, disabled, unreachable, unloaded, or unsupported interactions reject without side effects.
+- Unsafe, disabled, unreachable, unloaded, or missing-adapter interactions reject without side effects.
 - Inventory persistence remains stable across despawn, restore, and server restart.
 - Manual QA confirms no obvious item duplication or owner-bypass behavior in supported flows.
 
@@ -582,7 +584,7 @@ Expand player-like NPC interactions through a safe manager that centralizes inve
 
 OpenPlayer now includes a focused Phase N expansion without a broad container, crafting, trading, or block-entity interaction rewrite. The intent vocabulary includes `USE_SELECTED_ITEM`, `SWAP_TO_OFFHAND`, and `EQUIP_ARMOR` in addition to prior Phase L/M intents. These new intents are disabled unless the selected character was spawned with `allowWorldActions=true`, require blank instructions, and return bounded deterministic accept/reject text.
 
-`USE_SELECTED_ITEM` is intentionally approximate rather than full player-equivalent item use: it only completes vanilla local eat/drink use for the currently selected NPC main-hand stack and rejects empty, non-consumable, player-only, unsupported, or cooldown-blocked items. `SWAP_TO_OFFHAND` swaps the selected hotbar stack with the NPC offhand and rejects an empty selected hotbar stack. `EQUIP_ARMOR` scans NPC inventory for armor pieces and swaps the best upgrade into empty or weaker armor slots while preserving the replaced stack in inventory. A small pure Java interaction cooldown is ticked by the vanilla automation controller and reset by `STOP`, so repeated immediate interaction intents reject deterministically until cooldown elapses. No containers, crafting, trading UI, arbitrary block entity mutation, online services, or dependencies were added.
+`USE_SELECTED_ITEM` is intentionally adapter-limited rather than full player-equivalent item use: it only completes vanilla local eat/drink use for the currently selected NPC main-hand stack and rejects empty, non-consumable, player-only, missing-adapter, or cooldown-blocked items. `SWAP_TO_OFFHAND` swaps the selected hotbar stack with the NPC offhand and rejects an empty selected hotbar stack. `EQUIP_ARMOR` scans NPC inventory for armor pieces and swaps the best upgrade into empty or weaker armor slots while preserving the replaced stack in inventory. A small pure Java interaction cooldown is ticked by the vanilla automation controller and reset by `STOP`, so repeated immediate interaction intents reject deterministically until cooldown elapses. Container, crafting, trading UI, arbitrary block entity mutation, online service, and dependency gaps require later reviewed adapters rather than Java route assumptions.
 
 ## Phase O: Cross-Loader Manual QA And Release Packaging
 
@@ -596,7 +598,7 @@ Complete cross-loader verification and package clean local parity releases with 
 - Verify docs, README, changelog/release notes where present, mod metadata, license declarations, and dependency provenance remain accurate.
 - Ensure release artifacts contain no secrets, local character files with credentials, remote skin caches, vendored opaque jars, or copied proprietary code.
 - Keep packaging targeted to Minecraft 1.20.1 and Java 17 unless the project intentionally changes targets.
-- Record known gaps honestly and do not market unsupported behavior as implemented.
+- Record known gaps honestly as missing adapters, policy/world-state failures, or online/account non-goals; do not market missing behavior as implemented.
 
 ### Implementation Guidance
 

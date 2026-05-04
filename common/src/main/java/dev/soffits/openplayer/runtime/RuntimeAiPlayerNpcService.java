@@ -10,6 +10,7 @@ import dev.soffits.openplayer.api.NpcOwnerId;
 import dev.soffits.openplayer.api.NpcSessionId;
 import dev.soffits.openplayer.api.NpcSessionStatus;
 import dev.soffits.openplayer.api.NpcSpawnLocation;
+import dev.soffits.openplayer.automation.AutomationControllerSnapshot;
 import dev.soffits.openplayer.conversation.ConversationContextSnapshot;
 import dev.soffits.openplayer.debug.OpenPlayerDebugEvents;
 import dev.soffits.openplayer.debug.OpenPlayerRawTrace;
@@ -325,6 +326,34 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         return new ConversationContextSnapshot(RuntimeContextFormatter.format(snapshot));
     }
 
+    public synchronized List<String> selectedRuntimeStatusLines(NpcSessionId sessionId, String assignmentId) {
+        if (sessionId == null) {
+            throw new IllegalArgumentException("sessionId cannot be null");
+        }
+        String safeAssignmentId = safeToken(assignmentId == null || assignmentId.isBlank() ? "unknown" : assignmentId.trim(), 48);
+        reattachPersistedNpcs();
+        RuntimeAiPlayerNpcSession session = sessions.get(sessionId);
+        if (session == null) {
+            return List.of(limitStatusLine("selected_assignment=" + safeAssignmentId
+                    + " source=selected_npc status=despawned active=idle queued=0"));
+        }
+        OpenPlayerNpcEntity entity = entityFor(session);
+        if (entity == null) {
+            return List.of(limitStatusLine("selected_assignment=" + safeAssignmentId
+                    + " source=selected_npc status=entity_unavailable active=idle queued=0"));
+        }
+        AutomationControllerSnapshot snapshot = entity.runtimeCommandSnapshot();
+        String active = snapshot.active() ? snapshot.activeKind().name() : "idle";
+        return List.of(
+                limitStatusLine("selected_assignment=" + safeAssignmentId + " source=selected_npc status=active active="
+                        + active + " queued=" + snapshot.queuedCommandCount() + " paused=" + snapshot.paused()),
+                limitStatusLine("selected_controller=" + snapshot.monitorStatus().name().toLowerCase(java.util.Locale.ROOT)
+                        + " reason=" + safeStatusValue(snapshot.monitorReason()) + " ticks="
+                        + snapshot.elapsedTicks() + "/" + snapshot.maxTicks()),
+                limitStatusLine("selected_queue source=selected_npc kinds=" + queuedKinds(snapshot))
+        );
+    }
+
     synchronized void clearRuntimeSessions() {
         for (RuntimeAiPlayerNpcSession session : sessions.values()) {
             OpenPlayerNpcEntity entity = entityFor(session);
@@ -334,6 +363,47 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         }
         sessions.clear();
         sessionIdsByIdentity.clear();
+    }
+
+    private static String queuedKinds(AutomationControllerSnapshot snapshot) {
+        if (snapshot.queuedKinds().isEmpty()) {
+            return "none";
+        }
+        StringBuilder builder = new StringBuilder();
+        for (int index = 0; index < snapshot.queuedKinds().size(); index++) {
+            if (index > 0) {
+                builder.append(',');
+            }
+            builder.append(snapshot.queuedKinds().get(index).name());
+        }
+        return builder.toString();
+    }
+
+    private static String safeStatusValue(String value) {
+        return safeToken(value == null || value.isBlank() ? "none" : value, 64);
+    }
+
+    private static String safeToken(String value, int maxLength) {
+        StringBuilder builder = new StringBuilder();
+        String source = value == null ? "unknown" : value.trim();
+        for (int index = 0; index < source.length() && builder.length() < maxLength; index++) {
+            char character = source.charAt(index);
+            if ((character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z')
+                    || (character >= '0' && character <= '9') || character == '_' || character == '-'
+                    || character == ':' || character == '.' || character == ',' || character == '=') {
+                builder.append(character);
+            } else {
+                builder.append('_');
+            }
+        }
+        return builder.isEmpty() ? "unknown" : builder.toString();
+    }
+
+    private static String limitStatusLine(String line) {
+        if (line.length() <= 120) {
+            return line;
+        }
+        return line.substring(0, 106) + "... truncated";
     }
 
     private ServerLevel levelFor(NpcSpawnLocation location) {

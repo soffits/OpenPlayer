@@ -27,6 +27,9 @@ OpenPlayer is an AGPL-3.0-only Minecraft mod developed as a legally clean, open 
 - Keep constants centralized in `OpenPlayerConstants`.
 - Keep configuration centralized once configuration exists.
 - Avoid networking, entities, GUI, skins, LLM providers, Baritone, Automatone, or PlayerEngine integration unless the active task explicitly asks for that phase.
+- Do not hardcode gameplay route planners in Java. Use generic primitives, capability adapters, validation, and truthful status; use local strategy/meta packs only as advisory goal-decomposition reference.
+- Normal player-like behavior should be attempted when reviewed adapters and policy allow it. A missing behavior is an adapter/interface gap or world-state/policy failure, not a permanent product-level prohibition.
+- While OpenPlayer runtime and intent surfaces are unreleased or unfinished, remove abandoned internal intent/API designs fully instead of keeping aliases. Do not preserve compatibility for provider/internal command names that were never a stable public contract; prefer clean generic primitives and capability adapters over old synonyms.
 
 ## Code Style
 

@@ -37,9 +37,7 @@ public final class RuntimeIntentPolicies {
             IntentKind.LOCATE_STRUCTURE,
             IntentKind.EXPLORE_CHUNKS,
             IntentKind.USE_PORTAL,
-            IntentKind.TRAVEL_NETHER,
-            IntentKind.LOCATE_STRONGHOLD,
-            IntentKind.END_GAME_TASK
+            IntentKind.TRAVEL_NETHER
     );
 
     private RuntimeIntentPolicies() {
@@ -80,9 +78,7 @@ public final class RuntimeIntentPolicies {
                     LOCATE_STRUCTURE,
                     EXPLORE_CHUNKS,
                     USE_PORTAL,
-                    TRAVEL_NETHER,
-                    LOCATE_STRONGHOLD,
-                    END_GAME_TASK -> true;
+                    TRAVEL_NETHER -> true;
             case UNAVAILABLE,
                     OBSERVE,
                     STOP,
@@ -112,6 +108,12 @@ public final class RuntimeIntentPolicies {
     }
 
     public static String allIntentKindNames() {
+        return Arrays.stream(IntentKind.values())
+                .map(IntentKind::name)
+                .collect(Collectors.joining(", "));
+    }
+
+    public static String providerIntentKindNames() {
         return Arrays.stream(IntentKind.values())
                 .map(IntentKind::name)
                 .collect(Collectors.joining(", "));

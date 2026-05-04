@@ -3,6 +3,7 @@ package dev.soffits.openplayer.entity;
 import dev.soffits.openplayer.api.AiPlayerNpcCommand;
 import dev.soffits.openplayer.api.CommandSubmissionResult;
 import dev.soffits.openplayer.api.NpcOwnerId;
+import dev.soffits.openplayer.automation.AutomationControllerSnapshot;
 import dev.soffits.openplayer.automation.survival.SurvivalFoodPolicy;
 import dev.soffits.openplayer.automation.resource.ResourcePlanStep;
 import java.nio.charset.StandardCharsets;
@@ -200,6 +201,10 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
 
     public void stopRuntimeCommands() {
         runtimeCommandExecutor.stopAll();
+    }
+
+    public AutomationControllerSnapshot runtimeCommandSnapshot() {
+        return runtimeCommandExecutor.snapshot();
     }
 
     public int selectedHotbarSlot() {
