@@ -10,6 +10,16 @@ OpenPlayer is an AGPL-3.0-only Minecraft mod developed as a legally clean, open 
 - Prefer the Architectury multiloader structure: `common`, `fabric`, and `forge`.
 - Keep APIs small until a shipped integration needs them.
 
+## Branching Model
+
+- Long-lived development lines are Minecraft-version branches named `mc/<minecraft-version>`, starting with `mc/1.20.1`.
+- Do not rely on permanent `main` or `dev` branches for normal development; write workflows and docs so they survive default-branch renames.
+- Start new port lines from the nearest useful existing Minecraft line, such as `mc/1.21.1` from `mc/1.20.1` when that port begins.
+- Use short-lived purpose branches for work against the active line: `feat/<short-name>`, `fix/<short-name>`, `docs/<short-name>`, `ci/<short-name>`, or `refactor/<short-name>`.
+- Use `backport/mc-1.20.1/<short-name>` style branches for backports from newer Minecraft lines into older maintained lines.
+- Merge short-lived branches back into the intended `mc/<version>` branch after local verification or CI, then delete the merged branch.
+- Release tags are independent of branch names and must keep the product-prefixed scheme, such as `openplayer_1.20.1_1-alpha.1` or `openplayer_1.20.1_1`.
+
 ## License And Provenance
 
 - Project code and metadata must declare `AGPL-3.0-only`.
