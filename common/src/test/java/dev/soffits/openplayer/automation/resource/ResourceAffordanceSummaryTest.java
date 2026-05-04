@@ -21,6 +21,7 @@ public final class ResourceAffordanceSummaryTest {
         multipleExactSafeStacksCanSatisfyMissingCount();
         droppedItemsAreSortedDeterministically();
         diagnosticsAreBoundedAndTruthful();
+        diagnosticsIncludeNetherRecoveryConstraints();
     }
 
     private static void exactInventoryCapacityUsesNormalInventoryOnly() {
@@ -120,6 +121,21 @@ public final class ResourceAffordanceSummaryTest {
         require(diagnostics.contains("containers=nearby_safe_loaded"), "diagnostics must include container observation");
         require(diagnostics.contains("block_sources=diagnostic_only matched=3"),
                 "block sources must be diagnostic-only");
+    }
+
+    private static void diagnosticsIncludeNetherRecoveryConstraints() {
+        ResourceAffordanceSummary summary = new ResourceAffordanceSummary(
+                "minecraft:blaze_rod", Items.BLAZE_ROD, 1, 0, 64, 0, 0, 8, false,
+                List.of(), List.of(),
+                new ResourceAffordanceSummary.BlockSourceAffordance(false, 0, true, "not_a_block_item")
+        );
+
+        String diagnostics = summary.boundedDiagnostics(false, "minecraft:the_nether");
+
+        require(diagnostics.contains("dimension=minecraft:the_nether"),
+                "diagnostics must include current dimension");
+        require(diagnostics.contains("nether_recovery=water_bucket_unusable"),
+                "Nether diagnostics must include obvious recovery constraints");
     }
 
     private static NonNullList<ItemStack> emptyInventory() {

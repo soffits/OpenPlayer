@@ -20,6 +20,7 @@ import dev.soffits.openplayer.automation.navigation.LoadedAreaNavigator;
 import dev.soffits.openplayer.automation.navigation.LoadedChunkExplorationMemory;
 import dev.soffits.openplayer.automation.navigation.NavigationRuntime;
 import dev.soffits.openplayer.automation.navigation.NavigationTarget;
+import dev.soffits.openplayer.automation.resource.EndgamePreparationDiagnostics;
 import dev.soffits.openplayer.automation.resource.GetItemRequest;
 import dev.soffits.openplayer.automation.resource.ResourceAffordanceScanner;
 import dev.soffits.openplayer.automation.resource.ResourceAffordanceSummary;
@@ -588,6 +589,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 ResourceAffordanceSummary affordances = resourceAffordanceScanner.summarize(
                         entity, parsed.itemId().toString(), parsed.item(), parsed.count()
                 );
+                String currentDimension = serverLevel() == null ? "unknown" : dimensionId(serverLevel());
+                String endgameHint = EndgamePreparationDiagnostics.hintForItem(parsed.itemId().toString(), currentDimension);
                 if (affordances.canSatisfyMissingFromVisibleDrops()) {
                     queuedCommands.add(QueuedCommand.getItem(
                             parsed.itemId().toString(), parsed.item(), parsed.count(), currentCount,
@@ -595,12 +598,14 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                     ));
                     return accepted("GET_ITEM accepted: collecting visible dropped " + parsed.itemId()
                             + " x" + affordances.missingCount() + "; "
-                            + affordances.boundedDiagnostics(nearestSafeContainer() != null));
+                            + affordances.boundedDiagnostics(nearestSafeContainer() != null, currentDimension)
+                            + nonBlankSuffix(endgameHint));
                 }
                 MinecraftServer server = entity.getServer();
                 if (server == null) {
                     return rejected("GET_ITEM requires server recipe data for inventory crafting; "
-                            + affordances.boundedDiagnostics(nearestSafeContainer() != null));
+                            + affordances.boundedDiagnostics(nearestSafeContainer() != null, currentDimension)
+                            + nonBlankSuffix(endgameHint));
                 }
                 ResourceDependencyPlanner resourceDependencyPlanner = new ResourceDependencyPlanner(
                         RuntimeCraftingRecipeIndex.fromServer(server)
@@ -633,10 +638,12 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 if (plan.status() == ResourcePlanResult.Status.MISSING_MATERIALS) {
                     return rejected("GET_ITEM missing materials for " + parsed.itemId() + " x" + parsed.count()
                             + ": " + missingItemsSummary(plan) + "; "
-                            + affordances.boundedDiagnostics(nearestSafeContainer() != null));
+                            + affordances.boundedDiagnostics(nearestSafeContainer() != null, currentDimension)
+                            + nonBlankSuffix(endgameHint));
                 }
                 return rejected("GET_ITEM unsupported for bounded inventory crafting: " + parsed.itemId()
-                        + reasonSuffix(plan) + "; " + affordances.boundedDiagnostics(nearestSafeContainer() != null));
+                        + reasonSuffix(plan) + "; " + affordances.boundedDiagnostics(nearestSafeContainer() != null, currentDimension)
+                        + nonBlankSuffix(endgameHint));
             }
             if (kind == IntentKind.SMELT_ITEM) {
                 ParsedItemInstruction parsed = InventoryActionInstructionParser.parseItemCountOrNull(intent.instruction(), false);
@@ -3057,18 +3064,32 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private String portalCommandSummary(QueuedCommand command, boolean transitionObserved, String reason) {
             String currentDimension = serverLevel() == null ? "unknown" : dimensionId(serverLevel());
             BlockPos frame = command.portalFramePlan() == null ? null : command.portalFramePlan().origin();
-            String position = command.portalPos() == null
-                    ? frame == null ? "none" : frame.toShortString()
-                    : command.portalPos().toShortString();
+            String portalPosition = command.portalPos() == null ? "none" : command.portalPos().toShortString();
+            String framePosition = frame == null ? "none" : frame.toShortString();
             return "mode=" + command.portalMode() + " target_dimension="
-                    + targetDimensionSummary(command.portalTargetDimensionId()) + " current_dimension=" + currentDimension
+                    + targetDimensionSummary(command.portalTargetDimensionId())
+                    + " origin_dimension=" + command.portalStartDimensionId()
+                    + " current_dimension=" + currentDimension
                     + " source=" + (command.portalFramePlan() == null ? "loaded_scan" : "player_like_build")
-                    + " radius=" + formatRadius(command.radius()) + " portal_frame_position=" + position
+                    + " radius=" + formatRadius(command.radius())
+                    + " portal_position=" + portalPosition
+                    + " frame_position=" + framePosition
                     + " placed_blocks=" + command.portalPlacedBlocks() + " required_obsidian="
                     + PortalFramePlan.REQUIRED_OBSIDIAN + " has_flint_and_steel="
                     + (entity.normalInventoryCount(Items.FLINT_AND_STEEL) > 0)
+                    + " return_affordance=" + portalReturnAffordance(currentDimension)
                     + " " + command.portalDiagnostics() + " transition_observed=" + transitionObserved
                     + " failure=" + reason;
+        }
+
+        private static String portalReturnAffordance(String currentDimension) {
+            if (NETHER_DIMENSION_ID.equals(currentDimension)) {
+                return "use_portal_target_minecraft:overworld_or_travel_nether_loaded_player_like_portal";
+            }
+            if (OVERWORLD_DIMENSION_ID.equals(currentDimension)) {
+                return "travel_nether_loaded_or_player_like_portal";
+            }
+            return "unsupported_dimension_report_status_only";
         }
 
         private void notePortalProgress(QueuedCommand command, String currentDimension, String reason) {
@@ -3076,12 +3097,16 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return;
             }
             activeMonitor.note("mode=" + command.portalMode() + " target_dimension="
-                    + targetDimensionSummary(command.portalTargetDimensionId()) + " current_dimension=" + currentDimension
+                    + targetDimensionSummary(command.portalTargetDimensionId())
+                    + " origin_dimension=" + command.portalStartDimensionId()
+                    + " current_dimension=" + currentDimension
                     + " source=player_like_build radius=" + formatRadius(command.radius())
                     + " frame=" + command.portalFramePlan().origin().toShortString()
                     + " placed_blocks=" + command.portalPlacedBlocks() + " required_obsidian="
                     + PortalFramePlan.REQUIRED_OBSIDIAN + " has_flint_and_steel="
-                    + (entity.normalInventoryCount(Items.FLINT_AND_STEEL) > 0) + " status=" + reason);
+                    + (entity.normalInventoryCount(Items.FLINT_AND_STEEL) > 0)
+                    + " return_affordance=" + portalReturnAffordance(currentDimension)
+                    + " status=" + reason);
         }
 
         private String statusSummary() {
@@ -3140,11 +3165,16 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return;
             }
             if (status == AutomationControllerMonitorStatus.TIMED_OUT || status == AutomationControllerMonitorStatus.STUCK) {
-                cancelNavigation(activeMonitor.boundedReason());
+                String reason = activeMonitor.boundedReason();
+                if (activeCommand.kind() == IntentKind.USE_PORTAL || activeCommand.kind() == IntentKind.TRAVEL_NETHER) {
+                    reason = portalCommandSummary(activeCommand, false, status.name().toLowerCase());
+                }
+                cancelNavigation(reason);
                 OpenPlayerDebugEvents.record("automation", status.name(), null, null, null,
-                        "kind=" + activeCommand.kind().name() + " reason=" + activeMonitor.boundedReason());
+                        "kind=" + activeCommand.kind().name() + " reason=" + reason);
                 OpenPlayerRawTrace.automationOperation(status.name(), activeCommand.kind().name(),
-                        "reason=" + activeMonitor.boundedReason());
+                        "reason=" + reason);
+                activeMonitor.cancel(reason);
                 recoverActiveSmeltResources();
                 activeCommand = null;
             }
@@ -3314,7 +3344,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             if ((kind == IntentKind.USE_PORTAL || kind == IntentKind.TRAVEL_NETHER)) {
                 if (!entity.allowWorldActions()) {
-                    failActiveCommand("world_actions_disabled_during_portal_travel");
+                    failActiveCommand(portalCommandSummary(activeCommand, false, "world_actions_disabled"));
                     return;
                 }
                 if (activeCommand.portalFramePlan() != null
@@ -3760,6 +3790,13 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return "";
             }
             return ": " + plan.reason();
+        }
+
+        private static String nonBlankSuffix(String value) {
+            if (value == null || value.isBlank()) {
+                return "";
+            }
+            return "; " + value;
         }
 
         enum BlockInteractionCapability {

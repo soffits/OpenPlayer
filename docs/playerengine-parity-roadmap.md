@@ -442,21 +442,56 @@ The first twelve phases establish a bounded first-party runtime foundation, but 
 - Portal construction is no-loss and rollback-aware where possible.
 - Nether hazards and return failure are reported, not hidden.
 
-### Phase 20: Stronghold, End, and Speedrun Task Family
+### Phase 20: Nether Survival, Travel Recovery, and Resource Chain
 
-**Objective:** Add explicit endgame task orchestration only after travel/resource/search foundations are safe.
+**Status:** Phase 20 implements a broad truthful foundation for Nether/resource recovery without adding opaque automation. Portal travel diagnostics now carry origin dimension, target dimension, source, portal/frame positions, observed transition, failure/timeout state, and return affordance through active status and failure summaries. Resource diagnostics include current dimension and Nether recovery constraints, and endgame preparation hints for blaze rods, blaze powder, ender pearls, eyes of ender, and food/safety items point planners toward visible primitives such as `TRAVEL_NETHER`, `USE_PORTAL`, `REPORT_STATUS`, `GET_ITEM`, `ATTACK_TARGET`, `COLLECT_FOOD`, and `SMELT_ITEM` while naming missing primitives. This phase does not add fortress search, barter/trading, stronghold search, End travel, dragon tactics, forced teleportation, fake hostile-drop collection, or opaque bot dependencies.
+
+**Objective:** Make Nether travel and endgame-resource preparation recoverable and diagnosable as ordinary player-like actions over existing reviewed primitives.
 
 **Capabilities:**
 
-- Stronghold coordinate estimation/locate as a transparent, bounded task.
-- End portal preparation, travel, dragon-fight primitives, bed/pearl tactics only if safely expressible for NPCs.
-- A high-level `END_GAME_TASK` that is a task tree over already-reviewed primitives, not a monolithic opaque bot.
+- Report portal origin/target dimensions, portal or frame location, build/use source, observed transitions, timeout/failure reasons, partial frame progress, and return-travel affordance.
+- Surface Nether-aware survival/resource diagnostics including current dimension and obvious recovery constraints such as lava/fire/cliffs and unusable water buckets.
+- Expose endgame preparation as a visible primitive chain for blaze resources, pearl/eye resources, and food/safety preparation rather than a fake monolithic speedrun command.
+- Identify available primitives and missing primitives so the planner can ask for player-like follow-up actions or truthfully stop.
 
 **Acceptance Criteria:**
 
-- Every subtask is visible, cancellable, and based on implemented primitives.
-- No speedrun claim unless the complete dependency chain exists and local integration QA passes.
-- Failures return truthful partial progress and recovery state.
+- Nether/portal status gives enough state for a planner or user to request return travel without teleporting or pretending recovery succeeded.
+- Resource preparation diagnostics distinguish available carried/visible/craftable actions from missing search, barter, trade, or task-tree orchestration.
+- No OP/admin/cheat commands, permission bypass, arbitrary provider-origin code execution, PlayerEngine/Baritone/AltoClef dependency, forced dimension change, or fake success.
+
+### Phase 21: Stronghold, End Preparation, and Dragon Task Tree
+
+**Objective:** Add stronghold and End preparation only as transparent task trees over reviewed primitives.
+
+**Capabilities:**
+
+- Stronghold estimation/search through explicit, reviewable eye-of-ender or loaded-world diagnostics, with bounded state and no hidden locate API claims.
+- End portal preparation and End travel only after required materials, portal state, inventory safety, and recovery status are visible.
+- Dragon-fight primitives as a cancellable task tree over reviewed movement, combat, inventory, block placement, bed/pearl, and recovery actions where safe for NPCs.
+
+**Acceptance Criteria:**
+
+- Every stronghold/End/dragon subtask is visible, cancellable, and based on implemented primitives.
+- Partial progress, missing materials, unsafe dimension state, and recovery options are reported truthfully.
+- No speedrun or dragon-completion claim unless the complete dependency chain exists and local integration QA covers it.
+
+### Phase 22: Task Tree UI, QA Hardening, and Release Candidate
+
+**Objective:** Make advanced automation observable, cancellable, and release-ready.
+
+**Capabilities:**
+
+- Visible task tree/status UI for active and queued advanced tasks, including subtask progress, cancellation, recovery affordances, and missing primitive diagnostics.
+- Integration QA for Nether/resource/stronghold/End flows across Fabric and Forge with clear fixture coverage and failure-mode checks.
+- Release hardening for prompts, validation, debug traces, localization, compatibility, and documentation.
+
+**Acceptance Criteria:**
+
+- Users can see what the NPC is trying, cancel it, and understand recovery or missing-capability state.
+- QA covers the broad capability clusters rather than only isolated adapters.
+- Release notes and docs describe implemented behavior without overclaiming speedrun or dragon support.
 
 ---
 
@@ -486,4 +521,4 @@ For action/runtime phases:
 
 ## Immediate Next Step
 
-Review the next advanced capability cluster with explicit safety/cancellation semantics before any stronghold, End, or speedrun behavior is implemented.
+Continue Phase 20 integration QA, then review Phase 21 stronghold/End task-tree semantics before implementing stronghold, End, dragon, or speedrun behavior.

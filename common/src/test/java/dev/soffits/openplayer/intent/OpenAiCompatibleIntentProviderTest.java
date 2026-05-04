@@ -197,6 +197,14 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must document portal anti-cheat boundaries");
         require(prompt.contains("completion requires an observed dimension transition"),
                 "system prompt must prevent fake portal success");
+        require(prompt.contains("REPORT_STATUS exposes portal origin dimension, target dimension, portal/frame position"),
+                "system prompt must document portal recovery state");
+        require(prompt.contains("Nether return travel should be requested through USE_PORTAL target=minecraft:overworld or TRAVEL_NETHER rather than teleport"),
+                "system prompt must document player-like return travel affordance");
+        require(prompt.contains("Endgame preparation is a task tree over visible primitives"),
+                "system prompt must document endgame preparation as task-tree primitives");
+        require(prompt.contains("report missing primitives such as fortress search, barter/trade, or End orchestration instead of claiming success"),
+                "system prompt must prevent overclaiming missing endgame primitives");
         require(prompt.contains("never generates chunks, never teleports"),
                 "system prompt must not overclaim unsafe exploration behavior");
         require(!prompt.contains("COLLECT_FOOD <"),

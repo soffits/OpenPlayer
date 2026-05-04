@@ -270,6 +270,12 @@ tasks.register('runResourceAffordanceSummaryTest', JavaExec) {
     mainClass = 'dev.soffits.openplayer.automation.resource.ResourceAffordanceSummaryTest'
 }
 
+tasks.register('runEndgamePreparationDiagnosticsTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.automation.resource.EndgamePreparationDiagnosticsTest'
+}
+
 tasks.register('runRuntimeCraftingRecipeIndexTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
@@ -333,6 +339,7 @@ tasks.named('check') {
     dependsOn tasks.named('runNpcInventoryTransferTest')
     dependsOn tasks.named('runResourceDependencyPlannerTest')
     dependsOn tasks.named('runResourceAffordanceSummaryTest')
+    dependsOn tasks.named('runEndgamePreparationDiagnosticsTest')
     dependsOn tasks.named('runRuntimeCraftingRecipeIndexTest')
     dependsOn tasks.named('runRuntimeSmeltingRecipeIndexTest')
     dependsOn tasks.named('runWorkstationCapabilityTest')
