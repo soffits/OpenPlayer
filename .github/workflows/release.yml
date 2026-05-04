@@ -80,25 +80,6 @@ jobs:
 
           cp "$fabric_jar" "$forge_jar" release-artifacts/
 
-      - name: Prepare release notes
-        run: |
-          notes_file="release-notes.md"
-          section_file="release-notes-section.md"
-
-          if [ -f RELEASE_NOTES.md ]; then
-            awk -v tag="$RELEASE_TAG" '
-              $0 == "## " tag { capture = 1; next }
-              capture && /^## / { capture = 0 }
-              capture { print }
-            ' RELEASE_NOTES.md > "$section_file"
-          fi
-
-          if [ -s "$section_file" ]; then
-            cp "$section_file" "$notes_file"
-          else
-            printf 'OpenPlayer %s artifacts for Minecraft 1.20.1 and Java 17.\n\nArtifacts:\n\n- openplayer-fabric-%s.jar\n- openplayer-forge-%s.jar\n' "$RELEASE_TAG" "$ARTIFACT_VERSION" "$ARTIFACT_VERSION" > "$notes_file"
-          fi
-
       - name: Create GitHub release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -110,7 +91,6 @@ jobs:
 
           gh release create "$RELEASE_TAG" \
             --title "$RELEASE_TAG" \
-            --notes-file release-notes.md \
             --generate-notes \
             "${prerelease_arg[@]}" \
             release-artifacts/*.jar
