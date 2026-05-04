@@ -10,6 +10,7 @@ import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Optional;
 
 public final class OpenAiCompatibleIntentProvider implements IntentProvider {
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30L);
@@ -113,28 +114,39 @@ public final class OpenAiCompatibleIntentProvider implements IntentProvider {
     }
 
     static String systemPrompt() {
-        return "Parse the user command for an OpenPlayer NPC. Return only compact JSON with string fields kind, priority, and instruction. "
-            + "kind must be CHAT, UNAVAILABLE, or one primitive tool name from: " + MinecraftPrimitiveTools.providerToolNames() + ". "
-            + "priority must be one of LOW, NORMAL, HIGH. Keep instruction short and actionable. "
+        return "Parse the user command for an OpenPlayer NPC. Return only compact JSON. For conversation or refusal, use {\"kind\":\"CHAT\"|\"UNAVAILABLE\",\"priority\":\"LOW\"|\"NORMAL\"|\"HIGH\",\"instruction\":\"...\"}. "
+            + "For one executable primitive tool, use {\"tool\":\"tool_name\",\"priority\":\"LOW\"|\"NORMAL\"|\"HIGH\",\"args\":{...}}; if priority is omitted, OpenPlayer treats it as NORMAL. "
+            + "tool must be one primitive tool name from: " + MinecraftPrimitiveTools.providerToolNames() + ". "
+            + "Do not return plan JSON; provider plans are parser-only in this runtime and are not executed as multi-step tasks. Keep instruction and args short and actionable. "
             + "For CHAT, instruction must be the selected character's concise conversational reply, not a restatement of the player text. For UNAVAILABLE, instruction may be blank or a short safe reason. "
             + "Return JSON only, with no secrets, credentials, markdown, or explanatory text. "
             + "Primitive tool schemas: " + MinecraftPrimitiveTools.providerToolSchemaText() + ". "
-            + "Use x y z only for move_to, look_at, break_block_at, and place_block_at. move_to is coordinate-only; do not use owner, block id, entity id, search, resource, route, or goal syntax for move_to. Blank instruction for pickup_items_nearby, report_status, inventory_query, stop, pause, and unpause; blank or radius number for attack_nearest. "
-            + "For interact use block <x> <y> <z> or entity <entity_type_or_uuid> [radius]. interact is player-like and capability-gated to loaded, reachable, line-of-sight targets with reviewed adapters. Unsupported custom blocks, unsupported entity interactions, villager trading UI, breeding/taming without an adapter, and modded machines should use deterministic missing-adapter or UNAVAILABLE wording rather than fake success. For attack_target use [entity] <entity_type_or_uuid> [radius]; it only targets loaded explicitly allowlisted hostile danger entities and must not be used for players, owners, OpenPlayer NPCs, passive animals, friendly mobs, neutral mobs, or arbitrary non-hostile entities. "
-            + "For equip_item use exact item id <item_id>; for drop_item use blank to drop selected hotbar stack or exact one-stack item id syntax <item_id> [count]. Container transfer, owner item transfer, automatic best-equipment selection, following, guarding, patrol, and body-language controls are not provider tools in this AICore primitive contract. "
-            + "find_loaded_blocks and find_loaded_entities are report-only loaded-world reconnaissance primitives with instruction <resource_id> [radius]; they do not navigate, mutate the world, load chunks, run long-range locate searches, or imply a plan. "
+            + "Use args x, y, z only for move_to, look_at, break_block_at, dig, place_block_at, and place_block. move_to is coordinate-only; do not use owner, block id, entity id, search, resource, route, or goal syntax for move_to. Use empty args for pickup_items_nearby, report_status, inventory_query, stop, pause, and unpause; use args maxDistance for attack_nearest when needed. "
+            + "For interact use args target=block with x, y, z or target=entity with entityId and optional maxDistance. interact is player-like and capability-gated to loaded, reachable, line-of-sight targets with reviewed adapters. Unsupported custom blocks, unsupported entity interactions, villager trading UI, breeding/taming without an adapter, and modded machines should use deterministic missing-adapter or UNAVAILABLE wording rather than fake success. For attack_target use args entityId and optional maxDistance; it only targets loaded explicitly allowlisted hostile danger entities and must not be used for players, owners, OpenPlayer NPCs, passive animals, friendly mobs, neutral mobs, or arbitrary non-hostile entities. "
+            + "For equip_item use args item=<item_id>; for drop_item use empty args to drop selected hotbar stack or args itemType=<item_id> with optional count for one stack. Container transfer, owner item transfer, automatic best-equipment selection, following, guarding, patrol, and body-language controls are not provider tools in this AICore primitive contract. "
+            + "find_loaded_blocks and find_loaded_entities are report-only loaded-world reconnaissance primitives with args matching and optional maxDistance; they do not navigate, mutate the world, load chunks, run long-range locate searches, or imply a plan. "
             + "pause stops automation ticks without clearing active or queued tasks; unpause resumes them. Memory reset is not an AICore tool and does not clear files, config, logs, raw traces, or secrets. "
             + "Do not emit high-level goals or macro task chains such as acquiring resources, crafting, smelting, farming, fishing, defending an owner, building structures, exploring chunks, locating structures, using portals, Nether travel, End travel, strongholds, or speedrun/endgame plans. Decompose only by selecting one currently supported primitive; if the requested next primitive is unavailable, return UNAVAILABLE or report_status. "
             + "Online/commercial-service features are unavailable; use UNAVAILABLE when a required reviewed primitive or capability adapter is absent, policy disallows the action, or visible world state lacks the requirement. "
             + "Only select world, inventory, or combat actions when the user prompt says the selected character allows world actions.";
     }
 
-    private static ProviderIntent parseProviderResponse(String responseBody) throws IntentProviderException {
+    static ProviderIntent parseProviderResponse(String responseBody) throws IntentProviderException {
         try {
             OpenPlayerRawTrace.parseInput("provider_response_body", null, responseBody);
             String content = readStringField(responseBody, "content", "provider response content");
             OpenPlayerRawTrace.parseInput("provider_model_content", null, content);
             String intentJson = extractJsonObject(content);
+            if (containsJsonField(intentJson, "plan")) {
+                String priority = readOptionalStringField(intentJson, "priority").orElse("NORMAL");
+                OpenPlayerRawTrace.parseOutput("provider_intent_json", null, intentJson);
+                return ProviderIntent.structuredPlan(priority, intentJson);
+            }
+            if (containsJsonField(intentJson, "tool")) {
+                String priority = readOptionalStringField(intentJson, "priority").orElse("NORMAL");
+                OpenPlayerRawTrace.parseOutput("provider_intent_json", null, intentJson);
+                return ProviderIntent.structuredTool(priority, intentJson);
+            }
             String kind = readStringField(intentJson, "kind", "provider intent kind");
             String priority = readStringField(intentJson, "priority", "provider intent priority");
             String instruction = readStringField(intentJson, "instruction", "provider intent instruction");
@@ -173,6 +185,37 @@ public final class OpenAiCompatibleIntentProvider implements IntentProvider {
         }
 
         throw new IntentProviderException(description + " is missing or not a JSON string");
+    }
+
+    private static Optional<String> readOptionalStringField(String json, String fieldName) throws IntentProviderException {
+        try {
+            return Optional.of(readStringField(json, fieldName, "provider intent " + fieldName));
+        } catch (IntentProviderException exception) {
+            if (exception.getMessage().contains("is missing or not a JSON string")) {
+                return Optional.empty();
+            }
+            throw exception;
+        }
+    }
+
+    private static boolean containsJsonField(String json, String fieldName) {
+        if (json == null) {
+            return false;
+        }
+        String quotedFieldName = "\"" + fieldName + "\"";
+        int searchIndex = 0;
+        while (searchIndex < json.length()) {
+            int fieldIndex = json.indexOf(quotedFieldName, searchIndex);
+            if (fieldIndex < 0) {
+                return false;
+            }
+            int index = skipWhitespace(json, fieldIndex + quotedFieldName.length());
+            if (index < json.length() && json.charAt(index) == ':') {
+                return true;
+            }
+            searchIndex = fieldIndex + 1;
+        }
+        return false;
     }
 
     private static String extractJsonObject(String value) throws IntentProviderException {

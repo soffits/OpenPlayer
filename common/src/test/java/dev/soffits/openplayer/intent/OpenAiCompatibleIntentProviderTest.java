@@ -16,6 +16,8 @@ public final class OpenAiCompatibleIntentProviderTest {
         systemPromptIncludesPrimitiveSyntax();
         systemPromptIncludesPlannedUnsupportedInstruction();
         systemPromptRejectsMacroSurface();
+        parsesStructuredToolProviderResponse();
+        parsesStructuredPlanProviderResponseAsNonExecutablePlan();
     }
 
     private static void resolvesV1BaseEndpoint() throws Exception {
@@ -56,6 +58,12 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must make CHAT instruction an NPC reply");
         require(prompt.contains("For UNAVAILABLE, instruction may be blank or a short safe reason"),
                 "system prompt must allow a short safe UNAVAILABLE reason");
+        require(prompt.contains("For one executable primitive tool"),
+                "system prompt must document structured tool JSON");
+        require(prompt.contains("if priority is omitted, OpenPlayer treats it as NORMAL"),
+                "system prompt must document deterministic structured priority default");
+        require(prompt.contains("Do not return plan JSON"),
+                "system prompt must not overclaim provider plan execution");
         require(prompt.contains("Return JSON only"), "system prompt must constrain output to JSON only");
         require(prompt.contains("no secrets"), "system prompt must prohibit secrets");
     }
@@ -83,9 +91,9 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must narrow move_to to explicit coordinates");
         require(prompt.contains("do not use owner, block id, entity id, search, resource, route, or goal syntax for move_to"),
                 "system prompt must reject move_to lookup macros");
-        require(prompt.contains("For equip_item use exact item id <item_id>"),
+        require(prompt.contains("For equip_item use args item=<item_id>"),
                 "system prompt must document exact equip item ids");
-        require(prompt.contains("drop_item use blank to drop selected hotbar stack or exact one-stack item id syntax <item_id> [count]"),
+        require(prompt.contains("drop_item use empty args to drop selected hotbar stack or args itemType=<item_id> with optional count"),
                 "system prompt must document drop item count syntax");
         require(prompt.contains("Container transfer, owner item transfer, automatic best-equipment selection"),
                 "system prompt must declare non-tool inventory macros unavailable to providers");
@@ -121,8 +129,41 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must name removed macro categories");
     }
 
+    private static void parsesStructuredToolProviderResponse() throws Exception {
+        ProviderIntent intent = OpenAiCompatibleIntentProvider.parseProviderResponse(responseWithContent(
+                "{\"tool\":\"dig\",\"args\":{\"x\":10,\"y\":64,\"z\":-3}}"
+        ));
+        require(intent.hasStructuredToolJson(), "provider response parser must preserve structured tool JSON");
+        require(!intent.plan(), "single tool provider response must not be marked as a plan");
+        require("NORMAL".equals(intent.priority()), "missing structured tool priority must default to NORMAL");
+    }
+
+    private static void parsesStructuredPlanProviderResponseAsNonExecutablePlan() throws Exception {
+        ProviderIntent intent = OpenAiCompatibleIntentProvider.parseProviderResponse(responseWithContent(
+                "{\"plan\":[{\"tool\":\"report_status\",\"args\":{}}]}"
+        ));
+        require(intent.hasStructuredToolJson(), "provider response parser must preserve structured plan JSON");
+        require(intent.plan(), "provider response parser must mark plan JSON as non-executable plan output");
+    }
+
     private static String normalize(String value) throws Exception {
         return OpenAiCompatibleIntentProvider.normalizeChatCompletionsEndpoint(new URI(value)).toString();
+    }
+
+    private static String responseWithContent(String content) {
+        return "{\"choices\":[{\"message\":{\"content\":\"" + escapeJson(content) + "\"}}]}";
+    }
+
+    private static String escapeJson(String value) {
+        StringBuilder builder = new StringBuilder();
+        for (int index = 0; index < value.length(); index++) {
+            char character = value.charAt(index);
+            if (character == '"' || character == '\\') {
+                builder.append('\\');
+            }
+            builder.append(character);
+        }
+        return builder.toString();
     }
 
     private static void require(boolean condition, String message) {

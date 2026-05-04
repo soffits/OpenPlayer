@@ -6,7 +6,6 @@ import dev.soffits.openplayer.intent.IntentPriority;
 import dev.soffits.openplayer.runtime.validation.RuntimeIntentValidationResult;
 import dev.soffits.openplayer.runtime.validation.RuntimeIntentValidator;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -31,27 +30,7 @@ public final class MinecraftPrimitiveTools {
     public static final ToolName PAUSE = ToolName.of("pause");
     public static final ToolName UNPAUSE = ToolName.of("unpause");
 
-    private static final ToolRegistry REGISTRY = new ToolRegistry(List.of(
-            schema(OBSERVE_SELF, "Report the NPC's current status and inventory summary.", false, text("instruction", false, "blank")),
-            schema(OBSERVE_WORLD, "Report bounded loaded-world status without loading chunks or mutating world state.", false, text("instruction", false, "blank")),
-            schema(FIND_LOADED_BLOCKS, "Find loaded blocks by exact resource id within a bounded radius.", false, text("instruction", true, "<resource_id> [radius]")),
-            schema(FIND_LOADED_ENTITIES, "Find loaded entities by exact resource id within a bounded radius.", false, text("instruction", true, "<resource_id> [radius]")),
-            schema(PICKUP_ITEMS_NEARBY, "Collect already dropped item entities nearby; does not acquire resources or break blocks.", true, text("instruction", false, "blank")),
-            schema(MOVE_TO, "Move to an explicit loaded coordinate.", false, text("instruction", true, "x y z")),
-            schema(LOOK_AT, "Look at an explicit coordinate.", false, text("instruction", true, "x y z")),
-            schema(BREAK_BLOCK_AT, "Break a loaded reachable block at an explicit coordinate.", true, text("instruction", true, "x y z")),
-            schema(PLACE_BLOCK_AT, "Place the selected block item at an explicit loaded coordinate.", true, text("instruction", true, "x y z")),
-            schema(INVENTORY_QUERY, "Report the NPC inventory summary.", false, text("instruction", false, "blank")),
-            schema(EQUIP_ITEM, "Equip an exact inventory item id when available.", true, text("instruction", true, "<item_id>")),
-            schema(DROP_ITEM, "Drop selected stack or one exact inventory item stack.", true, text("instruction", false, "blank or <item_id> [count]")),
-            schema(INTERACT, "Interact with a loaded block or supported entity adapter.", true, text("instruction", true, "block <x> <y> <z> or entity <entity_type_or_uuid> [radius]")),
-            schema(ATTACK_NEAREST, "Attack nearest allowlisted hostile danger entity in a bounded radius.", true, text("instruction", false, "blank or radius")),
-            schema(ATTACK_TARGET, "Attack an explicitly named or UUID allowlisted hostile danger entity.", true, text("instruction", true, "[entity] <entity_type_or_uuid> [radius]")),
-            schema(REPORT_STATUS, "Report current automation status.", false, text("instruction", false, "blank")),
-            schema(STOP, "Stop active and queued automation.", false, text("instruction", false, "blank")),
-            schema(PAUSE, "Pause automation ticks without clearing active or queued work.", false, text("instruction", false, "blank")),
-            schema(UNPAUSE, "Resume paused automation ticks.", false, text("instruction", false, "blank"))
-    ));
+    private static final ToolRegistry REGISTRY = AICoreToolCatalog.registry();
 
     private static final Map<ToolName, IntentKind> TOOL_TO_INTENT = toolToIntent();
     private static final Map<IntentKind, ToolName> INTENT_TO_TOOL = intentToTool();
@@ -71,7 +50,7 @@ public final class MinecraftPrimitiveTools {
         if (kind == null) {
             return Optional.empty();
         }
-        return Optional.of(new CommandIntent(kind, priority, call.arguments().instruction()));
+        return Optional.of(new CommandIntent(kind, priority, runtimeInstruction(call)));
     }
 
     public static Optional<ToolCall> toToolCall(CommandIntent intent) {
@@ -105,12 +84,27 @@ public final class MinecraftPrimitiveTools {
         if (schema.isEmpty()) {
             return ToolResult.rejected("Unknown tool: " + call.name().value());
         }
-        if (schema.get().mutatesWorld() && !context.allowWorldActions()) {
+        ToolSchema toolSchema = schema.get();
+        if (toolSchema.mutatesWorld() && !context.allowWorldActions()) {
             return ToolResult.rejected("World actions are disabled for this OpenPlayer character");
+        }
+        Optional<ToolResult> schemaValidation = validateSchema(call, toolSchema);
+        if (schemaValidation.isPresent()) {
+            return schemaValidation.get();
+        }
+        Optional<AICoreToolDefinition> definition = AICoreToolCatalog.definition(call.name());
+        if (definition.isPresent()) {
+            CapabilityStatus status = definition.get().capabilityStatus();
+            if (status == CapabilityStatus.POLICY_REJECTED) {
+                return ToolResult.rejected(definition.get().resultReason());
+            }
+            if (status == CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER || status == CapabilityStatus.NOT_APPLICABLE_SERVER_SIDE_NPC) {
+                return ToolResult.failed(definition.get().resultReason());
+            }
         }
         Optional<CommandIntent> commandIntent = toCommandIntent(call, IntentPriority.NORMAL);
         if (commandIntent.isEmpty()) {
-            return ToolResult.rejected("Tool is not mapped to a runtime primitive: " + call.name().value());
+            return ToolResult.success("Tool call accepted by AICore facade");
         }
         RuntimeIntentValidationResult validation = RuntimeIntentValidator.validate(commandIntent.get(), context.allowWorldActions());
         if (!validation.isAccepted()) {
@@ -141,14 +135,6 @@ public final class MinecraftPrimitiveTools {
         return builder.toString();
     }
 
-    private static ToolSchema schema(ToolName name, String description, boolean mutatesWorld, ToolParameter... parameters) {
-        return new ToolSchema(name, description, List.of(parameters), mutatesWorld);
-    }
-
-    private static ToolParameter text(String name, boolean required, String description) {
-        return new ToolParameter(name, "string", required, description);
-    }
-
     private static Map<ToolName, IntentKind> toolToIntent() {
         LinkedHashMap<ToolName, IntentKind> map = new LinkedHashMap<>();
         map.put(OBSERVE_SELF, IntentKind.REPORT_STATUS);
@@ -158,14 +144,24 @@ public final class MinecraftPrimitiveTools {
         map.put(PICKUP_ITEMS_NEARBY, IntentKind.COLLECT_ITEMS);
         map.put(MOVE_TO, IntentKind.GOTO);
         map.put(LOOK_AT, IntentKind.LOOK);
+        map.put(ToolName.of("pathfinder_stop"), IntentKind.STOP);
         map.put(BREAK_BLOCK_AT, IntentKind.BREAK_BLOCK);
+        map.put(ToolName.of("dig"), IntentKind.BREAK_BLOCK);
         map.put(PLACE_BLOCK_AT, IntentKind.PLACE_BLOCK);
+        map.put(ToolName.of("place_block"), IntentKind.PLACE_BLOCK);
         map.put(INVENTORY_QUERY, IntentKind.INVENTORY_QUERY);
+        map.put(ToolName.of("inventory"), IntentKind.INVENTORY_QUERY);
         map.put(EQUIP_ITEM, IntentKind.EQUIP_ITEM);
+        map.put(ToolName.of("equip"), IntentKind.EQUIP_ITEM);
         map.put(DROP_ITEM, IntentKind.DROP_ITEM);
+        map.put(ToolName.of("toss"), IntentKind.DROP_ITEM);
         map.put(INTERACT, IntentKind.INTERACT);
+        map.put(ToolName.of("activate_block"), IntentKind.INTERACT);
         map.put(ATTACK_NEAREST, IntentKind.ATTACK_NEAREST);
         map.put(ATTACK_TARGET, IntentKind.ATTACK_TARGET);
+        map.put(ToolName.of("attack"), IntentKind.ATTACK_TARGET);
+        map.put(ToolName.of("pvp_stop"), IntentKind.STOP);
+        map.put(ToolName.of("pvp_force_stop"), IntentKind.STOP);
         map.put(REPORT_STATUS, IntentKind.REPORT_STATUS);
         map.put(STOP, IntentKind.STOP);
         map.put(PAUSE, IntentKind.PAUSE);
@@ -176,7 +172,116 @@ public final class MinecraftPrimitiveTools {
     private static Map<IntentKind, ToolName> intentToTool() {
         LinkedHashMap<IntentKind, ToolName> map = new LinkedHashMap<>();
         TOOL_TO_INTENT.forEach((toolName, intentKind) -> map.putIfAbsent(intentKind, toolName));
+        map.put(IntentKind.GOTO, MOVE_TO);
+        map.put(IntentKind.LOOK, LOOK_AT);
+        map.put(IntentKind.BREAK_BLOCK, BREAK_BLOCK_AT);
+        map.put(IntentKind.PLACE_BLOCK, PLACE_BLOCK_AT);
+        map.put(IntentKind.INVENTORY_QUERY, INVENTORY_QUERY);
+        map.put(IntentKind.EQUIP_ITEM, EQUIP_ITEM);
+        map.put(IntentKind.DROP_ITEM, DROP_ITEM);
+        map.put(IntentKind.ATTACK_TARGET, ATTACK_TARGET);
         map.put(IntentKind.MOVE, MOVE_TO);
         return Map.copyOf(map);
+    }
+
+    private static String runtimeInstruction(ToolCall call) {
+        if (!call.arguments().instruction().isBlank()) {
+            return call.arguments().instruction();
+        }
+        Map<String, String> values = call.arguments().values();
+        if (hasCoordinates(values)) {
+            return values.get("x") + " " + values.get("y") + " " + values.get("z");
+        }
+        if (values.containsKey("matching")) {
+            String maxDistance = values.getOrDefault("maxDistance", "");
+            return (values.get("matching") + " " + maxDistance).trim();
+        }
+        if (values.containsKey("item")) {
+            return values.get("item");
+        }
+        if (values.containsKey("itemType")) {
+            return (values.get("itemType") + " " + values.getOrDefault("count", "")).trim();
+        }
+        if (values.containsKey("entityId")) {
+            return values.get("entityId");
+        }
+        if (values.containsKey("maxDistance")) {
+            return values.get("maxDistance");
+        }
+        return "";
+    }
+
+    private static boolean hasCoordinates(Map<String, String> values) {
+        return values.containsKey("x") && values.containsKey("y") && values.containsKey("z");
+    }
+
+    private static Optional<ToolResult> validateSchema(ToolCall call, ToolSchema schema) {
+        for (ToolParameter parameter : schema.parameters()) {
+            String value = call.arguments().values().get(parameter.name());
+            if ((value == null || value.isBlank()) && parameter.required()) {
+                if (!call.arguments().instruction().isBlank()) {
+                    continue;
+                }
+                return Optional.of(ToolResult.rejected("Missing required argument: " + parameter.name()));
+            }
+            if (value != null && !value.isBlank()) {
+                Optional<ToolResult> typeValidation = validateType(parameter, value);
+                if (typeValidation.isPresent()) {
+                    return typeValidation;
+                }
+            }
+        }
+        Optional<ToolResult> boundedValidation = validateBounds(call);
+        if (boundedValidation.isPresent()) {
+            return boundedValidation;
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<ToolResult> validateType(ToolParameter parameter, String value) {
+        try {
+            if (parameter.type().equals("integer")) {
+                Integer.parseInt(value);
+            } else if (parameter.type().equals("number")) {
+                Double.parseDouble(value);
+            } else if (parameter.type().equals("boolean") && !value.equals("true") && !value.equals("false")) {
+                return Optional.of(ToolResult.rejected("Argument must be boolean: " + parameter.name()));
+            }
+        } catch (NumberFormatException exception) {
+            return Optional.of(ToolResult.rejected("Argument has invalid " + parameter.type() + " value: " + parameter.name()));
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<ToolResult> validateBounds(ToolCall call) {
+        Optional<Integer> maxDistance = integerArgument(call, "maxDistance");
+        if (maxDistance.isPresent() && (maxDistance.get() < 1 || maxDistance.get() > 256)) {
+            return Optional.of(ToolResult.rejected("maxDistance must be between 1 and 256"));
+        }
+        Optional<Integer> count = integerArgument(call, "count");
+        if (count.isPresent() && (count.get() < 1 || count.get() > 256)) {
+            return Optional.of(ToolResult.rejected("count must be between 1 and 256"));
+        }
+        Optional<Integer> ticks = integerArgument(call, "ticks");
+        if (ticks.isPresent() && (ticks.get() < 1 || ticks.get() > 1200)) {
+            return Optional.of(ToolResult.rejected("ticks must be between 1 and 1200"));
+        }
+        Optional<Integer> timeoutTicks = integerArgument(call, "timeoutTicks");
+        if (timeoutTicks.isPresent() && (timeoutTicks.get() < 0 || timeoutTicks.get() > 1200)) {
+            return Optional.of(ToolResult.rejected("timeoutTicks must be between 0 and 1200"));
+        }
+        Optional<Integer> slot = integerArgument(call, "slot");
+        if (slot.isPresent() && (slot.get() < 0 || slot.get() > 255)) {
+            return Optional.of(ToolResult.rejected("slot must be between 0 and 255"));
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<Integer> integerArgument(ToolCall call, String name) {
+        String value = call.arguments().values().get(name);
+        if (value == null || value.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.of(Integer.parseInt(value));
     }
 }

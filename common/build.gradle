@@ -234,6 +234,78 @@ tasks.register('runMinecraftPrimitiveToolsTest', JavaExec) {
     mainClass = 'dev.soffits.openplayer.aicore.MinecraftPrimitiveToolsTest'
 }
 
+tasks.register('runAICoreToolSchemaParityTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.aicore.AICoreToolSchemaParityTest'
+}
+
+tasks.register('runMineflayerApiSurfaceMatrixTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.aicore.MineflayerApiSurfaceMatrixTest'
+}
+
+tasks.register('runAICoreToolValidationTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.aicore.AICoreToolValidationTest'
+}
+
+tasks.register('runAICoreProviderJsonToolParserTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.aicore.AICoreProviderJsonToolParserTest'
+}
+
+tasks.register('runAICoreWorldQueryTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.aicore.AICoreWorldQueryTest'
+}
+
+tasks.register('runAICoreNavigationGoalTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.aicore.AICoreNavigationGoalTest'
+}
+
+tasks.register('runAICoreInventoryWindowTransactionTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.aicore.AICoreInventoryWindowTransactionTest'
+}
+
+tasks.register('runAICoreCraftingRecipeTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.aicore.AICoreCraftingRecipeTest'
+}
+
+tasks.register('runAICoreContainerSessionTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.aicore.AICoreContainerSessionTest'
+}
+
+tasks.register('runAICoreEventBusTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.aicore.AICoreEventBusTest'
+}
+
+tasks.register('runAICoreAdminPolicyTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.aicore.AICoreAdminPolicyTest'
+}
+
+tasks.register('runAICorePluginRegistryTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.aicore.AICorePluginRegistryTest'
+}
+
 tasks.register('runNpcEquipmentSelectionTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
@@ -303,6 +375,18 @@ tasks.named('check') {
     dependsOn tasks.named('runRuntimeContextFormatterTest')
     dependsOn tasks.named('runRuntimeIntentValidatorTest')
     dependsOn tasks.named('runMinecraftPrimitiveToolsTest')
+    dependsOn tasks.named('runAICoreToolSchemaParityTest')
+    dependsOn tasks.named('runMineflayerApiSurfaceMatrixTest')
+    dependsOn tasks.named('runAICoreToolValidationTest')
+    dependsOn tasks.named('runAICoreProviderJsonToolParserTest')
+    dependsOn tasks.named('runAICoreWorldQueryTest')
+    dependsOn tasks.named('runAICoreNavigationGoalTest')
+    dependsOn tasks.named('runAICoreInventoryWindowTransactionTest')
+    dependsOn tasks.named('runAICoreCraftingRecipeTest')
+    dependsOn tasks.named('runAICoreContainerSessionTest')
+    dependsOn tasks.named('runAICoreEventBusTest')
+    dependsOn tasks.named('runAICoreAdminPolicyTest')
+    dependsOn tasks.named('runAICorePluginRegistryTest')
     dependsOn tasks.named('runNpcEquipmentSelectionTest')
     dependsOn tasks.named('runNpcInventoryTransferTest')
     dependsOn tasks.named('runResourceAffordanceSummaryTest')

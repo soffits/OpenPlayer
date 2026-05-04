@@ -1,0 +1,9 @@
+package dev.soffits.openplayer.aicore;
+
+public enum CapabilityStatus {
+    IMPLEMENTED,
+    IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS,
+    POLICY_REJECTED,
+    UNSUPPORTED_MISSING_ADAPTER,
+    NOT_APPLICABLE_SERVER_SIDE_NPC
+}

@@ -1,14 +1,22 @@
 package dev.soffits.openplayer.intent;
 
+import dev.soffits.openplayer.aicore.AICoreProviderJsonToolParser;
+import dev.soffits.openplayer.aicore.JsonToolParseResult;
 import dev.soffits.openplayer.aicore.MinecraftPrimitiveTools;
 import dev.soffits.openplayer.aicore.ToolArguments;
 import dev.soffits.openplayer.aicore.ToolCall;
 import dev.soffits.openplayer.aicore.ToolName;
+import dev.soffits.openplayer.aicore.ToolResult;
+import dev.soffits.openplayer.aicore.ToolResultStatus;
+import dev.soffits.openplayer.aicore.ToolValidationContext;
 import dev.soffits.openplayer.debug.OpenPlayerRawTrace;
 import java.util.Locale;
 import java.util.Optional;
 
 public final class ProviderBackedIntentParser implements IntentParser {
+    private static final AICoreProviderJsonToolParser TOOL_JSON_PARSER =
+            new AICoreProviderJsonToolParser(MinecraftPrimitiveTools.registry(), 8);
+
     private final IntentProvider provider;
 
     public ProviderBackedIntentParser(IntentProvider provider) {
@@ -58,6 +66,9 @@ public final class ProviderBackedIntentParser implements IntentParser {
 
     private static CommandIntent parseCommandIntent(ProviderIntent providerIntent, IntentPriority priority)
             throws IntentParseException {
+        if (providerIntent.hasStructuredToolJson()) {
+            return parseStructuredToolCommandIntent(providerIntent, priority);
+        }
         Optional<ToolName> toolName = MinecraftPrimitiveTools.toolNameForProviderKind(providerIntent.kind());
         if (toolName.isPresent()) {
             ToolCall call = new ToolCall(toolName.get(), ToolArguments.instruction(providerIntent.instruction()));
@@ -71,6 +82,31 @@ public final class ProviderBackedIntentParser implements IntentParser {
             throw new IntentParseException("intent provider returned an unsupported primitive tool");
         }
         return new CommandIntent(kind, priority, providerIntent.instruction());
+    }
+
+    private static CommandIntent parseStructuredToolCommandIntent(ProviderIntent providerIntent, IntentPriority priority)
+            throws IntentParseException {
+        if (providerIntent.plan()) {
+            throw new IntentParseException("provider plans are parser-only and are not executable by this provider path");
+        }
+        JsonToolParseResult parseResult = TOOL_JSON_PARSER.parse(providerIntent.toolJson());
+        if (!parseResult.isAccepted()) {
+            throw new IntentParseException(parseResult.error());
+        }
+        if (parseResult.calls().size() != 1) {
+            throw new IntentParseException("provider tool JSON must contain exactly one executable tool");
+        }
+
+        ToolCall call = parseResult.calls().get(0);
+        ToolResult validation = MinecraftPrimitiveTools.validate(call, new ToolValidationContext(true));
+        if (validation.status() != ToolResultStatus.SUCCESS) {
+            throw new IntentParseException(validation.reason());
+        }
+        Optional<CommandIntent> commandIntent = MinecraftPrimitiveTools.toCommandIntent(call, priority);
+        if (commandIntent.isEmpty()) {
+            throw new IntentParseException("intent provider returned a non-executable primitive tool");
+        }
+        return commandIntent.get();
     }
 
     private static IntentKind parseKind(String value) throws IntentParseException {
