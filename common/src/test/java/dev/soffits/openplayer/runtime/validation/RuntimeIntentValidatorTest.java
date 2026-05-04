@@ -18,6 +18,7 @@ public final class RuntimeIntentValidatorTest {
         rejectsNullIntent();
         validatesWorldActionGate();
         validatesBlankOnlyInstructions();
+        validatesPhaseThirteenControlAndExpressionInstructions();
         validatesPhaseFiveInventoryInstructions();
         validatesContainerTransferInstructions();
         validatesGetItemInstruction();
@@ -66,6 +67,9 @@ public final class RuntimeIntentValidatorTest {
                 IntentKind.EQUIP_ARMOR,
                 IntentKind.USE_SELECTED_ITEM,
                 IntentKind.SWAP_TO_OFFHAND,
+                IntentKind.PAUSE,
+                IntentKind.UNPAUSE,
+                IntentKind.RESET_MEMORY,
                 IntentKind.INVENTORY_QUERY
         };
         for (IntentKind kind : blankOnlyKinds) {
@@ -76,6 +80,23 @@ public final class RuntimeIntentValidatorTest {
             requireRejected(RuntimeIntentValidator.validate(intent(kind, "extra"), true),
                     kind.name() + " requires a blank instruction");
         }
+    }
+
+    private static void validatesPhaseThirteenControlAndExpressionInstructions() {
+        require(RuntimeIntentValidator.validate(intent(IntentKind.BODY_LANGUAGE, ""), true).isAccepted(),
+                "BODY_LANGUAGE should accept blank idle instruction");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.BODY_LANGUAGE, "wave"), true).isAccepted(),
+                "BODY_LANGUAGE should accept wave");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.BODY_LANGUAGE, "look_owner"), true).isAccepted(),
+                "BODY_LANGUAGE should accept look_owner");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.BODY_LANGUAGE, "CROUCH"), true).isAccepted(),
+                "BODY_LANGUAGE should accept case-insensitive crouch");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.BODY_LANGUAGE, "nod"), true),
+                "BODY_LANGUAGE requires blank, idle, wave, swing, crouch, uncrouch, or look_owner");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.BODY_LANGUAGE, "shake"), true),
+                "BODY_LANGUAGE requires blank, idle, wave, swing, crouch, uncrouch, or look_owner");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.BODY_LANGUAGE, "wave"), false).isAccepted(),
+                "BODY_LANGUAGE must not be gated as a world or inventory action");
     }
 
     private static void validatesPhaseFiveInventoryInstructions() {
@@ -408,11 +429,11 @@ public final class RuntimeIntentValidatorTest {
                     LOCATE_STRONGHOLD,
                     END_GAME_TASK -> "";
             case ATTACK_TARGET,
-                    DEFEND_OWNER,
-                    PAUSE,
+                    DEFEND_OWNER -> "";
+            case PAUSE,
                     UNPAUSE,
-                    RESET_MEMORY,
-                    BODY_LANGUAGE -> "";
+                    RESET_MEMORY -> "";
+            case BODY_LANGUAGE -> "wave";
             case OBSERVE,
                     STOP,
                     FOLLOW_OWNER,
@@ -446,12 +467,7 @@ public final class RuntimeIntentValidatorTest {
     }
 
     private static EnumSet<IntentKind> plannedNonGatedKinds() {
-        return EnumSet.of(
-                IntentKind.PAUSE,
-                IntentKind.UNPAUSE,
-                IntentKind.RESET_MEMORY,
-                IntentKind.BODY_LANGUAGE
-        );
+        return EnumSet.noneOf(IntentKind.class);
     }
 
     private static CommandIntent intent(IntentKind kind, String instruction) {

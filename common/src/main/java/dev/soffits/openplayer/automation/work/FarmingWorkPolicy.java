@@ -1,12 +1,16 @@
 package dev.soffits.openplayer.automation.work;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.Item;
-import net.minecraft.world.item.Items;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.NetherWartBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.IntegerProperty;
+import net.minecraft.world.level.block.state.properties.Property;
 
 public final class FarmingWorkPolicy {
     public static final double DEFAULT_RADIUS = 8.0D;
@@ -15,8 +19,8 @@ public final class FarmingWorkPolicy {
     private FarmingWorkPolicy() {
     }
 
-    public static boolean isSupportedCrop(BlockState blockState) {
-        return replantItem(blockState) != null;
+    public static boolean isSupportedCrop(BlockGetter blockGetter, BlockPos blockPos, BlockState blockState) {
+        return replantPlan(blockGetter, blockPos, blockState) != null;
     }
 
     public static boolean isMature(BlockState blockState) {
@@ -27,43 +31,56 @@ public final class FarmingWorkPolicy {
         if (block instanceof CropBlock cropBlock) {
             return cropBlock.isMaxAge(blockState);
         }
-        return block == Blocks.NETHER_WART && blockState.getValue(NetherWartBlock.AGE) >= 3;
+        return isMatureNetherWart(blockState);
     }
 
-    public static Item replantItem(BlockState blockState) {
-        if (blockState == null) {
+    public static FarmingReplantPlan replantPlan(BlockGetter blockGetter, BlockPos blockPos, BlockState harvestedState) {
+        if (blockGetter == null || blockPos == null || harvestedState == null) {
             return null;
         }
-        Block block = blockState.getBlock();
-        if (block == Blocks.WHEAT) {
-            return Items.WHEAT_SEEDS;
+        if (!(harvestedState.getBlock() instanceof CropBlock) && !isNetherWartAdapter(harvestedState)) {
+            return null;
         }
-        if (block == Blocks.CARROTS) {
-            return Items.CARROT;
+        ItemStack cloneStack = harvestedState.getBlock().getCloneItemStack(blockGetter, blockPos, harvestedState);
+        if (cloneStack.isEmpty()) {
+            return null;
         }
-        if (block == Blocks.POTATOES) {
-            return Items.POTATO;
+        Block replantBlock = Block.byItem(cloneStack.getItem());
+        if (replantBlock == Blocks.AIR || replantBlock != harvestedState.getBlock()) {
+            return null;
         }
-        if (block == Blocks.BEETROOTS) {
-            return Items.BEETROOT_SEEDS;
-        }
-        if (block == Blocks.NETHER_WART) {
-            return Items.NETHER_WART;
-        }
-        return null;
+        BlockState replantState = initialGrowthState(replantBlock.defaultBlockState());
+        return new FarmingReplantPlan(cloneStack.getItem(), replantState, isNetherWartAdapter(harvestedState));
     }
 
-    public static BlockState replantState(BlockState harvestedState) {
-        if (harvestedState == null) {
-            return null;
+    private static BlockState initialGrowthState(BlockState blockState) {
+        for (Property<?> property : blockState.getProperties()) {
+            if ("age".equals(property.getName()) && property instanceof IntegerProperty integerProperty) {
+                Integer initialAge = integerProperty.getPossibleValues().stream().min(Integer::compareTo).orElse(null);
+                if (initialAge != null) {
+                    return blockState.setValue(integerProperty, initialAge);
+                }
+            }
         }
-        Block block = harvestedState.getBlock();
-        if (block instanceof CropBlock cropBlock) {
-            return cropBlock.getStateForAge(0);
+        return blockState;
+    }
+
+    private static boolean isMatureNetherWart(BlockState blockState) {
+        return isNetherWartAdapter(blockState) && blockState.getValue(NetherWartBlock.AGE) >= NetherWartBlock.MAX_AGE;
+    }
+
+    private static boolean isNetherWartAdapter(BlockState blockState) {
+        return blockState != null && blockState.getBlock() == Blocks.NETHER_WART;
+    }
+
+    public record FarmingReplantPlan(Item item, BlockState state, boolean adapterException) {
+        public FarmingReplantPlan {
+            if (item == null) {
+                throw new IllegalArgumentException("item cannot be null");
+            }
+            if (state == null) {
+                throw new IllegalArgumentException("state cannot be null");
+            }
         }
-        if (block == Blocks.NETHER_WART) {
-            return Blocks.NETHER_WART.defaultBlockState();
-        }
-        return null;
     }
 }

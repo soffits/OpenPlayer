@@ -9,6 +9,7 @@ public final class NavigationRuntimeTest {
         recoveryBudgetCannotExceedConfiguredMax();
         replanCountIsTrackedDeterministically();
         failureKeepsRejectedPathUnreachable();
+        suspendPreservesActiveTelemetry();
     }
 
     private static void targetAndReasonAreSanitizedAndBounded() {
@@ -70,6 +71,22 @@ public final class NavigationRuntimeTest {
         require("navigation_position_rejected".equals(snapshot.lastReason()), "rejection reason must be deterministic");
         require(snapshot.loadedStatus() == NavigationTargetStatus.YES, "loaded target status must be preserved");
         require(snapshot.reachableStatus() == NavigationTargetStatus.NO, "rejected path must stay unreachable");
+    }
+
+    private static void suspendPreservesActiveTelemetry() {
+        NavigationRuntime runtime = new NavigationRuntime(1);
+        runtime.start(NavigationTarget.block(4, 65, 6), 25.0D, true);
+        runtime.markReachable(true);
+        NavigationSnapshot before = runtime.snapshot();
+
+        runtime.suspend();
+        NavigationSnapshot after = runtime.snapshot();
+
+        require(after.state() == NavigationState.ACTIVE, "suspend must not complete active navigation");
+        require(after.targetKind() == before.targetKind(), "suspend must preserve target kind");
+        require(after.targetSummary().equals(before.targetSummary()), "suspend must preserve target summary");
+        require(after.reachableStatus() == NavigationTargetStatus.YES, "suspend must preserve reachable telemetry");
+        require(after.lastReason().equals(before.lastReason()), "suspend must preserve navigation reason");
     }
 
     private static void require(boolean condition, String message) {

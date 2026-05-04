@@ -19,8 +19,12 @@ import dev.soffits.openplayer.conversation.ConversationLoop;
 import dev.soffits.openplayer.conversation.ConversationStatusRepository;
 import dev.soffits.openplayer.conversation.ConversationTurn;
 import dev.soffits.openplayer.debug.OpenPlayerDebugEvents;
+import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentParser;
+import dev.soffits.openplayer.intent.IntentKind;
 import dev.soffits.openplayer.OpenPlayerIntentParserConfig;
+import dev.soffits.openplayer.runtime.validation.RuntimeIntentValidationResult;
+import dev.soffits.openplayer.runtime.validation.RuntimeIntentValidator;
 import java.util.Locale;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -155,12 +159,36 @@ public final class CompanionLifecycleManager {
         if (command == null) {
             throw new IllegalArgumentException("command cannot be null");
         }
+        if (command.intent().kind() == IntentKind.RESET_MEMORY) {
+            return resetSelectedMemory(ownerId, characterId, command.intent());
+        }
         Optional<AiPlayerNpcSession> session = findActiveSession(ownerId, characterId);
         if (session.isEmpty()) {
             OpenPlayerDebugEvents.record("companion", "unknown_session", characterId, null, null, "submit_command");
             return unknownOrMissingAssignment(characterId);
         }
         return npcService().submitCommand(session.get().sessionId(), command);
+    }
+
+    private CommandSubmissionResult resetSelectedMemory(UUID ownerId, String characterId, CommandIntent intent) {
+        RuntimeIntentValidationResult validation = RuntimeIntentValidator.validate(intent, true);
+        if (!validation.isAccepted()) {
+            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, validation.message());
+        }
+        Optional<ResolvedAssignment> resolvedAssignment = findAssignment(characterId);
+        if (resolvedAssignment.isEmpty()) {
+            OpenPlayerDebugEvents.record("memory", "unknown_assignment", characterId, null, null, "assignment_not_found");
+            return rejectedUnknownAssignment();
+        }
+        LocalAssignmentDefinition assignment = resolvedAssignment.get().assignment();
+        ConversationHistoryKey historyKey = new ConversationHistoryKey(ownerId, assignment.id());
+        boolean clearedConversationHistory = conversationHistory.remove(historyKey) != null;
+        conversationStatusRepository.recordAction(ownerId, assignment.id(), intent);
+        OpenPlayerDebugEvents.record("memory", "reset", assignment.id(), resolvedAssignment.get().character().id(), null,
+                "conversationHistory=" + clearedConversationHistory + " automationLocalMemory=false");
+        return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED,
+                "RESET_MEMORY accepted: cleared conversationHistory=" + clearedConversationHistory
+                        + ", automationLocalMemory=false");
     }
 
     public CommandSubmissionResult submitSelectedCommandText(UUID ownerId, String characterId, String commandText) {
@@ -208,13 +236,17 @@ public final class CompanionLifecycleManager {
                 intent -> OpenPlayerDebugEvents.record("provider_parse", "success", assignment.id(), character.id(), sessionId,
                         "kind=" + intent.kind().name() + " instructionLength=" + intent.instruction().length())
         );
-        if (result.status() == CommandSubmissionStatus.ACCEPTED && submittedCommand[0] != null) {
+        if (result.status() == CommandSubmissionStatus.ACCEPTED && submittedCommand[0] != null
+                && submittedCommand[0].intent().kind() != IntentKind.RESET_MEMORY) {
             appendConversationTurn(historyKey, new ConversationTurn("player", commandText));
             appendConversationTurn(historyKey, new ConversationTurn(
                     "openplayer",
                     "Action accepted: " + submittedCommand[0].intent().kind().name()
             ));
             conversationStatusRepository.recordAction(ownerId, assignment.id(), submittedCommand[0].intent());
+        } else if (result.status() == CommandSubmissionStatus.ACCEPTED && submittedCommand[0] != null
+                && submittedCommand[0].intent().kind() == IntentKind.RESET_MEMORY) {
+            return result;
         } else if (result.status() == CommandSubmissionStatus.ACCEPTED) {
             appendConversationTurn(historyKey, new ConversationTurn("player", commandText));
             appendConversationTurn(historyKey, new ConversationTurn("openplayer", result.message()));

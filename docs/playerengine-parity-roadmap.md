@@ -249,7 +249,7 @@ OpenPlayer already has:
 
 ### Phase 10: Farming, Fishing, and Repeatable Work Loops
 
-**Status:** Phase 10 implements bounded `FARM_NEARBY` and truthful `FISH` command handling. `FARM_NEARBY` accepts blank or a capped positive radius, scans only loaded nearby blocks, harvests one mature vanilla crop per queued task, uses vanilla block drops, and replants only after successful placement when the NPC carries the matching seed/item. `FISH` accepts blank, capped positive seconds, `stop`, or `cancel`, but actual cast/reel execution is deterministically rejected until a safe NPC fishing-hook adapter exists because vanilla fishing hooks are player-bound; OpenPlayer does not simulate fake hook or loot. Both commands remain gated by `allowWorldActions` and surface bounded monitor/rejection reasons for no target, harvested/replanted counts, no-replant cases, unsupported fishing, and cancel paths.
+**Status:** Phase 10 implements bounded `FARM_NEARBY` and truthful `FISH` command handling. `FARM_NEARBY` accepts blank or a capped positive radius, scans only loaded nearby blocks, harvests one mature crop per queued task, uses vanilla block drops, and replants only after successful placement when server block/item metadata exposes a same-block replant capability and the NPC carries the required item. Nether wart maturity is the current explicit adapter exception because vanilla exposes it outside `CropBlock`. `FISH` accepts blank, capped positive seconds, `stop`, or `cancel`, but actual cast/reel execution is deterministically rejected until a safe NPC fishing-hook adapter exists because vanilla fishing hooks are player-bound; OpenPlayer does not simulate fake hook or loot. Both commands remain gated by `allowWorldActions` and surface bounded monitor/rejection reasons for no target, harvested/replanted counts, no-replant cases, unsupported fishing, and cancel paths.
 
 **Objective:** Implement common repeatable work commands.
 
@@ -301,6 +301,148 @@ OpenPlayer already has:
 **Acceptance Criteria:**
 
 - Each task must be added as a separate reviewed phase with explicit safety and cancellation semantics.
+
+---
+
+## Remaining Post-12 Parity Phases
+
+The first twelve phases establish a bounded first-party runtime foundation, but PlayerEngine/AltoClef also exposes broader task families such as command control, body-language movement, real fishing, chunk search, structure location, portal/dimension travel, richer resource gathering, and speedrun/endgame tasks. These require separate clean-room phases because they can mutate world state, run for a long time, load or inspect chunks, cross dimensions, or imply success when vanilla NPC support is incomplete.
+
+### Phase 13: Control, Memory, and Expression Commands
+
+**Objective:** Implement the low-risk command families that are currently recognized but rejected: `PAUSE`, `UNPAUSE`, `RESET_MEMORY`, and `BODY_LANGUAGE`, plus cleanup of unreachable truthful-unsupported code paths.
+
+**Capabilities:**
+
+- Pause and unpause automation without losing the active/queued task state unless explicitly stopped.
+- Surface paused state in controller snapshots, status summaries, and safe diagnostics.
+- Reset bounded local conversation/runtime memory without deleting character files or secrets.
+- Execute safe body-language actions such as look, nod-like look motion, crouch/sneak pulse, swing/wave, and idle stance where vanilla NPC state supports it.
+- Remove or hard-disable stale fake fishing execution paths until a real hook adapter exists.
+
+**Acceptance Criteria:**
+
+- Paused automation performs no world/inventory/combat mutations and does not advance active task progress.
+- `STOP` still cancels paused tasks.
+- `RESET_MEMORY` clears only safe local history/state and reports exactly what was cleared.
+- Body-language instructions are bounded, visual-only, and deterministic; unsupported gestures reject without pretending.
+
+### Phase 14: Interaction and Targeted Combat Refinement
+
+**Objective:** Implement safe `INTERACT` and richer `ATTACK_TARGET` semantics without arbitrary entity/block use.
+
+**Capabilities:**
+
+- `INTERACT block <x> <y> <z>` for loaded nearby whitelisted interactions such as door/button/lever/use-on-empty-hand where no inventory loss can occur.
+- `INTERACT entity <entity_type_or_uuid> [radius]` for safe non-destructive entity interactions when vanilla semantics are predictable.
+- `ATTACK_TARGET <entity_type_or_uuid> [radius]` with owner/same-dimension checks and hostile/explicit-target policy.
+- Clear rejection for villagers, trading, animal breeding, buckets, item-use-on-block, or modded interactions until specific adapters exist.
+
+**Acceptance Criteria:**
+
+- No arbitrary right-click passthrough from provider text.
+- Interactions are loaded-only, nearby-only, cooldown-gated, and policy-gated.
+- Combat target selection cannot attack players or passive entities unless a future explicit trust policy is added.
+
+### Phase 15: Real Fishing and Repeatable Work Runtime
+
+**Objective:** Replace truthful `FISH` rejection with a real server-authoritative NPC fishing adapter, or keep rejection if a safe adapter cannot be implemented cleanly.
+
+**Capabilities:**
+
+- Spawn/drive a real fishing hook or equivalent first-party server-side task that produces loot only through vanilla loot mechanics.
+- Track cast, bite, reel, timeout, rod durability, inventory capacity, and cancellation.
+- Add bounded repeat counts for farming/fishing/deposit loops without infinite automation.
+
+**Acceptance Criteria:**
+
+- No fake hook, fake swing success, or fabricated loot.
+- Loot is considered complete only after entering NPC inventory.
+- STOP/cancel recovers hook/task state without item loss.
+
+### Phase 16: Loaded Chunk Exploration and Search Tasks
+
+**Objective:** Upgrade `EXPLORE_CHUNKS` from deterministic unsupported to a bounded loaded/opt-in exploration task.
+
+**Capabilities:**
+
+- Search only loaded chunks by default; optionally allow limited server-authorized chunk stepping with strict caps.
+- Maintain visited-chunk memory per NPC/session with reset support.
+- Search for blocks/entities/biomes through the existing loaded-area navigator and report progress.
+
+**Acceptance Criteria:**
+
+- No unbounded chunk generation or server locate abuse.
+- Search is cancellable, status-visible, and capped by radius/chunk count/ticks.
+- Memory is bounded and resettable.
+
+### Phase 17: Universal Resource and Affordance Planner
+
+**Objective:** Move `GET_ITEM` and related resource tasks away from hardcoded per-item scripts toward a universal capability layer. OpenPlayer should implement reusable Minecraft affordances, while the AI/provider may choose goals and high-level strategies only through validated schemas.
+
+**Capabilities:**
+
+- Represent visible loaded-world affordances generically: breakable blocks, reachable dropped items, craftable recipes, smeltable recipes, usable workstations, safe containers, simple entity interactions, carried tools, and inventory capacity.
+- Query server registries, tags, recipes, loot/drop outcomes where safely inspectable, and block/item/entity metadata instead of maintaining one `CollectXTask` per resource.
+- Plan resource acquisition as bounded primitive chains such as locate-visible-source -> navigate -> equip tool -> break/collect -> verify inventory delta -> craft/smelt/deposit, with every step observable and cancellable.
+- Let the AI choose among exposed strategies by emitting validated goals or primitive plans; never let provider text call arbitrary world methods, bypass policy, or invent unsupported operations.
+- Keep small explicit adapters only for genuinely special mechanics with non-obvious semantics, such as buckets, shearing, milking, fishing, portals, trading, or modded machines.
+
+**Acceptance Criteria:**
+
+- No hidden ore X-ray, unloaded search, or hardcoded success claims.
+- Generic planners derive possible actions from live server state and registries where possible, and reject unsupported metadata shapes deterministically.
+- Blocks/items/entities are mutated only after target/tool/path/policy checks pass.
+- Completion is based on actual NPC inventory/world-state deltas, not on provider claims.
+- Special-case adapters are additive capability modules, not the default architecture.
+
+### Phase 18: Structure Locate and Loot Tasks
+
+**Objective:** Implement a safe subset of structure location/looting without uncontrolled long-range search.
+
+**Capabilities:**
+
+- Server-authorized `LOCATE_STRUCTURE` policies that may use loaded-only sightings first and optionally capped server locate calls when explicitly enabled.
+- Structure approach and simple loot-container plans for known vanilla structures with no-loss container transfer semantics.
+- Truthful unsupported for complex/destructive structures until adapters exist.
+
+**Acceptance Criteria:**
+
+- No implicit chunk loading or long-distance teleport/path claims.
+- Looting uses existing container no-loss semantics and never deletes or overwrites items.
+- Locate results clearly state source: loaded scan, configured locate API, or unsupported.
+
+### Phase 19: Portal and Dimension Travel
+
+**Objective:** Implement `USE_PORTAL` and `TRAVEL_NETHER` through reviewed portal/dimension safety semantics.
+
+**Capabilities:**
+
+- Detect nearby loaded existing portals and use them when pathable and safe.
+- Optionally build simple portals only from carried/available obsidian or bucket-flow adapter after separate safety review.
+- Track dimension transition, timeout, owner relation, return path, and hazard recovery.
+
+**Acceptance Criteria:**
+
+- No cross-dimension task claims without an observed dimension transition.
+- Portal construction is no-loss and rollback-aware where possible.
+- Nether hazards and return failure are reported, not hidden.
+
+### Phase 20: Stronghold, End, and Speedrun Task Family
+
+**Objective:** Add explicit endgame task orchestration only after travel/resource/search foundations are safe.
+
+**Capabilities:**
+
+- Stronghold coordinate estimation/locate as a transparent, bounded task.
+- End portal preparation, travel, dragon-fight primitives, bed/pearl tactics only if safely expressible for NPCs.
+- A high-level `END_GAME_TASK` that is a task tree over already-reviewed primitives, not a monolithic opaque bot.
+
+**Acceptance Criteria:**
+
+- Every subtask is visible, cancellable, and based on implemented primitives.
+- No speedrun claim unless the complete dependency chain exists and local integration QA passes.
+- Failures return truthful partial progress and recovery state.
 
 ---
 

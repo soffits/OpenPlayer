@@ -72,6 +72,9 @@ public final class NavigationRuntime {
         reachableStatus = reachable ? NavigationTargetStatus.YES : NavigationTargetStatus.NO;
     }
 
+    public void suspend() {
+    }
+
     public void complete() {
         state = NavigationState.COMPLETED;
         lastReason = "completed";

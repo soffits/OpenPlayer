@@ -127,6 +127,14 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must document nearby loaded furnace limitation");
         require(prompt.contains("NPC-carried recipe input plus NPC-carried fuel"),
                 "system prompt must document carried input and fuel requirement");
+        require(prompt.contains("For PAUSE, UNPAUSE, and RESET_MEMORY, instruction must be blank"),
+                "system prompt must document control command blank syntax");
+        require(prompt.contains("RESET_MEMORY clears only bounded local conversation history"),
+                "system prompt must document bounded reset memory scope");
+        require(prompt.contains("For BODY_LANGUAGE, instruction must be blank, idle, wave, swing, crouch, uncrouch, or look_owner"),
+                "system prompt must document body language grammar");
+        require(prompt.contains("unsupported gestures such as nod and shake should use UNAVAILABLE"),
+                "system prompt must not overclaim unsupported gestures");
         require(prompt.contains("It is asynchronous"),
                 "system prompt must document async smelting behavior");
         require(prompt.contains("REPORT_STATUS observes progress"),

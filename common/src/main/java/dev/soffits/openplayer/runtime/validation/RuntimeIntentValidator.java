@@ -1,6 +1,7 @@
 package dev.soffits.openplayer.runtime.validation;
 
 import dev.soffits.openplayer.automation.AutomationInstructionParser;
+import dev.soffits.openplayer.automation.BodyLanguageInstructionParser;
 import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser;
 import dev.soffits.openplayer.automation.advanced.AdvancedTaskPolicy;
 import dev.soffits.openplayer.automation.building.BuildPlanParser;
@@ -23,6 +24,9 @@ public final class RuntimeIntentValidator {
         }
         return switch (kind) {
             case STOP -> requireBlankInstruction(intent, "STOP");
+            case PAUSE -> requireBlankInstruction(intent, "PAUSE");
+            case UNPAUSE -> requireBlankInstruction(intent, "UNPAUSE");
+            case RESET_MEMORY -> requireBlankInstruction(intent, "RESET_MEMORY");
             case REPORT_STATUS -> requireBlankInstruction(intent, "REPORT_STATUS");
             case MOVE -> requireCoordinateInstruction(intent, "MOVE");
             case GOTO -> requireGotoInstruction(intent);
@@ -67,14 +71,11 @@ public final class RuntimeIntentValidator {
             case GET_ITEM -> requireItemCountInstruction(intent, "GET_ITEM");
             case SMELT_ITEM -> requireItemCountInstruction(intent, "SMELT_ITEM");
             case INTERACT -> RuntimeIntentValidationResult.rejected("INTERACT is not implemented by the vanilla runtime");
+            case BODY_LANGUAGE -> requireBodyLanguageInstruction(intent);
             case CHAT -> RuntimeIntentValidationResult.rejected("CHAT cannot be submitted to automation");
             case UNAVAILABLE -> RuntimeIntentValidationResult.rejected("UNAVAILABLE cannot be submitted to automation");
             case OBSERVE -> RuntimeIntentValidationResult.rejected("OBSERVE cannot be submitted to automation");
-            case ATTACK_TARGET,
-                    PAUSE,
-                    UNPAUSE,
-                    RESET_MEMORY,
-                    BODY_LANGUAGE -> rejectUnimplemented(kind);
+            case ATTACK_TARGET -> rejectUnimplemented(kind);
         };
     }
 
@@ -144,6 +145,13 @@ public final class RuntimeIntentValidator {
         return RuntimeIntentValidationResult.rejected(
                 "FISH instruction must be blank, stop, cancel, or a positive duration in seconds"
         );
+    }
+
+    private static RuntimeIntentValidationResult requireBodyLanguageInstruction(CommandIntent intent) {
+        if (BodyLanguageInstructionParser.parseOrNull(intent.instruction()) == null) {
+            return RuntimeIntentValidationResult.rejected(BodyLanguageInstructionParser.USAGE);
+        }
+        return RuntimeIntentValidationResult.accepted();
     }
 
     private static RuntimeIntentValidationResult requireBuildStructureInstruction(CommandIntent intent) {

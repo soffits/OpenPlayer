@@ -26,6 +26,7 @@ import dev.soffits.openplayer.automation.survival.SurvivalFoodPolicy;
 import dev.soffits.openplayer.automation.survival.SurvivalHealthPolicy;
 import dev.soffits.openplayer.automation.survival.SurvivalTargetPolicy;
 import dev.soffits.openplayer.automation.work.FarmingWorkPolicy;
+import dev.soffits.openplayer.automation.work.FarmingWorkPolicy.FarmingReplantPlan;
 import dev.soffits.openplayer.automation.work.FishingWorkPolicy;
 import dev.soffits.openplayer.automation.workstation.WorkstationCapability;
 import dev.soffits.openplayer.automation.workstation.WorkstationDiagnostics;
@@ -149,6 +150,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private AutomationControllerMonitor activeMonitor;
         private NpcOwnerId ownerId;
         private String idleSurvivalReason = "idle";
+        private boolean paused;
 
         private VanillaAutomationController(OpenPlayerNpcEntity entity) {
             if (entity == null) {
@@ -175,11 +177,44 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 stopAll();
                 return accepted("STOP accepted");
             }
+            if (kind == IntentKind.PAUSE) {
+                if (!AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
+                    return rejected("PAUSE requires a blank instruction");
+                }
+                paused = true;
+                suspendNavigation();
+                entity.setDeltaMovement(Vec3.ZERO);
+                return accepted("PAUSE accepted");
+            }
+            if (kind == IntentKind.UNPAUSE) {
+                if (!AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
+                    return rejected("UNPAUSE requires a blank instruction");
+                }
+                paused = false;
+                reissueActiveNavigation();
+                return accepted("UNPAUSE accepted");
+            }
+            if (kind == IntentKind.RESET_MEMORY) {
+                if (!AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
+                    return rejected("RESET_MEMORY requires a blank instruction");
+                }
+                return accepted("RESET_MEMORY accepted: no automation-local memory was cleared");
+            }
             if (kind == IntentKind.REPORT_STATUS) {
                 if (!AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
                     return rejected("REPORT_STATUS requires a blank instruction");
                 }
                 return accepted("REPORT_STATUS accepted: " + statusSummary());
+            }
+            if (kind == IntentKind.BODY_LANGUAGE) {
+                BodyLanguageInstruction bodyLanguage = BodyLanguageInstructionParser.parseOrNull(intent.instruction());
+                if (bodyLanguage == null) {
+                    return rejected(BodyLanguageInstructionParser.USAGE);
+                }
+                if (paused) {
+                    return rejected("BODY_LANGUAGE is unavailable while automation is paused");
+                }
+                return applyBodyLanguage(bodyLanguage);
             }
             if (kind == IntentKind.INVENTORY_QUERY) {
                 if (!AutomationInstructionParser.isBlankInstruction(intent.instruction())) {
@@ -786,6 +821,10 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (entity.level().isClientSide) {
                 return;
             }
+            if (paused) {
+                entity.setDeltaMovement(Vec3.ZERO);
+                return;
+            }
             interactionCooldown.tick();
             survivalCooldown.tick();
             if (activeCommand == null) {
@@ -832,6 +871,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                     queuedKinds.size(),
                     queuedKinds,
                     interactionCooldown.remainingTicks(),
+                    paused,
                     navigationRuntime.snapshot()
             );
         }
@@ -851,6 +891,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             interactionCooldown.reset();
             survivalCooldown.reset();
             idleSurvivalReason = "idle";
+            paused = false;
             navigationRuntime.reset();
             resetAndStopNavigation();
             entity.setDeltaMovement(Vec3.ZERO);
@@ -880,7 +921,6 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                     || command.kind() == IntentKind.PLACE_BLOCK
                     || command.kind() == IntentKind.BUILD_STRUCTURE
                     || command.kind() == IntentKind.SMELT_ITEM
-                    || command.kind() == IntentKind.FISH
                     || command.kind() == IntentKind.ATTACK_NEAREST
                     || command.kind() == IntentKind.GUARD_OWNER
                     || command.kind() == IntentKind.DEFEND_OWNER
@@ -922,10 +962,6 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             if (activeCommand.kind() == IntentKind.FARM_NEARBY) {
                 farmNearby(activeCommand);
-                return;
-            }
-            if (activeCommand.kind() == IntentKind.FISH) {
-                fish(activeCommand);
                 return;
             }
             if (activeCommand.kind() == IntentKind.BREAK_BLOCK) {
@@ -1280,8 +1316,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return;
             }
             BlockState cropState = serverLevel.getBlockState(cropPos);
-            Item replantItem = FarmingWorkPolicy.replantItem(cropState);
-            BlockState replantState = FarmingWorkPolicy.replantState(cropState);
+            FarmingReplantPlan replantPlan = FarmingWorkPolicy.replantPlan(serverLevel, cropPos, cropState);
             lookAtBlock(cropPos);
             if (!isWithinInteractionDistance(cropPos)) {
                 moveNearBlock(cropPos);
@@ -1294,10 +1329,12 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 failActiveCommand("crop_harvest_failed");
                 return;
             }
-            if (replantItem == null || replantState == null) {
-                completeActiveCommand("farm:harvested_no_replant unsupported_mapping harvested=1");
+            if (replantPlan == null) {
+                completeActiveCommand("farm:harvested_no_replant unsupported_replant_capability harvested=1");
                 return;
             }
+            Item replantItem = replantPlan.item();
+            BlockState replantState = replantPlan.state();
             if (entity.normalInventoryCount(replantItem) <= 0) {
                 completeActiveCommand("farm:harvested_no_replant missing=" + itemId(replantItem) + " harvested=1");
                 return;
@@ -1332,7 +1369,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                             continue;
                         }
                         BlockState blockState = serverLevel.getBlockState(candidate);
-                        if (!FarmingWorkPolicy.isSupportedCrop(blockState) || !FarmingWorkPolicy.isMature(blockState)) {
+                        if (!FarmingWorkPolicy.isSupportedCrop(serverLevel, candidate, blockState)
+                                || !FarmingWorkPolicy.isMature(blockState)) {
                             continue;
                         }
                         double distance = entity.distanceToSqr(Vec3.atCenterOf(candidate));
@@ -1344,31 +1382,6 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 }
             }
             return bestPos;
-        }
-
-        private void fish(QueuedCommand command) {
-            ServerLevel serverLevel = serverLevel();
-            if (serverLevel == null) {
-                failActiveCommand("server_level_unavailable");
-                return;
-            }
-            if (!entity.getMainHandItem().is(Items.FISHING_ROD)
-                    && !entity.selectOrMoveNormalItemToHotbar(Items.FISHING_ROD)) {
-                failActiveCommand("missing_fishing_rod");
-                return;
-            }
-            if (!command.fishingCast()) {
-                stopNavigation();
-                entity.getLookControl().setLookAt(entity.getX(), entity.getEyeY() - 0.2D, entity.getZ() + 4.0D);
-                entity.swingMainHandAction();
-                command.markFishingCast();
-                return;
-            }
-            command.incrementFishingTicks();
-            if (command.fishingTicks() >= command.maxTicks()) {
-                entity.swingMainHandAction();
-                completeActiveCommand("fish:cast_wait_reel ticks=" + command.fishingTicks() + " loot=none hook=unsupported");
-            }
         }
 
         private void breakBlock(QueuedCommand command) {
@@ -1936,6 +1949,34 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             return snapshot().summary();
         }
 
+        private AutomationCommandResult applyBodyLanguage(BodyLanguageInstruction instruction) {
+            if (instruction == BodyLanguageInstruction.IDLE) {
+                entity.setShiftKeyDown(false);
+                return accepted("BODY_LANGUAGE accepted: idle");
+            }
+            if (instruction == BodyLanguageInstruction.WAVE || instruction == BodyLanguageInstruction.SWING) {
+                entity.swingMainHandAction();
+                return accepted("BODY_LANGUAGE accepted: " + instruction.name().toLowerCase());
+            }
+            if (instruction == BodyLanguageInstruction.CROUCH) {
+                entity.setShiftKeyDown(true);
+                return accepted("BODY_LANGUAGE accepted: crouch");
+            }
+            if (instruction == BodyLanguageInstruction.UNCROUCH) {
+                entity.setShiftKeyDown(false);
+                return accepted("BODY_LANGUAGE accepted: uncrouch");
+            }
+            if (instruction == BodyLanguageInstruction.LOOK_OWNER) {
+                ServerPlayer player = owner();
+                if (player == null) {
+                    return rejected("BODY_LANGUAGE look_owner requires an available owner in this dimension");
+                }
+                entity.getLookControl().setLookAt(player.getX(), player.getEyeY(), player.getZ());
+                return accepted("BODY_LANGUAGE accepted: look_owner");
+            }
+            return rejected(BodyLanguageInstructionParser.USAGE);
+        }
+
         private List<IntentKind> queuedKinds() {
             List<IntentKind> queuedKinds = new ArrayList<>(queuedCommands.size());
             for (QueuedCommand queuedCommand : queuedCommands) {
@@ -2163,6 +2204,11 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             navigationRuntime.complete();
         }
 
+        private void suspendNavigation() {
+            entity.getNavigation().stop();
+            navigationRuntime.suspend();
+        }
+
         private void cancelNavigation(String reason) {
             entity.getNavigation().stop();
             navigationRuntime.fail(reason);
@@ -2379,8 +2425,6 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             private int reachTicks;
             private boolean patrolReturn;
             private boolean smeltStarted;
-            private boolean fishingCast;
-            private int fishingTicks;
 
             private QueuedCommand(IntentKind kind, Coordinate coordinate, double radius) {
                 this(kind, coordinate, radius, null, null, false, null, null, null, 0, false);
@@ -2442,12 +2486,6 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
             private static QueuedCommand farmNearby(double radius) {
                 return new QueuedCommand(IntentKind.FARM_NEARBY, null, radius);
-            }
-
-            private static QueuedCommand fish(int maxTicks) {
-                return new QueuedCommand(
-                        IntentKind.FISH, null, 0.0D, null, null, false, null, null, null, maxTicks, false
-                );
             }
 
             private static QueuedCommand breakBlock(Coordinate coordinate) {
@@ -2572,22 +2610,6 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
             private void markSmeltStarted() {
                 smeltStarted = true;
-            }
-
-            private boolean fishingCast() {
-                return fishingCast;
-            }
-
-            private void markFishingCast() {
-                fishingCast = true;
-            }
-
-            private int fishingTicks() {
-                return fishingTicks;
-            }
-
-            private void incrementFishingTicks() {
-                fishingTicks++;
             }
 
             private int reachTicks() {

@@ -16,6 +16,7 @@ public record AutomationControllerSnapshot(
         int queuedCommandCount,
         List<IntentKind> queuedKinds,
         int interactionCooldownTicks,
+        boolean paused,
         NavigationSnapshot navigationSnapshot
 ) {
     public AutomationControllerSnapshot {
@@ -59,6 +60,24 @@ public record AutomationControllerSnapshot(
         monitorReason = AutomationControllerMonitor.bounded(monitorReason);
     }
 
+    public AutomationControllerSnapshot(
+            int health,
+            int selectedHotbarSlot,
+            boolean active,
+            IntentKind activeKind,
+            AutomationControllerMonitorStatus monitorStatus,
+            String monitorReason,
+            int elapsedTicks,
+            int maxTicks,
+            int queuedCommandCount,
+            List<IntentKind> queuedKinds,
+            int interactionCooldownTicks,
+            NavigationSnapshot navigationSnapshot
+    ) {
+        this(health, selectedHotbarSlot, active, activeKind, monitorStatus, monitorReason, elapsedTicks, maxTicks,
+                queuedCommandCount, queuedKinds, interactionCooldownTicks, false, navigationSnapshot);
+    }
+
     public static AutomationControllerSnapshot idle(
             int health,
             int selectedHotbarSlot,
@@ -79,6 +98,33 @@ public record AutomationControllerSnapshot(
                 queuedKinds.size(),
                 queuedKinds,
                 interactionCooldownTicks,
+                false,
+                NavigationSnapshot.idle()
+        );
+    }
+
+    public static AutomationControllerSnapshot idle(
+            int health,
+            int selectedHotbarSlot,
+            AutomationControllerMonitorStatus monitorStatus,
+            String monitorReason,
+            List<IntentKind> queuedKinds,
+            int interactionCooldownTicks,
+            boolean paused
+    ) {
+        return new AutomationControllerSnapshot(
+                health,
+                selectedHotbarSlot,
+                false,
+                null,
+                monitorStatus,
+                monitorReason,
+                0,
+                0,
+                queuedKinds.size(),
+                queuedKinds,
+                interactionCooldownTicks,
+                paused,
                 NavigationSnapshot.idle()
         );
     }
@@ -107,6 +153,37 @@ public record AutomationControllerSnapshot(
                 queuedKinds.size(),
                 queuedKinds,
                 interactionCooldownTicks,
+                false,
+                navigationSnapshot
+        );
+    }
+
+    public static AutomationControllerSnapshot active(
+            int health,
+            int selectedHotbarSlot,
+            IntentKind activeKind,
+            AutomationControllerMonitorStatus monitorStatus,
+            String monitorReason,
+            int elapsedTicks,
+            int maxTicks,
+            List<IntentKind> queuedKinds,
+            int interactionCooldownTicks,
+            boolean paused,
+            NavigationSnapshot navigationSnapshot
+    ) {
+        return new AutomationControllerSnapshot(
+                health,
+                selectedHotbarSlot,
+                true,
+                activeKind,
+                monitorStatus,
+                monitorReason,
+                elapsedTicks,
+                maxTicks,
+                queuedKinds.size(),
+                queuedKinds,
+                interactionCooldownTicks,
+                paused,
                 navigationSnapshot
         );
     }
@@ -118,6 +195,7 @@ public record AutomationControllerSnapshot(
                 + ", active=" + activeValue
                 + ", queued=" + queuedCommandCount
                 + ", queuedKinds=" + queuedKindsSummary()
+                + ", paused=" + paused
                 + ", interactCd=" + interactionCooldownTicks
                 + ", ctrl=" + monitorStatus.name().toLowerCase()
                 + ", reason=" + monitorReason

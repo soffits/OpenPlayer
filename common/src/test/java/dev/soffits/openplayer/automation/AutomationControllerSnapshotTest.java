@@ -20,6 +20,7 @@ public final class AutomationControllerSnapshotTest {
         negativeValuesThrowIllegalArgumentException();
         monitorReasonIsNormalizedAndBounded();
         summaryIncludesBoundedNavigationTelemetry();
+        pausedSnapshotPreservesActiveAndQueuedState();
     }
 
     private static void idleSnapshotSummaryIsStable() {
@@ -34,7 +35,7 @@ public final class AutomationControllerSnapshotTest {
 
         require(!snapshot.active(), "idle snapshot must not be active");
         require(snapshot.activeKind() == null, "idle snapshot must not expose active kind");
-        require(("hp=20, slot=2, active=idle, queued=0, queuedKinds=[], interactCd=3, ctrl=idle, reason=idle, "
+        require(("hp=20, slot=2, active=idle, queued=0, queuedKinds=[], paused=false, interactCd=3, ctrl=idle, reason=idle, "
                 + "ticks=0/0, nav=idle, navTarget=none:none, navDistSq=0.0, navReplans=0, navRecoveries=0, "
                 + "navLoaded=unknown, navReachable=unknown, navReason=idle")
                 .equals(snapshot.summary()), "idle summary must be deterministic");
@@ -57,10 +58,33 @@ public final class AutomationControllerSnapshotTest {
         require(snapshot.active(), "active snapshot must be active");
         require(snapshot.activeKind() == IntentKind.MOVE, "active snapshot must expose active kind");
         require(("hp=17, slot=4, active=MOVE, queued=3, queuedKinds=[LOOK>COLLECT_ITEMS>PATROL], "
-                + "interactCd=5, ctrl=active, reason=active, ticks=12/1200, nav=idle, navTarget=none:none, "
+                + "paused=false, interactCd=5, ctrl=active, reason=active, ticks=12/1200, nav=idle, navTarget=none:none, "
                 + "navDistSq=0.0, navReplans=0, navRecoveries=0, navLoaded=unknown, navReachable=unknown, "
                 + "navReason=idle")
                 .equals(snapshot.summary()), "active summary must include queue order and ticks");
+    }
+
+    private static void pausedSnapshotPreservesActiveAndQueuedState() {
+        AutomationControllerSnapshot snapshot = AutomationControllerSnapshot.active(
+                18,
+                1,
+                IntentKind.PATROL,
+                AutomationControllerMonitorStatus.ACTIVE,
+                "active",
+                7,
+                1200,
+                List.of(IntentKind.LOOK, IntentKind.FOLLOW_OWNER),
+                2,
+                true,
+                NavigationSnapshot.idle()
+        );
+
+        require(snapshot.paused(), "paused snapshot must expose paused state");
+        require(snapshot.active(), "paused snapshot must preserve active task state");
+        require(snapshot.activeKind() == IntentKind.PATROL, "paused snapshot must preserve active task kind");
+        require(snapshot.queuedKinds().equals(List.of(IntentKind.LOOK, IntentKind.FOLLOW_OWNER)),
+                "paused snapshot must preserve queued task order");
+        require(snapshot.summary().contains("paused=true"), "paused summary must be deterministic");
     }
 
     private static void queuedKindsAreDefensivelyCopiedAndUnmodifiable() {

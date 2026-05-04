@@ -63,6 +63,8 @@ public final class CompanionLifecycleManagerTest {
         chatConversationRecordsNpcReplyWithoutAutomation();
         unavailableConversationRecordsSafeNpcReplyWithoutAutomation();
         acceptedConversationHistoryDoesNotRetainProviderInstruction();
+        resetMemoryClearsOnlySelectedConversationHistory();
+        resetMemoryTextPathDoesNotReappendClearedTurns();
         conversationHistoryEvictsOldOwnerKeysFromLaterPrompts();
         conversationHistoryEvictsOldAssignmentKeysFromLaterPrompts();
     }
@@ -418,6 +420,93 @@ public final class CompanionLifecycleManagerTest {
         }
     }
 
+    private static void resetMemoryClearsOnlySelectedConversationHistory() {
+        String previousEndpoint = System.getProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT");
+        String previousModel = System.getProperty("OPENPLAYER_INTENT_PROVIDER_MODEL");
+        String previousApiKey = System.getProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY");
+        System.setProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT", "https://example.invalid/v1/chat/completions");
+        System.setProperty("OPENPLAYER_INTENT_PROVIDER_MODEL", "test-model");
+        System.setProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY", "test-key");
+        try {
+            TestNpcService service = new TestNpcService();
+            LocalCharacterDefinition character = conversationCharacter();
+            HistoryInspectingIntentParser parser = new HistoryInspectingIntentParser();
+            CompanionLifecycleManager manager = CompanionLifecycleManager.withAssignments(
+                    () -> service,
+                    () -> new LocalAssignmentRepositoryResult(List.of(LocalAssignmentDefinition.defaultFor(character)), List.of(character), List.of()),
+                    () -> parser
+            );
+            manager.spawnSelectedAssignment(new NpcOwnerId(OWNER_ID),
+                    new NpcSpawnLocation("minecraft:overworld", 1.0D, 64.0D, 1.0D), character.id());
+            CommandSubmissionResult first = manager.submitSelectedCommandText(OWNER_ID, character.id(), "please follow me");
+            require(first.status() == CommandSubmissionStatus.ACCEPTED, "first command must create bounded history");
+
+            CommandSubmissionResult reset = manager.submitSelectedCommand(
+                    OWNER_ID,
+                    character.id(),
+                    new AiPlayerNpcCommand(UUID.randomUUID(),
+                            new CommandIntent(IntentKind.RESET_MEMORY, IntentPriority.NORMAL, ""))
+            );
+            require(reset.status() == CommandSubmissionStatus.ACCEPTED, "RESET_MEMORY must be accepted at lifecycle layer");
+            require(reset.message().contains("conversationHistory=true"),
+                    "RESET_MEMORY must report cleared conversation history truthfully");
+            require(reset.message().contains("automationLocalMemory=false"),
+                    "RESET_MEMORY must not claim unavailable local memory cleanup");
+
+            CommandSubmissionResult second = manager.submitSelectedCommandText(OWNER_ID, character.id(), "after reset");
+            require(second.status() == CommandSubmissionStatus.ACCEPTED, "conversation must continue after reset");
+            String promptAfterReset = parser.prompts.get(1);
+            require(!promptAfterReset.contains("Action accepted: FOLLOW_OWNER"),
+                    "RESET_MEMORY must clear selected owner and assignment conversation history");
+            require(service.submittedCommandCount == 2,
+                    "RESET_MEMORY must not submit an automation command to the runtime service");
+        } finally {
+            restoreProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT", previousEndpoint);
+            restoreProperty("OPENPLAYER_INTENT_PROVIDER_MODEL", previousModel);
+            restoreProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY", previousApiKey);
+        }
+    }
+
+    private static void resetMemoryTextPathDoesNotReappendClearedTurns() {
+        String previousEndpoint = System.getProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT");
+        String previousModel = System.getProperty("OPENPLAYER_INTENT_PROVIDER_MODEL");
+        String previousApiKey = System.getProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY");
+        System.setProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT", "https://example.invalid/v1/chat/completions");
+        System.setProperty("OPENPLAYER_INTENT_PROVIDER_MODEL", "test-model");
+        System.setProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY", "test-key");
+        try {
+            TestNpcService service = new TestNpcService();
+            LocalCharacterDefinition character = conversationCharacter();
+            ResetMemoryTextPathParser parser = new ResetMemoryTextPathParser();
+            CompanionLifecycleManager manager = CompanionLifecycleManager.withAssignments(
+                    () -> service,
+                    () -> new LocalAssignmentRepositoryResult(List.of(LocalAssignmentDefinition.defaultFor(character)), List.of(character), List.of()),
+                    () -> parser
+            );
+            manager.spawnSelectedAssignment(new NpcOwnerId(OWNER_ID),
+                    new NpcSpawnLocation("minecraft:overworld", 1.0D, 64.0D, 1.0D), character.id());
+
+            CommandSubmissionResult first = manager.submitSelectedCommandText(OWNER_ID, character.id(), "previous history");
+            CommandSubmissionResult reset = manager.submitSelectedCommandText(OWNER_ID, character.id(), "reset everything");
+            CommandSubmissionResult afterReset = manager.submitSelectedCommandText(OWNER_ID, character.id(), "fresh prompt");
+
+            require(first.status() == CommandSubmissionStatus.ACCEPTED, "first text command must create history");
+            require(reset.status() == CommandSubmissionStatus.ACCEPTED, "RESET_MEMORY text command must be accepted");
+            require(afterReset.status() == CommandSubmissionStatus.ACCEPTED, "conversation must continue after reset text command");
+            require(parser.prompts.size() == 3, "reset text test must inspect the next prompt");
+            String nextPrompt = parser.prompts.get(2);
+            require(!nextPrompt.contains("previous history"), "RESET_MEMORY text path must clear previous player history");
+            require(!nextPrompt.contains("Action accepted: FOLLOW_OWNER"), "RESET_MEMORY text path must clear prior action summary");
+            require(!nextPrompt.contains("reset everything"), "RESET_MEMORY text path must not reappend reset player text");
+            require(!nextPrompt.contains("RESET_MEMORY accepted"), "RESET_MEMORY text path must not reappend reset result");
+            require(service.submittedCommandCount == 2, "RESET_MEMORY text path must not submit automation to runtime");
+        } finally {
+            restoreProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT", previousEndpoint);
+            restoreProperty("OPENPLAYER_INTENT_PROVIDER_MODEL", previousModel);
+            restoreProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY", previousApiKey);
+        }
+    }
+
     private static void conversationHistoryEvictsOldOwnerKeysFromLaterPrompts() {
         String previousEndpoint = System.getProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT");
         String previousModel = System.getProperty("OPENPLAYER_INTENT_PROVIDER_MODEL");
@@ -717,6 +806,19 @@ public final class CompanionLifecycleManagerTest {
                     ? "follow using token " + SECRET_TOKEN + " from " + SECRET_PATH + " " + RAW_TEXT.repeat(10)
                     : "follow owner safely";
             return new CommandIntent(IntentKind.FOLLOW_OWNER, IntentPriority.HIGH, instruction);
+        }
+    }
+
+    private static final class ResetMemoryTextPathParser implements IntentParser {
+        private final List<String> prompts = new ArrayList<>();
+
+        @Override
+        public CommandIntent parse(String input) {
+            prompts.add(input);
+            if (prompts.size() == 2) {
+                return new CommandIntent(IntentKind.RESET_MEMORY, IntentPriority.NORMAL, "");
+            }
+            return new CommandIntent(IntentKind.FOLLOW_OWNER, IntentPriority.HIGH, "follow owner safely");
         }
     }
 }

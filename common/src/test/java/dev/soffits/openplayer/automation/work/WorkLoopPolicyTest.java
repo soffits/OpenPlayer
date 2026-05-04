@@ -1,9 +1,12 @@
 package dev.soffits.openplayer.automation.work;
 
 import dev.soffits.openplayer.automation.AutomationInstructionParser;
+import dev.soffits.openplayer.automation.work.FarmingWorkPolicy.FarmingReplantPlan;
 import net.minecraft.SharedConstants;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.Bootstrap;
-import net.minecraft.world.item.Items;
+import net.minecraft.world.level.EmptyBlockGetter;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.NetherWartBlock;
@@ -35,17 +38,31 @@ public final class WorkLoopPolicyTest {
 
         require(FarmingWorkPolicy.isMature(matureWheat), "mature wheat should be mature");
         require(!FarmingWorkPolicy.isMature(youngWheat), "young wheat should not be mature");
-        require(FarmingWorkPolicy.replantItem(matureWheat) == Items.WHEAT_SEEDS, "wheat should replant with seeds");
-        require(FarmingWorkPolicy.replantItem(matureCarrots) == Items.CARROT, "carrots should replant with carrot");
-        require(FarmingWorkPolicy.replantItem(maturePotatoes) == Items.POTATO, "potatoes should replant with potato");
-        require(FarmingWorkPolicy.replantItem(matureBeetroots) == Items.BEETROOT_SEEDS,
-                "beetroots should replant with beetroot seeds");
-        require(FarmingWorkPolicy.replantItem(matureNetherWart) == Items.NETHER_WART,
-                "nether wart should replant with nether wart");
-        require(!FarmingWorkPolicy.isMature(FarmingWorkPolicy.replantState(matureWheat)),
+        requireReplantPlan(matureWheat, false, "wheat");
+        requireReplantPlan(matureCarrots, false, "carrots");
+        requireReplantPlan(maturePotatoes, false, "potatoes");
+        requireReplantPlan(matureBeetroots, false, "beetroots");
+        requireReplantPlan(matureNetherWart, true, "nether wart");
+        require(!FarmingWorkPolicy.isMature(requireReplantPlan(matureWheat, false, "wheat").state()),
                 "crop replant state should reset age");
-        require(FarmingWorkPolicy.replantItem(Blocks.OAK_LOG.defaultBlockState()) == null,
+        require(FarmingWorkPolicy.replantPlan(
+                EmptyBlockGetter.INSTANCE, BlockPos.ZERO, Blocks.OAK_LOG.defaultBlockState()
+        ) == null,
                 "non-crops should not have replant items");
+    }
+
+    private static FarmingReplantPlan requireReplantPlan(
+            BlockState matureState,
+            boolean adapterException,
+            String description
+    ) {
+        FarmingReplantPlan plan = FarmingWorkPolicy.replantPlan(EmptyBlockGetter.INSTANCE, BlockPos.ZERO, matureState);
+        require(plan != null, description + " should have a replant capability");
+        require(Block.byItem(plan.item()) == matureState.getBlock(), description + " replant item should resolve to same block");
+        require(plan.state().getBlock() == matureState.getBlock(), description + " replant state should use same block");
+        require(plan.adapterException() == adapterException,
+                description + " should report the expected adapter boundary");
+        return plan;
     }
 
     private static void validatesFarmRadiusParsing() {
