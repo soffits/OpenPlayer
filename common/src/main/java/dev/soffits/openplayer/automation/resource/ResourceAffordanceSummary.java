@@ -44,6 +44,12 @@ public record ResourceAffordanceSummary(String itemId, Item item, int requestedC
         return missing > 0 && normalInventoryCapacity >= missing && exactSafeDroppedCount >= missing;
     }
 
+    public boolean canAttemptVisibleBlockSourceAcquisition() {
+        int missing = missingCount();
+        return missing > 0 && normalInventoryCapacity >= missing && blockSource != null
+                && blockSource.seen() && !blockSource.diagnosticOnly() && blockSource.nearestBlockPos() != null;
+    }
+
     public String boundedDiagnostics(boolean containerSeen) {
         return boundedDiagnostics(containerSeen, "unknown");
     }
@@ -67,8 +73,13 @@ public record ResourceAffordanceSummary(String itemId, Item item, int requestedC
         }
         entries.add("workstations=" + workstationsSummary());
         entries.add("containers=" + (containerSeen ? "nearby_safe_loaded" : "none_seen"));
-        if (blockSource != null && blockSource.seen()) {
+        if (blockSource != null && blockSource.seen() && blockSource.diagnosticOnly()) {
             entries.add("block_sources=diagnostic_only matched=" + blockSource.matchedCount());
+        } else if (blockSource != null && blockSource.seen()) {
+            entries.add("block_sources=available matched=" + blockSource.matchedCount()
+                    + " nearest=" + blockSource.nearestBlockPos().toShortString());
+        } else if (blockSource != null && !"not_a_block_item".equals(blockSource.reason())) {
+            entries.add("block_sources=none reason=" + blockSource.reason());
         }
         return String.join("; ", entries);
     }
@@ -170,11 +181,24 @@ public record ResourceAffordanceSummary(String itemId, Item item, int requestedC
         }
     }
 
-    public record BlockSourceAffordance(boolean seen, int matchedCount, boolean diagnosticOnly, String reason) {
+    public record BlockSourceAffordance(boolean seen, int matchedCount, boolean diagnosticOnly, String reason,
+                                        BlockPos nearestBlockPos) {
+        public BlockSourceAffordance(boolean seen, int matchedCount, boolean diagnosticOnly, String reason) {
+            this(seen, matchedCount, diagnosticOnly, reason, null);
+        }
+
         public BlockSourceAffordance {
             if (matchedCount < 0 || reason == null || reason.isBlank()) {
                 throw new IllegalArgumentException("invalid block source affordance");
             }
+            if (seen && !diagnosticOnly && nearestBlockPos == null) {
+                throw new IllegalArgumentException("available block source requires a nearest block position");
+            }
+            nearestBlockPos = nearestBlockPos == null ? null : nearestBlockPos.immutable();
+        }
+
+        public static BlockSourceAffordance unavailable(String reason) {
+            return new BlockSourceAffordance(false, 0, true, reason);
         }
     }
 

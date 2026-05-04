@@ -15,6 +15,7 @@ public final class OpenAiCompatibleIntentProviderTest {
         systemPromptContainsRecommendedIntentKindsOnly();
         systemPromptIncludesPhaseFiveSyntax();
         systemPromptIncludesPlannedUnsupportedInstruction();
+        systemPromptSteersResourceAcquisitionToGetItem();
     }
 
     private static void resolvesV1BaseEndpoint() throws Exception {
@@ -229,6 +230,16 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must not tell providers to include COLLECT_FOOD token syntax");
         require(!prompt.contains("DEFEND_OWNER <"),
                 "system prompt must not tell providers to include DEFEND_OWNER token syntax");
+    }
+
+    private static void systemPromptSteersResourceAcquisitionToGetItem() {
+        String prompt = OpenAiCompatibleIntentProvider.systemPrompt();
+        require(prompt.contains("For chop, mine, gather, harvest, or break requests where the player's goal is obtaining a visible loaded block resource, choose GET_ITEM with the dropped item id and count"),
+                "system prompt must steer resource acquisition requests to GET_ITEM");
+        require(prompt.contains("Do not use GOTO block for resource acquisition; GOTO block is only navigation to reach or inspect a target"),
+                "system prompt must prevent GOTO block dead-ends for resource acquisition");
+        require(prompt.contains("visible block-item resources by navigating near a matching loaded block, breaking it, collecting real drops, and verifying NPC inventory count"),
+                "system prompt must describe verified visible block resource acquisition");
     }
 
     private static String normalize(String value) throws Exception {

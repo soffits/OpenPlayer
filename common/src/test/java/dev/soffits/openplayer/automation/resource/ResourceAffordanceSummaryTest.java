@@ -23,6 +23,7 @@ public final class ResourceAffordanceSummaryTest {
         diagnosticsAreBoundedAndTruthful();
         diagnosticsIncludeNetherRecoveryConstraints();
         diagnosticsIncludeGenericDimensionRecovery();
+        visibleBlockSourcesCanSatisfyBlockItemsWhenInventoryFits();
     }
 
     private static void exactInventoryCapacityUsesNormalInventoryOnly() {
@@ -107,8 +108,8 @@ public final class ResourceAffordanceSummaryTest {
                 List.of(new ResourceAffordanceSummary.WorkstationAffordance(
                         "crafting_table", new BlockPos(2, 64, 0), "vanilla_crafting_table"
                 )),
-                new ResourceAffordanceSummary.BlockSourceAffordance(true, 3, true,
-                        "generic_block_breaking_requires_safe_drop_adapter")
+                new ResourceAffordanceSummary.BlockSourceAffordance(true, 3, false,
+                        "visible_block_break_collect_verify", new BlockPos(3, 64, 0))
         );
 
         String diagnostics = summary.boundedDiagnostics(true);
@@ -120,8 +121,8 @@ public final class ResourceAffordanceSummaryTest {
                 "diagnostics must include candidate cap status");
         require(diagnostics.contains("workstations=crafting_table@"), "diagnostics must include workstation summary");
         require(diagnostics.contains("containers=nearby_safe_loaded"), "diagnostics must include container observation");
-        require(diagnostics.contains("block_sources=diagnostic_only matched=3"),
-                "block sources must be diagnostic-only");
+        require(diagnostics.contains("block_sources=available matched=3 nearest=3, 64, 0"),
+                "block sources must expose bounded acquisition capability");
     }
 
     private static void diagnosticsIncludeNetherRecoveryConstraints() {
@@ -154,6 +155,20 @@ public final class ResourceAffordanceSummaryTest {
                 "diagnostics must describe observed loaded world state");
         require(diagnostics.contains("generic_dimension_recovery=loaded_portal_or_explore_or_owner_path_if_available"),
                 "diagnostics must expose generic player-like recovery options");
+    }
+
+    private static void visibleBlockSourcesCanSatisfyBlockItemsWhenInventoryFits() {
+        ResourceAffordanceSummary summary = new ResourceAffordanceSummary(
+                "minecraft:oak_log", Items.OAK_LOG, 1, 0, 64, 0, 0, 8, false,
+                List.of(), List.of(),
+                new ResourceAffordanceSummary.BlockSourceAffordance(true, 2, false,
+                        "visible_block_break_collect_verify", new BlockPos(4, 64, 0))
+        );
+
+        require(summary.canAttemptVisibleBlockSourceAcquisition(),
+                "visible block sources must allow truthful GET_ITEM block acquisition attempts");
+        require(summary.blockSource().nearestBlockPos().equals(new BlockPos(4, 64, 0)),
+                "visible block source must preserve nearest loaded block target");
     }
 
     private static NonNullList<ItemStack> emptyInventory() {

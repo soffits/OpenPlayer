@@ -51,7 +51,7 @@ public final class ResourceAffordanceScanner {
                 ? List.of()
                 : workstationAffordances(serverLevel, entity.position());
         ResourceAffordanceSummary.BlockSourceAffordance blockSource = serverLevel == null
-                ? new ResourceAffordanceSummary.BlockSourceAffordance(false, 0, true, "server_level_unavailable")
+                ? ResourceAffordanceSummary.BlockSourceAffordance.unavailable("server_level_unavailable")
                 : blockSourceAffordance(serverLevel, entity.position(), itemId, item);
         return new ResourceAffordanceSummary(
                 itemId, item, requestedCount, carriedCount, capacity,
@@ -135,14 +135,15 @@ public final class ResourceAffordanceScanner {
     private ResourceAffordanceSummary.BlockSourceAffordance blockSourceAffordance(ServerLevel serverLevel, Vec3 origin,
                                                                                   String itemId, Item item) {
         if (!(item instanceof BlockItem)) {
-            return new ResourceAffordanceSummary.BlockSourceAffordance(false, 0, true, "not_a_block_item");
+            return ResourceAffordanceSummary.BlockSourceAffordance.unavailable("not_a_block_item");
         }
         LoadedAreaNavigator.BlockSearchResult result = loadedAreaNavigator.nearestLoadedBlock(
                 serverLevel, origin, itemId, DEFAULT_DROP_RADIUS
         );
         return new ResourceAffordanceSummary.BlockSourceAffordance(
-                result.found(), result.diagnostics().matchedCount(), true,
-                "generic_block_breaking_requires_safe_drop_adapter"
+                result.found(), result.diagnostics().matchedCount(), false,
+                result.found() ? "visible_block_break_collect_verify" : "no_matching_visible_loaded_block",
+                result.blockPos()
         );
     }
 

@@ -138,6 +138,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private static final double COLLECT_FOOD_MAX_RADIUS = 24.0D;
         private static final double COLLECT_REACH_DISTANCE = 1.5D;
         private static final int COLLECT_REACH_TICKS = 20;
+        private static final int BLOCK_DROP_OBSERVATION_TICKS = 40;
         private static final double BLOCK_TASK_MAX_DISTANCE = 24.0D;
         private static final double BLOCK_INTERACTION_DISTANCE = 4.0D;
         private static final double OWNER_ITEM_TRANSFER_DISTANCE = 4.0D;
@@ -593,9 +594,18 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 if (affordances.canSatisfyMissingFromVisibleDrops()) {
                     queuedCommands.add(QueuedCommand.getItem(
                             parsed.itemId().toString(), parsed.item(), parsed.count(), currentCount,
-                            ResourceAffordanceScanner.DEFAULT_DROP_RADIUS
+                            ResourceAffordanceScanner.DEFAULT_DROP_RADIUS, false
                     ));
                     return accepted("GET_ITEM accepted: collecting visible dropped " + parsed.itemId()
+                            + " x" + affordances.missingCount() + "; "
+                            + affordances.boundedDiagnostics(nearestSafeContainer() != null, currentDimension));
+                }
+                if (affordances.canAttemptVisibleBlockSourceAcquisition()) {
+                    queuedCommands.add(QueuedCommand.getItem(
+                            parsed.itemId().toString(), parsed.item(), parsed.count(), currentCount,
+                            ResourceAffordanceScanner.DEFAULT_DROP_RADIUS, true
+                    ));
+                    return accepted("GET_ITEM accepted: acquiring visible block resource " + parsed.itemId()
                             + " x" + affordances.missingCount() + "; "
                             + affordances.boundedDiagnostics(nearestSafeContainer() != null, currentDimension));
                 }
@@ -1808,6 +1818,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             if (currentCount > command.targetStartCount()) {
                 command.setTargetStartCount(currentCount);
+                command.resetVisibleBlockBreakAttempts();
                 command.resetReachTicks();
             }
             ServerLevel serverLevel = serverLevel();
@@ -1826,6 +1837,14 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             ItemEntity itemEntity = nearestRequestedItem(serverLevel, command, missing);
             if (itemEntity == null) {
+                if (command.allowVisibleBlockSource()) {
+                    if (command.visibleBlockBreakAttempts() > 0 && command.reachTicks() < BLOCK_DROP_OBSERVATION_TICKS) {
+                        command.incrementReachTicks();
+                        return;
+                    }
+                    acquireVisibleBlockResource(serverLevel, command, missing);
+                    return;
+                }
                 failActiveCommand("visible_dropped_item_unavailable");
                 return;
             }
@@ -1848,6 +1867,54 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                     command.resetReachTicks();
                 }
             }
+        }
+
+        private void acquireVisibleBlockResource(ServerLevel serverLevel, QueuedCommand command, int missingCount) {
+            if (!(command.targetItem() instanceof BlockItem)) {
+                failActiveCommand("not_a_block_item");
+                return;
+            }
+            if (command.visibleBlockBreakAttempts() >= missingCount) {
+                failActiveCommand("block_drop_not_observed");
+                return;
+            }
+            LoadedAreaNavigator.BlockSearchResult result = loadedAreaNavigator.nearestLoadedBlock(
+                    serverLevel, entity.position(), command.targetItemId(), command.radius()
+            );
+            if (!result.found()) {
+                failActiveCommand("no_matching_visible_loaded_block");
+                return;
+            }
+            BlockPos blockPos = result.blockPos();
+            if (!canUseBlockTarget(serverLevel, command, blockPos)) {
+                failActiveCommand("block_target_unavailable");
+                return;
+            }
+            BlockState blockState = serverLevel.getBlockState(blockPos);
+            if (blockState.isAir() || blockState.getDestroySpeed(serverLevel, blockPos) < 0.0F) {
+                failActiveCommand("block_not_breakable");
+                return;
+            }
+            lookAtBlock(blockPos);
+            if (!isWithinInteractionDistance(blockPos)) {
+                moveNearBlock(blockPos);
+                command.resetReachTicks();
+                return;
+            }
+            if (!hasLineOfSightToBlock(serverLevel, blockPos)) {
+                failActiveCommand("block_source_no_line_of_sight");
+                return;
+            }
+            stopNavigation();
+            entity.selectBestToolFor(blockState, serverLevel, blockPos);
+            entity.swingMainHandAction();
+            boolean destroyed = serverLevel.destroyBlock(blockPos, true, entity);
+            if (!destroyed) {
+                failActiveCommand("target_gone_or_destroy_failed");
+                return;
+            }
+            command.incrementVisibleBlockBreakAttempts();
+            command.resetReachTicks();
         }
 
         private ItemEntity nearestRequestedItem(ServerLevel serverLevel, QueuedCommand command, int missingCount) {
@@ -3320,6 +3387,15 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 ItemEntity target = nearestRequestedItem(serverLevel, activeCommand, missing);
                 if (target != null) {
                     moveToEntity(target, NavigationTarget.entity(entityTypeId(target)));
+                    return;
+                }
+                if (activeCommand.allowVisibleBlockSource()) {
+                    LoadedAreaNavigator.BlockSearchResult result = loadedAreaNavigator.nearestLoadedBlock(
+                            serverLevel, entity.position(), activeCommand.targetItemId(), activeCommand.radius()
+                    );
+                    if (result.found()) {
+                        moveNearBlock(result.blockPos());
+                    }
                 }
                 return;
             }
@@ -3877,6 +3953,8 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             private Item targetItem;
             private int targetItemCount;
             private int targetStartCount;
+            private boolean allowVisibleBlockSource;
+            private int visibleBlockBreakAttempts;
             private int reachTicks;
             private boolean patrolReturn;
             private boolean smeltStarted;
@@ -3949,12 +4027,14 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return new QueuedCommand(IntentKind.COLLECT_FOOD, null, radius);
             }
 
-            private static QueuedCommand getItem(String itemId, Item item, int targetCount, int startCount, double radius) {
+            private static QueuedCommand getItem(String itemId, Item item, int targetCount, int startCount, double radius,
+                                                 boolean allowVisibleBlockSource) {
                 QueuedCommand command = new QueuedCommand(IntentKind.GET_ITEM, null, radius);
                 command.targetItemId = itemId;
                 command.targetItem = item;
                 command.targetItemCount = targetCount;
                 command.targetStartCount = startCount;
+                command.allowVisibleBlockSource = allowVisibleBlockSource;
                 return command;
             }
 
@@ -4106,6 +4186,22 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
             private void setTargetStartCount(int targetStartCount) {
                 this.targetStartCount = targetStartCount;
+            }
+
+            private boolean allowVisibleBlockSource() {
+                return allowVisibleBlockSource;
+            }
+
+            private int visibleBlockBreakAttempts() {
+                return visibleBlockBreakAttempts;
+            }
+
+            private void incrementVisibleBlockBreakAttempts() {
+                visibleBlockBreakAttempts++;
+            }
+
+            private void resetVisibleBlockBreakAttempts() {
+                visibleBlockBreakAttempts = 0;
             }
 
             private SmeltingPlan smeltingPlan() {
