@@ -342,7 +342,7 @@ public final class MinecraftPrimitiveTools {
                 }
             }
         }
-        Optional<ToolResult> boundedValidation = validateBounds(call);
+        Optional<ToolResult> boundedValidation = validateBounds(call, schema);
         if (boundedValidation.isPresent()) {
             return boundedValidation;
         }
@@ -364,10 +364,20 @@ public final class MinecraftPrimitiveTools {
         return Optional.empty();
     }
 
-    private static Optional<ToolResult> validateBounds(ToolCall call) {
-        Optional<Integer> maxDistance = integerArgument(call, "maxDistance");
-        if (maxDistance.isPresent() && (maxDistance.get() < 1 || maxDistance.get() > 256)) {
-            return Optional.of(ToolResult.rejected("maxDistance must be between 1 and 256"));
+    private static Optional<ToolResult> validateBounds(ToolCall call, ToolSchema schema) {
+        Optional<ToolParameter> maxDistanceParameter = schema.parameters().stream()
+                .filter(parameter -> parameter.name().equals("maxDistance"))
+                .findFirst();
+        if (maxDistanceParameter.isPresent() && maxDistanceParameter.get().type().equals("number")) {
+            Optional<ToolResult> maxDistanceValidation = validateNumberMaxDistance(call);
+            if (maxDistanceValidation.isPresent()) {
+                return maxDistanceValidation;
+            }
+        } else {
+            Optional<Integer> maxDistance = integerArgument(call, "maxDistance");
+            if (maxDistance.isPresent() && (maxDistance.get() < 1 || maxDistance.get() > 256)) {
+                return Optional.of(ToolResult.rejected("maxDistance must be between 1 and 256"));
+            }
         }
         Optional<Integer> count = integerArgument(call, "count");
         if (count.isPresent() && (count.get() < 1 || count.get() > 256)) {
@@ -387,6 +397,18 @@ public final class MinecraftPrimitiveTools {
         }
         if (slot.isPresent() && (slot.get() < 0 || slot.get() > 255)) {
             return Optional.of(ToolResult.rejected("slot must be between 0 and 255"));
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<ToolResult> validateNumberMaxDistance(ToolCall call) {
+        String value = call.arguments().values().get("maxDistance");
+        if (value == null || value.isBlank()) {
+            return Optional.empty();
+        }
+        double maxDistance = Double.parseDouble(value);
+        if (!Double.isFinite(maxDistance) || maxDistance <= 0.0D || maxDistance > 256.0D) {
+            return Optional.of(ToolResult.rejected("maxDistance must be finite and greater than 0 and at most 256"));
         }
         return Optional.empty();
     }

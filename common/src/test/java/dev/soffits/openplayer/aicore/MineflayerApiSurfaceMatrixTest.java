@@ -16,5 +16,8 @@ public final class MineflayerApiSurfaceMatrixTest {
         AICoreTestSupport.requireStatus("accept_resource_pack", CapabilityStatus.NOT_APPLICABLE_SERVER_SIDE_NPC);
         AICoreTestSupport.requireStatus("creative_fly_to", CapabilityStatus.POLICY_REJECTED);
         AICoreTestSupport.requireStatus("fish", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER);
+        AICoreTestSupport.requireStatus("can_dig_block", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS);
+        AICoreTestSupport.requireStatus("dig_time", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS);
+        AICoreTestSupport.requireStatus("deactivate_item", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS);
     }
 }

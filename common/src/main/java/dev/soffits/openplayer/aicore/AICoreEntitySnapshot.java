@@ -1,6 +1,10 @@
 package dev.soffits.openplayer.aicore;
 
-public record AICoreEntitySnapshot(String id, String type, AICoreVec3 position) {
+public record AICoreEntitySnapshot(String id, String type, AICoreVec3 position, AICoreVec3 viewVector) {
+    public AICoreEntitySnapshot(String id, String type, AICoreVec3 position) {
+        this(id, type, position, null);
+    }
+
     public AICoreEntitySnapshot {
         if (id == null || id.isBlank()) {
             throw new IllegalArgumentException("entity id cannot be blank");

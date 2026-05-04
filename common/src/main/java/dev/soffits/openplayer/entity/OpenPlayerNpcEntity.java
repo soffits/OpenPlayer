@@ -7,7 +7,9 @@ import dev.soffits.openplayer.automation.AutomationControllerSnapshot;
 import dev.soffits.openplayer.automation.survival.SurvivalFoodPolicy;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Predicate;
@@ -83,6 +85,7 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
 
     private final RuntimeCommandExecutor runtimeCommandExecutor = new RuntimeCommandExecutor(this);
     private final NonNullList<ItemStack> internalInventory = NonNullList.withSize(INVENTORY_SIZE, ItemStack.EMPTY);
+    private final Map<String, Boolean> aicoreControlStates = new LinkedHashMap<>();
     private UUID persistedOwnerId;
     private String persistedRoleId;
     private String persistedProfileName;
@@ -216,6 +219,22 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
         }
         selectedMainHandSlot = slot;
         return true;
+    }
+
+    public boolean setAICoreControlState(String control, boolean state) {
+        if (!isAICoreControl(control)) {
+            return false;
+        }
+        aicoreControlStates.put(control, state);
+        return true;
+    }
+
+    public boolean aicoreControlState(String control) {
+        return isAICoreControl(control) && aicoreControlStates.getOrDefault(control, false);
+    }
+
+    public void clearAICoreControlStates() {
+        aicoreControlStates.clear();
     }
 
     public ItemStack getInventoryItem(int slot) {
@@ -448,6 +467,24 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
         ItemStack offhandStack = getItemBySlot(EquipmentSlot.OFFHAND);
         internalInventory.set(selectedMainHandSlot, offhandStack.copy());
         internalInventory.set(OFFHAND_SLOT, selectedStack.copy());
+        return true;
+    }
+
+    public boolean unequipToNormalInventory(EquipmentSlot equipmentSlot) {
+        int equipmentInventorySlot = inventorySlotForEquipmentSlot(equipmentSlot);
+        if (equipmentInventorySlot < FIRST_EQUIPMENT_INVENTORY_SLOT || equipmentInventorySlot >= internalInventory.size()) {
+            return false;
+        }
+        ItemStack equippedStack = internalInventory.get(equipmentInventorySlot);
+        if (equippedStack.isEmpty()) {
+            return false;
+        }
+        List<ItemStack> snapshot = inventorySnapshot();
+        internalInventory.set(equipmentInventorySlot, ItemStack.EMPTY);
+        if (!NpcInventoryTransfer.insertAll(internalInventory, equippedStack.copy(), FIRST_NORMAL_INVENTORY_SLOT, FIRST_EQUIPMENT_INVENTORY_SLOT)) {
+            restoreInternalInventory(snapshot);
+            return false;
+        }
         return true;
     }
 
@@ -778,6 +815,13 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
             score += 1000.0D;
         }
         return score;
+    }
+
+    private static boolean isAICoreControl(String control) {
+        return control != null && switch (control) {
+            case "forward", "back", "left", "right", "jump", "sprint", "sneak" -> true;
+            default -> false;
+        };
     }
 
     private static double attackItemScore(ItemStack itemStack) {

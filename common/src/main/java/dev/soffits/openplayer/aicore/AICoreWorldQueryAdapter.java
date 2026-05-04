@@ -29,6 +29,20 @@ public final class AICoreWorldQueryAdapter {
         return result.block();
     }
 
+    public Optional<AICoreBlockSnapshot> blockAtEntityCursor(String entityId, double maxDistance) {
+        if (entityId == null || entityId.isBlank()) {
+            return Optional.empty();
+        }
+        Optional<AICoreEntitySnapshot> entity = loadedEntities.stream()
+                .filter(candidate -> candidate.id().equals(entityId))
+                .findFirst();
+        if (entity.isEmpty() || entity.get().viewVector() == null) {
+            return Optional.empty();
+        }
+        RaycastResult result = raycastBlocks(entity.get().position(), entity.get().viewVector(), maxDistance, 0.25D);
+        return result.block();
+    }
+
     public Optional<AICoreBlockSnapshot> blockInSight(AICoreVec3 eyePosition, AICoreVec3 viewVector, int maxSteps, double vectorLength) {
         RaycastResult result = raycastBlocksBySteps(eyePosition, viewVector, maxSteps, vectorLength);
         return result.block();
@@ -79,6 +93,10 @@ public final class AICoreWorldQueryAdapter {
         if (name.equals("entity_at_cursor")) {
             Optional<AICoreEntitySnapshot> entity = entityAtCursor(eyePosition, viewVector, doubleValue(values, "maxDistance"));
             return entity.map(AICoreWorldQueryAdapter::entityResult).orElseGet(() -> ToolResult.failed("no_loaded_entity_in_cursor"));
+        }
+        if (name.equals("block_at_entity_cursor")) {
+            Optional<AICoreBlockSnapshot> block = blockAtEntityCursor(values.get("entityId"), doubleValue(values, "maxDistance"));
+            return block.map(AICoreWorldQueryAdapter::blockResult).orElseGet(() -> ToolResult.failed("unsupported_missing_entity_cursor_view_adapter"));
         }
         return ToolResult.failed("unsupported_world_query_tool");
     }

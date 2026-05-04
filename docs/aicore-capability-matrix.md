@@ -17,16 +17,15 @@ Statuses: `implemented`, `implemented_with_server_side_semantics`, `policy_rejec
 | `blockAt`, `canSeeBlock` | `block_at`, `can_see_block` | `implemented_with_server_side_semantics` | Loaded-world only. Live NPC executor uses `ServerLevel` loaded-chunk state and collider LOS; pure seam covers deterministic snapshots. |
 | `waitForChunksToLoad` | `wait_for_chunks_to_load` | `implemented_with_server_side_semantics` | Server-side check only; no chunk generation. |
 | `blockInSight`, `blockAtCursor`, `entityAtCursor` | `block_in_sight`, `block_at_cursor`, `entity_at_cursor` | `implemented_with_server_side_semantics` | Bounded loaded-world raycasts from NPC/view vector or pure snapshot seams; no chunk generation. These are facade/live executor tools, not provider-executable `CommandIntent` tools yet. |
-| `blockAtEntityCursor` | `block_at_entity_cursor` | `unsupported_missing_adapter` | Requires an entity-specific cursor/view adapter in both live and pure seams; it is not aliased to the NPC cursor. |
+| `blockAtEntityCursor` | `block_at_entity_cursor` | `implemented_with_server_side_semantics` | Uses the requested loaded entity's own eye position and view vector in live NPC execution, and requires explicit entity view state in pure snapshots. It is not aliased to the NPC cursor. |
 | `findBlocks`, `findBlock`, `nearestEntity` | `find_blocks`, `find_block`, `nearest_entity`, legacy `find_loaded_blocks`, `find_loaded_entities` | `implemented_with_server_side_semantics` | Bounded loaded-world searches; radius/count required for mineflayer-facing tools. |
 
 ## Control, Movement, And Pathfinder
 
 | Mineflayer surface | AICore tools | Status | Notes |
 | --- | --- | --- | --- |
-| `setControlState`, `clearControlStates` | `set_control_state`, `clear_control_states` | `unsupported_missing_adapter` | Surface exists; no fake control state mutation. |
-| `getControlState` | `get_control_state` | `implemented` | Facade state query. |
-| `lookAt`, `look`, `waitForTicks` | `look_at`, `look`, `wait_for_ticks` | `implemented_with_server_side_semantics` / `unsupported_missing_adapter` | `look_at` bridges existing explicit coordinate primitive. Raw yaw/pitch is implemented by the live NPC executor as facade-only and is not provider-executable yet. `wait_for_ticks` remains adapter-gated. |
+| `setControlState`, `getControlState`, `clearControlStates` | `set_control_state`, `get_control_state`, `clear_control_states` | `implemented_with_server_side_semantics` | Live NPC executor stores visible control-state flags without applying fake motion or bypassing navigation. |
+| `lookAt`, `look`, `waitForTicks` | `look_at`, `look`, `wait_for_ticks` | `implemented_with_server_side_semantics` | `look_at` bridges existing explicit coordinate primitive. Raw yaw/pitch and bounded wait requests are implemented by the live NPC executor as facade-only tools and are not provider-executable yet. |
 | `pathfinder.goto`, `getPathTo`, `getPathFromTo`, `setGoal`, `setMovements`, `stop` | `pathfinder_goto`, `pathfinder_get_path_to`, `pathfinder_get_path_from_to`, `pathfinder_set_goal`, `pathfinder_set_movements`, `pathfinder_stop` | `implemented_with_server_side_semantics` / `unsupported_missing_adapter` | `pathfinder_goto` bridges coordinate goal objects to existing loaded-area vanilla navigation. Path computation, persistent dynamic goals, and movement profile configuration still report missing adapters. |
 | `GoalBlock`, `GoalNear`, `GoalXZ`, `GoalNearXZ`, `GoalY`, `GoalGetToBlock`, `GoalFollow`, `GoalPlaceBlock`, `GoalLookAtBlock`, `GoalBreakBlock` | `AICoreGoal` | `implemented` | `GoalBreakBlock` is only a deprecated precondition alias shape, not a hidden dig macro. |
 
@@ -34,7 +33,7 @@ Statuses: `implemented`, `implemented_with_server_side_semantics`, `policy_rejec
 
 | Mineflayer surface | AICore tools | Status | Notes |
 | --- | --- | --- | --- |
-| `canDigBlock`, `stopDigging`, `digTime` | `can_dig_block`, `stop_digging`, `dig_time` | `unsupported_missing_adapter` | Real hardness/tool/state adapters are required. |
+| `canDigBlock`, `stopDigging`, `digTime` | `can_dig_block`, `stop_digging`, `dig_time` | `implemented_with_server_side_semantics` | Live NPC executor validates loaded, reachable, non-air, breakable blocks and estimates dig ticks from block hardness and selected tool speed. `stop_digging` clears held item use; current explicit dig remains an instant queued primitive rather than a long-running dig session. |
 | `dig`, `placeBlock` | `dig`, `break_block_at`, `place_block`, `place_block_at` | `implemented_with_server_side_semantics` | Bridges existing explicit block primitives and policy validation. |
 | `placeEntity`, `activateBlock`, `updateSign` | `place_entity`, `activate_block`, `update_sign` | `unsupported_missing_adapter` / `implemented_with_server_side_semantics` | `activate_block` bridges the reviewed loaded, reachable, LOS block interaction primitive. Entity placement and sign update remain missing adapters. |
 
@@ -42,7 +41,7 @@ Statuses: `implemented`, `implemented_with_server_side_semantics`, `policy_rejec
 
 | Mineflayer surface | AICore tools | Status | Notes |
 | --- | --- | --- | --- |
-| `activateItem`, `deactivateItem`, `consume`, `useOn`, `activateEntity`, `activateEntityAt`, `swingArm` | `activate_item`, `deactivate_item`, `consume`, `use_on_entity`, `activate_entity`, `activate_entity_at`, `swing_arm` | `implemented_with_server_side_semantics` / `unsupported_missing_adapter` | Safe selected edible use, reviewed entity interaction bridges, and main-hand swing are implemented. Long-running item-use deactivation remains missing because there is no held-use session adapter. |
+| `activateItem`, `deactivateItem`, `consume`, `useOn`, `activateEntity`, `activateEntityAt`, `swingArm` | `activate_item`, `deactivate_item`, `consume`, `use_on_entity`, `activate_entity`, `activate_entity_at`, `swing_arm` | `implemented_with_server_side_semantics` | Safe selected edible use, reviewed entity interaction bridges, main-hand swing, and held-use cancellation are implemented. |
 | `fish` | `fish` | `unsupported_missing_adapter` | Returns `unsupported_missing_npc_fishing_hook_adapter`; no fake fishing macro. |
 | `attack` | `attack`, `attack_nearest`, `attack_target` | `implemented_with_server_side_semantics` | Existing combat bridge remains hostile-policy gated. |
 | `mount`, `dismount`, `moveVehicle`, `elytraFly` | `mount`, `dismount`, `move_vehicle`, `elytra_fly` | `unsupported_missing_adapter` | Elytra returns `unsupported_missing_server_side_elytra_physics_adapter`. |
@@ -52,14 +51,14 @@ Statuses: `implemented`, `implemented_with_server_side_semantics`, `policy_rejec
 | Mineflayer surface | AICore tools | Status | Notes |
 | --- | --- | --- | --- |
 | `inventory`, `heldItem`, `quickBarSlot`, `updateHeldItem`, `getEquipmentDestSlot` | `inventory`, `held_item`, `set_quick_bar_slot`, `update_held_item`, `get_equipment_dest_slot` | `implemented_with_server_side_semantics` | Snapshot, destination resolution, and live hotbar selection are present. `set_quick_bar_slot` is facade-only and is not provider-executable yet. |
-| `equip`, `unequip`, `tossStack`, `toss` | `equip`, `equip_item`, `unequip`, `toss_stack`, `toss`, `drop_item` | `implemented_with_server_side_semantics` / `unsupported_missing_adapter` | Existing equip/drop bridge remains. `toss_stack` uses selected-stack no-loss spawn commit checks as a facade-only live executor tool and is not provider-executable yet. Unequip still needs an equipment transaction adapter. |
+| `equip`, `unequip`, `tossStack`, `toss` | `equip`, `equip_item`, `unequip`, `toss_stack`, `toss`, `drop_item` | `implemented_with_server_side_semantics` | Existing equip/drop bridge remains. `unequip` moves equipped armor/offhand items into normal inventory only when the full transfer can be committed. `toss_stack` uses selected-stack no-loss spawn commit checks as a facade-only live executor tool and is not provider-executable yet. |
 | `simpleClick`, `clickWindow`, `putSelectedItemRange`, `putAway`, `closeWindow`, `transfer`, `openBlock`, `openEntity`, `moveSlotItem` | Matching `simple_click_*`, `click_window`, `put_selected_item_range`, `put_away`, `close_window`, `transfer`, `open_block`, `open_entity`, `move_slot_item` | `unsupported_missing_adapter` | Present but rejected as missing window/session adapter to preserve no-loss semantics. |
 
 ## Recipes, Crafting, Containers, Workstations
 
 | Mineflayer surface | AICore tools | Status | Notes |
 | --- | --- | --- | --- |
-| `recipesFor`, `recipesAll`, `craft` | `recipes_for`, `recipes_all`, `craft` | `unsupported_missing_adapter` | Recipe primitives exist; no resource acquisition chains. |
+| `recipesFor`, `recipesAll`, `craft` | `recipes_for`, `recipes_all`, `craft` | `implemented_with_server_side_semantics` / `unsupported_missing_adapter` | `recipes_for` and `recipes_all` query the live server `RecipeManager` and respect datapack/modded recipe IDs. `craft` remains unsupported until a no-loss inventory/workstation/remainder transaction adapter exists. |
 | `window.deposit`, `window.withdraw`, `window.close`, `openContainer`, `openChest` | `window_deposit`, `window_withdraw`, `window_close`, `open_container`, `open_chest` | `unsupported_missing_adapter` | Requires no-loss window session adapter. |
 | Furnace, enchantment table, anvil, villager APIs | `open_furnace`, `furnace_*`, `open_enchantment_table`, `enchantment_*`, `open_anvil`, `anvil_combine`, `open_villager`, `villager_*` | `unsupported_missing_adapter` | Registered with truthful missing workstation adapter results. |
 

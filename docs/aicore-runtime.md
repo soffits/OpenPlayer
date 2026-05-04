@@ -11,8 +11,8 @@ AICore follows mineflayer API shape and behavior semantics where that is useful,
 - `AICoreProviderJsonToolParser` parses untrusted provider JSON into bounded `ToolCall` values without executing scripts, commands, JavaScript, or provider-origin plugins.
 - `MinecraftPrimitiveTools` bridges existing OpenPlayer NPC primitives through AICore validation and maps implemented tools to current `CommandIntent` primitives where practical.
 - `AICoreEventBus` stores sanitized session events in a bounded in-memory ring buffer.
-- `AICoreWorldQueryAdapter` provides pure loaded-world block/entity raycast and visibility seams for deterministic tests and non-Minecraft snapshots.
-- `AICoreNpcToolExecutor` executes reviewed live OpenPlayer NPC adapters for loaded block queries, cursor raycasts, yaw/pitch look, hotbar selection, selected-stack toss, main-hand swing, safe selected edible use, loaded-area pathfinder goto, and reviewed block/entity interaction bridges.
+- `AICoreWorldQueryAdapter` provides pure loaded-world block/entity raycast and visibility seams for deterministic tests and non-Minecraft snapshots, including entity-specific cursor raycasts when the snapshot carries an entity view vector.
+- `AICoreNpcToolExecutor` executes reviewed live OpenPlayer NPC adapters for loaded block queries, NPC/entity cursor raycasts, visible control-state flags, bounded wait requests, dig preconditions and dig-time estimates, yaw/pitch look, hotbar selection, no-loss unequip, selected-stack toss, main-hand swing, held-use cancellation, safe selected edible use, datapack-aware recipe queries, loaded-area pathfinder goto, and reviewed block/entity interaction bridges.
 - `AICorePluginRegistry` lists Java-registered capability modules only. Provider output cannot load arbitrary code.
 
 ## Policy Model
@@ -28,12 +28,13 @@ Provider-backed parsing accepts only structured `tool`, `chat`, or `unavailable`
 Existing OpenPlayer primitives still work through AICore where practical:
 
 - Observation/status: `observe_self`, `observe_world`, `report_status`.
-- Loaded searches and raycasts: `find_loaded_blocks`, `find_loaded_entities`, mineflayer-facing `find_blocks`, `find_block`, `nearest_entity`, `block_at`, `can_see_block`, `block_in_sight`, `block_at_cursor`, and `entity_at_cursor` through loaded-world seams. `block_at_entity_cursor` remains unsupported because entity-specific cursor/view state is not available in both live and pure adapters.
-- Movement/look: `move_to`, bounded coordinate `pathfinder_goto`, `look_at`, raw `look` yaw/pitch in the NPC executor as a facade-only tool, and `pathfinder_stop`.
-- Block mutation: `dig`, `break_block_at`, `place_block`, `place_block_at`.
-- Inventory/equipment: `inventory`, `inventory_query`, `equip`, `equip_item`, facade-only `set_quick_bar_slot` and `toss_stack`, `toss`, `drop_item`, `pickup_items_nearby`.
-- Interaction/use: `activate_block`, `activate_entity`, `activate_entity_at`, `use_on_entity`, `activate_item`, `consume`, and `swing_arm` through reviewed ordinary-player-like NPC adapters where runtime preconditions pass.
+- Loaded searches and raycasts: `find_loaded_blocks`, `find_loaded_entities`, mineflayer-facing `find_blocks`, `find_block`, `nearest_entity`, `block_at`, `can_see_block`, `block_in_sight`, `block_at_cursor`, `entity_at_cursor`, and `block_at_entity_cursor` through loaded-world seams. Entity cursor queries use the requested entity's view state and do not fall back to the NPC cursor.
+- Movement/look/control: `move_to`, bounded coordinate `pathfinder_goto`, `look_at`, raw `look` yaw/pitch in the NPC executor as a facade-only tool, `set_control_state`, `get_control_state`, `clear_control_states`, `wait_for_ticks`, and `pathfinder_stop`.
+- Block mutation: `can_dig_block`, `dig_time`, `stop_digging`, `dig`, `break_block_at`, `place_block`, `place_block_at`.
+- Inventory/equipment: `inventory`, `inventory_query`, `equip`, `equip_item`, facade-only `set_quick_bar_slot`, `unequip`, and `toss_stack`, `toss`, `drop_item`, `pickup_items_nearby`.
+- Interaction/use: `activate_block`, `activate_entity`, `activate_entity_at`, `use_on_entity`, `activate_item`, `deactivate_item`, `consume`, and `swing_arm` through reviewed ordinary-player-like NPC adapters where runtime preconditions pass.
 - Combat stop/attack bridge: `attack`, `attack_nearest`, `attack_target`, `pvp_stop`, `pvp_force_stop`.
 - Control: `stop`, `pause`, `unpause`.
+- Recipe queries: `recipes_for` and `recipes_all` query the server recipe manager. `craft` remains unsupported until no-loss crafting, workstation, and remainder handling exists.
 
 These bridges preserve current runtime validation and do not reintroduce hidden resource strategy chains.

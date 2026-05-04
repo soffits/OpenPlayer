@@ -17,6 +17,9 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
@@ -75,8 +78,45 @@ public final class AICoreNpcToolExecutor implements ToolExecutor {
         if (tool.equals("entity_at_cursor")) {
             return entityAtCursor(call);
         }
+        if (tool.equals("block_at_entity_cursor")) {
+            return blockAtEntityCursor(call);
+        }
         if (tool.equals("can_see_block")) {
             return canSeeBlock(call);
+        }
+        if (tool.equals("set_control_state")) {
+            return setControlState(call);
+        }
+        if (tool.equals("get_control_state")) {
+            return getControlState(call);
+        }
+        if (tool.equals("clear_control_states")) {
+            entity.clearAICoreControlStates();
+            return ToolResult.success("clear_control_states accepted");
+        }
+        if (tool.equals("wait_for_ticks")) {
+            return ToolResult.success("wait_for_ticks accepted", Map.of("ticks", call.arguments().values().get("ticks")));
+        }
+        if (tool.equals("can_dig_block")) {
+            return canDigBlock(call);
+        }
+        if (tool.equals("dig_time")) {
+            return digTime(call);
+        }
+        if (tool.equals("stop_digging")) {
+            entity.stopUsingItem();
+            return ToolResult.success("stop_digging accepted", Map.of("activeDigging", "false"));
+        }
+        if (tool.equals("deactivate_item")) {
+            boolean wasUsingItem = entity.isUsingItem();
+            entity.stopUsingItem();
+            return ToolResult.success("deactivate_item accepted", Map.of("wasUsingItem", Boolean.toString(wasUsingItem), "usingHeldItem", Boolean.toString(entity.isUsingItem())));
+        }
+        if (tool.equals("unequip")) {
+            return unequip(call);
+        }
+        if (tool.equals("recipes_for") || tool.equals("recipes_all")) {
+            return recipes(call);
         }
         if (tool.equals("look")) {
             return look(call);
@@ -161,6 +201,30 @@ public final class AICoreNpcToolExecutor implements ToolExecutor {
         ));
     }
 
+    private ToolResult blockAtEntityCursor(ToolCall call) {
+        ServerLevel level = serverLevel();
+        if (level == null) {
+            return ToolResult.failed("server_level_unavailable");
+        }
+        Map<String, String> values = call.arguments().values();
+        Entity source = entityById(level, values.get("entityId"));
+        if (source == null) {
+            return ToolResult.failed("entity_not_loaded");
+        }
+        if (!level.hasChunkAt(source.blockPosition())) {
+            return ToolResult.failed("entity_chunk_unloaded");
+        }
+        double maxDistance = maxDistance(call, 256.0D);
+        Vec3 eye = source.getEyePosition();
+        Vec3 direction = source.getViewVector(1.0F).normalize();
+        Vec3 target = eye.add(direction.scale(maxDistance));
+        BlockHitResult hit = level.clip(new ClipContext(eye, target, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, source));
+        if (hit.getType() != HitResult.Type.BLOCK || !level.hasChunkAt(hit.getBlockPos())) {
+            return ToolResult.failed("no_loaded_block_in_entity_cursor");
+        }
+        return blockResult(level, hit.getBlockPos());
+    }
+
     private ToolResult canSeeBlock(ToolCall call) {
         ServerLevel level = serverLevel();
         if (level == null) {
@@ -174,6 +238,90 @@ public final class AICoreNpcToolExecutor implements ToolExecutor {
         BlockHitResult hit = level.clip(new ClipContext(eye, Vec3.atCenterOf(pos), ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, entity));
         boolean visible = hit.getType() == HitResult.Type.MISS || hit.getBlockPos().equals(pos);
         return ToolResult.success("can_see_block=" + visible, Map.of("visible", Boolean.toString(visible)));
+    }
+
+    private ToolResult setControlState(ToolCall call) {
+        Map<String, String> values = call.arguments().values();
+        String control = values.get("control");
+        boolean state = Boolean.parseBoolean(values.get("state"));
+        if (!entity.setAICoreControlState(control, state)) {
+            return ToolResult.rejected("unsupported_control_state");
+        }
+        return ToolResult.success("set_control_state accepted", Map.of("control", control, "state", Boolean.toString(state), "appliesMotion", "false"));
+    }
+
+    private ToolResult getControlState(ToolCall call) {
+        String control = call.arguments().values().get("control");
+        if (!entity.setAICoreControlState(control, entity.aicoreControlState(control))) {
+            return ToolResult.rejected("unsupported_control_state");
+        }
+        return ToolResult.success("get_control_state accepted", Map.of("control", control, "state", Boolean.toString(entity.aicoreControlState(control))));
+    }
+
+    private ToolResult canDigBlock(ToolCall call) {
+        DigPreconditions preconditions = digPreconditions(call);
+        if (preconditions.failureReason() != null) {
+            return ToolResult.success("can_dig_block=false", Map.of("canDig", "false", "reason", preconditions.failureReason()));
+        }
+        return ToolResult.success("can_dig_block=true", Map.of(
+                "canDig", "true",
+                "resourceId", BuiltInRegistries.BLOCK.getKey(preconditions.state().getBlock()).toString(),
+                "withinReach", Boolean.toString(withinInteractionDistance(preconditions.pos()))
+        ));
+    }
+
+    private ToolResult digTime(ToolCall call) {
+        DigPreconditions preconditions = digPreconditions(call);
+        if (preconditions.failureReason() != null) {
+            return ToolResult.failed(preconditions.failureReason());
+        }
+        ItemStack tool = entity.getMainHandItem();
+        float destroySpeed = Math.max(1.0F, tool.getDestroySpeed(preconditions.state()));
+        float hardness = preconditions.state().getDestroySpeed(preconditions.level(), preconditions.pos());
+        int ticks = Math.max(1, (int) Math.ceil(hardness * 30.0F / destroySpeed));
+        return ToolResult.success("dig_time=" + ticks, Map.of(
+                "ticks", Integer.toString(ticks),
+                "hardness", Float.toString(hardness),
+                "toolDestroySpeed", Float.toString(destroySpeed),
+                "correctToolForDrops", Boolean.toString(tool.isCorrectToolForDrops(preconditions.state()))
+        ));
+    }
+
+    private ToolResult unequip(ToolCall call) {
+        EquipmentSlot slot = equipmentSlot(call.arguments().values().get("destination"));
+        if (slot == null) {
+            return ToolResult.rejected("unsupported_equipment_destination");
+        }
+        return entity.unequipToNormalInventory(slot)
+                ? ToolResult.success("unequip accepted")
+                : ToolResult.rejected("unequip requires equipped item and normal inventory space");
+    }
+
+    private ToolResult recipes(ToolCall call) {
+        ServerLevel level = serverLevel();
+        if (level == null || level.getServer() == null) {
+            return ToolResult.failed("server_recipe_manager_unavailable");
+        }
+        ResourceLocation itemId = ResourceLocation.tryParse(call.arguments().values().get("itemType"));
+        if (itemId == null || !BuiltInRegistries.ITEM.containsKey(itemId)) {
+            return ToolResult.rejected("unknown_item_type");
+        }
+        StringBuilder recipeIds = new StringBuilder();
+        int count = 0;
+        for (Recipe<?> recipe : level.getServer().getRecipeManager().getRecipes()) {
+            ItemStack result = recipe.getResultItem(level.registryAccess());
+            if (!result.isEmpty() && BuiltInRegistries.ITEM.getKey(result.getItem()).equals(itemId)) {
+                if (recipeIds.length() > 0) {
+                    recipeIds.append(',');
+                }
+                recipeIds.append(recipe.getId());
+                count++;
+                if (call.name().value().equals("recipes_for") && count >= Integer.parseInt(call.arguments().values().getOrDefault("minResultCount", "1"))) {
+                    break;
+                }
+            }
+        }
+        return ToolResult.success("recipes=" + count, Map.of("count", Integer.toString(count), "recipeIds", recipeIds.toString(), "itemType", itemId.toString()));
     }
 
     private ToolResult look(ToolCall call) {
@@ -203,6 +351,32 @@ public final class AICoreNpcToolExecutor implements ToolExecutor {
         ));
     }
 
+    private DigPreconditions digPreconditions(ToolCall call) {
+        ServerLevel level = serverLevel();
+        if (level == null) {
+            return DigPreconditions.failed("server_level_unavailable");
+        }
+        BlockPos pos = blockPos(call.arguments().values());
+        if (!level.hasChunkAt(pos)) {
+            return DigPreconditions.failed("target_chunk_unloaded");
+        }
+        BlockState state = level.getBlockState(pos);
+        if (state.isAir()) {
+            return DigPreconditions.failed("block_is_air");
+        }
+        if (state.getDestroySpeed(level, pos) < 0.0F) {
+            return DigPreconditions.failed("block_not_breakable");
+        }
+        if (!withinInteractionDistance(pos)) {
+            return DigPreconditions.failed("block_out_of_reach");
+        }
+        return new DigPreconditions(level, pos, state, null);
+    }
+
+    private boolean withinInteractionDistance(BlockPos pos) {
+        return entity.distanceToSqr(Vec3.atCenterOf(pos)) <= 4.0D * 4.0D;
+    }
+
     private ServerLevel serverLevel() {
         return entity.level() instanceof ServerLevel serverLevel ? serverLevel : null;
     }
@@ -226,10 +400,47 @@ public final class AICoreNpcToolExecutor implements ToolExecutor {
         return BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString();
     }
 
+    private static Entity entityById(ServerLevel level, String entityId) {
+        if (entityId == null || entityId.isBlank()) {
+            return null;
+        }
+        try {
+            Entity entity = level.getEntity(UUID.fromString(entityId));
+            return entity != null && entity.isAlive() ? entity : null;
+        } catch (IllegalArgumentException exception) {
+            for (Entity candidate : level.getAllEntities()) {
+                if (candidate.getStringUUID().equals(entityId) && candidate.isAlive()) {
+                    return candidate;
+                }
+            }
+            return null;
+        }
+    }
+
+    private static EquipmentSlot equipmentSlot(String destination) {
+        if (destination == null) {
+            return null;
+        }
+        return switch (destination) {
+            case "head", "helmet" -> EquipmentSlot.HEAD;
+            case "torso", "chest", "chestplate" -> EquipmentSlot.CHEST;
+            case "legs", "leggings" -> EquipmentSlot.LEGS;
+            case "feet", "boots" -> EquipmentSlot.FEET;
+            case "off-hand", "offhand" -> EquipmentSlot.OFFHAND;
+            default -> null;
+        };
+    }
+
     private void publish(EventType type, ToolCall call, String message) {
         LinkedHashMap<String, String> payload = new LinkedHashMap<>();
         payload.put("tool", call.name().value());
         payload.put("message", message);
         eventBus.publish(type, payload);
+    }
+
+    private record DigPreconditions(ServerLevel level, BlockPos pos, BlockState state, String failureReason) {
+        private static DigPreconditions failed(String reason) {
+            return new DigPreconditions(null, null, null, reason);
+        }
     }
 }
