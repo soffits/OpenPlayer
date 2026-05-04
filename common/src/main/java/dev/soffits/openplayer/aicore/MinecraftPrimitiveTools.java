@@ -29,6 +29,7 @@ public final class MinecraftPrimitiveTools {
     public static final ToolName STOP = ToolName.of("stop");
     public static final ToolName PAUSE = ToolName.of("pause");
     public static final ToolName UNPAUSE = ToolName.of("unpause");
+    public static final ToolName CRAFT = ToolName.of("craft");
 
     private static final ToolRegistry REGISTRY = AICoreToolCatalog.registry();
 
@@ -199,6 +200,7 @@ public final class MinecraftPrimitiveTools {
         map.put(STOP, IntentKind.STOP);
         map.put(PAUSE, IntentKind.PAUSE);
         map.put(UNPAUSE, IntentKind.UNPAUSE);
+        map.put(CRAFT, IntentKind.CRAFT);
         return Map.copyOf(map);
     }
 
@@ -214,6 +216,7 @@ public final class MinecraftPrimitiveTools {
         map.put(IntentKind.DROP_ITEM, DROP_ITEM);
         map.put(IntentKind.ATTACK_TARGET, ATTACK_TARGET);
         map.put(IntentKind.MOVE, MOVE_TO);
+        map.put(IntentKind.CRAFT, CRAFT);
         return Map.copyOf(map);
     }
 
@@ -240,6 +243,9 @@ public final class MinecraftPrimitiveTools {
         }
         if (values.containsKey("itemType")) {
             return (values.get("itemType") + " " + values.getOrDefault("count", "")).trim();
+        }
+        if (values.containsKey("recipe")) {
+            return craftInstruction(values);
         }
         if (values.containsKey("entityId")) {
             if (call.name().value().equals("activate_entity") || call.name().value().equals("activate_entity_at")
@@ -275,6 +281,18 @@ public final class MinecraftPrimitiveTools {
             return x + " 0 " + z;
         }
         return "";
+    }
+
+    private static String craftInstruction(Map<String, String> values) {
+        String instruction = (values.get("recipe") + " " + values.getOrDefault("count", "1")).trim();
+        String craftingTable = values.get("craftingTable");
+        if (craftingTable == null || craftingTable.isBlank()) {
+            return instruction;
+        }
+        String x = jsonIntegerField(craftingTable, "x");
+        String y = jsonIntegerField(craftingTable, "y");
+        String z = jsonIntegerField(craftingTable, "z");
+        return (instruction + " table " + x + " " + y + " " + z).trim();
     }
 
     private static String jsonStringField(String json, String fieldName) {

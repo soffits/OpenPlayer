@@ -23,6 +23,7 @@ public final class RuntimeIntentValidatorTest {
         validatesPhaseThirteenControlAndExpressionInstructions();
         validatesPhaseFiveInventoryInstructions();
         validatesContainerTransferInstructions();
+        validatesCraftInstructions();
         validatesCoordinateInstructions();
         validatesGotoInstructions();
         validatesRadiusInstructions();
@@ -152,6 +153,25 @@ public final class RuntimeIntentValidatorTest {
                 "WITHDRAW_ITEM requires instruction: <item_id> [count]");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.WITHDRAW_ITEM, "minecraft:bread 1"), false),
                 "World actions are disabled for this OpenPlayer character");
+    }
+
+    private static void validatesCraftInstructions() {
+        require(RuntimeIntentValidator.validate(intent(IntentKind.CRAFT, "minecraft:oak_planks"), true).isAccepted(),
+                "CRAFT should accept recipe-only syntax");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.CRAFT, "minecraft:oak_planks 2"), true).isAccepted(),
+                "CRAFT should accept recipe/count syntax");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.CRAFT, "minecraft:iron_pickaxe 1 table 10 64 -2"), true).isAccepted(),
+                "CRAFT should accept recipe/count/table coordinate syntax");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.CRAFT, "minecraft:iron_pickaxe table 10 64 -2"), true),
+                "CRAFT requires instruction: <recipe_id> [count] [table <x> <y> <z>]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.CRAFT, "minecraft:iron_pickaxe 1 table 10 64"), true),
+                "CRAFT requires instruction: <recipe_id> [count] [table <x> <y> <z>]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.CRAFT, "minecraft:iron_pickaxe 1 table 10 sixty-four -2"), true),
+                "CRAFT requires instruction: <recipe_id> [count] [table <x> <y> <z>]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.CRAFT, "minecraft:iron_pickaxe 0 table 10 64 -2"), true),
+                "CRAFT requires instruction: <recipe_id> [count] [table <x> <y> <z>]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.CRAFT, "minecraft:iron_pickaxe 1 at 10 64 -2"), true),
+                "CRAFT requires instruction: <recipe_id> [count] [table <x> <y> <z>]");
     }
 
     private static void validatesCoordinateInstructions() {
@@ -320,6 +340,7 @@ public final class RuntimeIntentValidatorTest {
             case LOCATE_LOADED_BLOCK -> "minecraft:oak_log";
             case LOCATE_LOADED_ENTITY -> "minecraft:zombie";
             case FIND_LOADED_BIOME -> "minecraft:plains";
+            case CRAFT -> "minecraft:oak_planks 1";
             case ATTACK_TARGET -> "minecraft:zombie";
             case PAUSE,
                     UNPAUSE,

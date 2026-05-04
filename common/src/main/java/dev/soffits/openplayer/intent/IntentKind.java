@@ -33,5 +33,6 @@ public enum IntentKind {
     LOCATE_LOADED_BLOCK,
     LOCATE_LOADED_ENTITY,
     FIND_LOADED_BIOME,
+    CRAFT,
     PROVIDER_PLAN
 }

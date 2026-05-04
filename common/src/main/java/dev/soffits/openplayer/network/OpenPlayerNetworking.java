@@ -513,6 +513,7 @@ public final class OpenPlayerNetworking {
                     UNPAUSE,
                     RESET_MEMORY,
                     BODY_LANGUAGE,
+                    CRAFT,
                     PROVIDER_PLAN -> intentKind.name();
             case GOTO -> "1 64 1";
             case LOCATE_LOADED_BLOCK -> "minecraft:oak_log";

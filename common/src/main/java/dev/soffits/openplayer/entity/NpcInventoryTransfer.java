@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.Ingredient;
 
 public final class NpcInventoryTransfer {
     public static final int INVENTORY_SIZE = 36;
@@ -139,6 +140,36 @@ public final class NpcInventoryTransfer {
         return true;
     }
 
+    public static boolean craftNormalInventory(List<ItemStack> stacks, List<Ingredient> ingredients, ItemStack result, int crafts) {
+        if (ingredients == null || result == null || result.isEmpty() || crafts < 1) {
+            return false;
+        }
+        List<ItemStack> snapshot = copyStacks(stacks);
+        for (int craft = 0; craft < crafts; craft++) {
+            ArrayList<ItemStack> remainderStacks = new ArrayList<>();
+            for (Ingredient ingredient : ingredients) {
+                if (ingredient == null || ingredient.isEmpty()) {
+                    continue;
+                }
+                ItemStack consumed = removeOneIngredient(stacks, ingredient, FIRST_NORMAL_SLOT, FIRST_EQUIPMENT_SLOT);
+                if (consumed.isEmpty()) {
+                    restoreStacks(stacks, snapshot);
+                    return false;
+                }
+                Item remainderItem = consumed.getItem().getCraftingRemainingItem();
+                if (remainderItem != null) {
+                    remainderStacks.add(new ItemStack(remainderItem));
+                }
+            }
+            if (!insertAll(stacks, remainderStacks, FIRST_NORMAL_SLOT, FIRST_EQUIPMENT_SLOT)
+                    || !insertAll(stacks, result.copy(), FIRST_NORMAL_SLOT, FIRST_EQUIPMENT_SLOT)) {
+                restoreStacks(stacks, snapshot);
+                return false;
+            }
+        }
+        return true;
+    }
+
     public static int firstHotbarSlotMatchingItem(List<ItemStack> stacks, Item item) {
         requireItem(item);
         int end = Math.min(HOTBAR_SIZE, stacks.size());
@@ -174,7 +205,7 @@ public final class NpcInventoryTransfer {
     }
 
     private static List<ItemStack> removeExactStacks(List<ItemStack> stacks, Item item, int count,
-                                                     int startSlotInclusive, int endSlotExclusive) {
+                                                      int startSlotInclusive, int endSlotExclusive) {
         requireItem(item);
         if (count < 1 || countItem(stacks, item, startSlotInclusive, endSlotExclusive) < count) {
             return List.of();
@@ -196,6 +227,23 @@ public final class NpcInventoryTransfer {
             }
         }
         return remaining == 0 ? removedStacks : List.of();
+    }
+
+    private static ItemStack removeOneIngredient(List<ItemStack> stacks, Ingredient ingredient,
+                                                 int startSlotInclusive, int endSlotExclusive) {
+        for (int slot = boundedStart(startSlotInclusive); slot < boundedEnd(stacks, endSlotExclusive); slot++) {
+            ItemStack stack = stacks.get(slot);
+            if (!stack.isEmpty() && ingredient.test(stack)) {
+                ItemStack consumed = stack.copy();
+                consumed.setCount(1);
+                stack.shrink(1);
+                if (stack.isEmpty()) {
+                    stacks.set(slot, ItemStack.EMPTY);
+                }
+                return consumed;
+            }
+        }
+        return ItemStack.EMPTY;
     }
 
     private static boolean insertAll(List<ItemStack> stacks, List<ItemStack> insertedStacks,

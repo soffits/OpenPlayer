@@ -56,7 +56,7 @@ Statuses: `implemented`, `implemented_with_server_side_semantics`, `policy_rejec
 
 | Mineflayer surface | AICore tools | Status | Notes |
 | --- | --- | --- | --- |
-| `recipesFor`, `recipesAll`, `craft` | `recipes_for`, `recipes_all`, `craft` | `implemented_with_server_side_semantics` / `unsupported_missing_adapter` | `recipes_for` and `recipes_all` query the live server `RecipeManager` and respect datapack/modded recipe IDs. `craft` remains unsupported until a no-loss inventory, remainder, and generic validation adapter exists. |
+| `recipesFor`, `recipesAll`, `craft` | `recipes_for`, `recipes_all`, `craft` | `implemented_with_server_side_semantics` | `recipes_for` and `recipes_all` query the live server `RecipeManager` and respect datapack/modded recipe IDs. `craft` executes exact crafting recipe IDs from existing NPC inventory only, rejects missing inputs or capacity failures without mutation, and does not acquire resources or run workstation macros. |
 | `window.deposit`, `window.withdraw`, `window.close`, `openContainer` | `window_deposit`, `window_withdraw`, `window_close`, `open_container` | `implemented_with_server_side_semantics` | The live executor uses an NPC-owned bounded server-side session for loaded reachable block-entity containers, so sessions survive per-submit executor replacement and close clears them. Transfers use no-loss snapshots and rollback on failed fit or missing item; slot-restricted containers are rejected truthfully instead of using hidden mechanics-specific branches. Unsupported/custom non-container blocks are rejected truthfully. |
 
 ## Chat, Settings, And Resource Packs

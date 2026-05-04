@@ -159,7 +159,7 @@ public final class OpenAiCompatibleIntentProviderTest {
         }
         require(prompt.contains("Do not emit high-level goals or macro task chains"),
                 "system prompt must forbid macro task chains");
-        require(prompt.contains("acquiring resources, crafting, smelting, farming, fishing, defending an owner, building structures, exploring chunks, locating structures, using portals, Nether travel"),
+        require(prompt.contains("acquiring resources, making workstations, smelting, farming, fishing, defending an owner, building structures, exploring chunks, locating structures, using portals, Nether travel"),
                 "system prompt must name removed macro categories");
     }
 

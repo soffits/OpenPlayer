@@ -1,5 +1,6 @@
 package dev.soffits.openplayer.aicore;
 
+import dev.soffits.openplayer.automation.CraftInstructionParser;
 import dev.soffits.openplayer.api.AiPlayerNpcCommand;
 import dev.soffits.openplayer.api.CommandSubmissionResult;
 import dev.soffits.openplayer.api.CommandSubmissionStatus;
@@ -23,9 +24,14 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.CraftingRecipe;
 import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeType;
+import net.minecraft.world.item.crafting.ShapedRecipe;
+import net.minecraft.world.item.crafting.ShapelessRecipe;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
@@ -117,6 +123,9 @@ public final class AICoreNpcToolExecutor implements ToolExecutor {
         }
         if (tool.equals("recipes_for") || tool.equals("recipes_all")) {
             return recipes(call);
+        }
+        if (tool.equals("craft")) {
+            return craft(call);
         }
         if (tool.equals("pathfinder_get_path_to") || tool.equals("pathfinder_get_path_from_to")) {
             return pathfinderDiagnostics(call);
@@ -347,6 +356,45 @@ public final class AICoreNpcToolExecutor implements ToolExecutor {
             }
         }
         return ToolResult.success("recipes=" + count, Map.of("count", Integer.toString(count), "recipeIds", recipeIds.toString(), "itemType", itemId.toString()));
+    }
+
+    private ToolResult craft(ToolCall call) {
+        ServerLevel level = serverLevel();
+        if (level == null || level.getServer() == null) {
+            return ToolResult.failed("server_recipe_manager_unavailable");
+        }
+        CraftRequest request = craftRequest(call);
+        if (request == null) {
+            return ToolResult.rejected("craft_requires_recipe_id_and_count");
+        }
+        Recipe<?> recipe = level.getServer().getRecipeManager().byKey(request.recipeId()).orElse(null);
+        if (!(recipe instanceof CraftingRecipe craftingRecipe) || recipe.getType() != RecipeType.CRAFTING) {
+            return ToolResult.failed("recipe_unknown_or_not_crafting");
+        }
+        if (!(craftingRecipe instanceof ShapedRecipe) && !(craftingRecipe instanceof ShapelessRecipe)) {
+            return ToolResult.failed("recipe_unsupported");
+        }
+        boolean needsCraftingTable = !craftingRecipe.canCraftInDimensions(2, 2);
+        if (needsCraftingTable && request.craftingTablePos() == null) {
+            return ToolResult.failed("crafting_table_required");
+        }
+        if (request.craftingTablePos() != null && !validCraftingTable(level, request.craftingTablePos())) {
+            return ToolResult.failed("crafting_table_absent_unloaded_or_unreachable");
+        }
+        ItemStack result = craftingRecipe.getResultItem(level.registryAccess()).copy();
+        if (result.isEmpty()) {
+            return ToolResult.failed("recipe_result_empty");
+        }
+        if (!entity.craftInventoryRecipeNoLoss(craftingRecipe.getIngredients(), result, request.count())) {
+            return ToolResult.rejected("craft_inputs_missing_or_output_would_not_fit");
+        }
+        int craftedCount = result.getCount() * request.count();
+        ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(result.getItem());
+        return ToolResult.success("craft accepted", Map.of(
+                "recipe", request.recipeId().toString(),
+                "itemType", itemId.toString(),
+                "count", Integer.toString(craftedCount)
+        ));
     }
 
     private ToolResult pathfinderDiagnostics(ToolCall call) {
@@ -629,6 +677,52 @@ public final class AICoreNpcToolExecutor implements ToolExecutor {
         }
     }
 
+    private static CraftRequest craftRequest(ToolCall call) {
+        Map<String, String> values = call.arguments().values();
+        String recipeValue = values.get("recipe");
+        String countValue = values.getOrDefault("count", "1");
+        BlockPos craftingTablePos = null;
+        if ((recipeValue == null || recipeValue.isBlank()) && !call.arguments().instruction().isBlank()) {
+            CraftInstructionParser.CraftInstruction instruction = CraftInstructionParser.parseOrNull(call.arguments().instruction());
+            if (instruction == null) {
+                return null;
+            }
+            CraftInstructionParser.CraftingTablePosition tablePos = instruction.craftingTablePos();
+            if (tablePos != null) {
+                craftingTablePos = new BlockPos(tablePos.x(), tablePos.y(), tablePos.z());
+            }
+            return new CraftRequest(instruction.recipeId(), instruction.count(), craftingTablePos);
+        }
+        ResourceLocation recipeId = ResourceLocation.tryParse(recipeValue == null ? "" : recipeValue);
+        Integer count = boundedCountOrNull(countValue);
+        if (recipeId == null || recipeValue == null || !recipeValue.contains(":") || count == null) {
+            return null;
+        }
+        String craftingTable = values.get("craftingTable");
+        if (craftingTable != null && !craftingTable.isBlank()) {
+            String x = jsonIntegerField(craftingTable, "x");
+            String y = jsonIntegerField(craftingTable, "y");
+            String z = jsonIntegerField(craftingTable, "z");
+            if (x.isBlank() || y.isBlank() || z.isBlank()) {
+                return null;
+            }
+            try {
+                craftingTablePos = new BlockPos(Integer.parseInt(x), Integer.parseInt(y), Integer.parseInt(z));
+            } catch (NumberFormatException exception) {
+                return null;
+            }
+        }
+        return new CraftRequest(recipeId, count, craftingTablePos);
+    }
+
+    private boolean validCraftingTable(ServerLevel level, BlockPos pos) {
+        return level != null
+                && pos != null
+                && level.hasChunkAt(pos)
+                && withinInteractionDistance(pos)
+                && level.getBlockState(pos).is(Blocks.CRAFTING_TABLE);
+    }
+
     private static String jsonStringField(String json, String fieldName) {
         String quoted = "\"" + fieldName + "\"";
         int fieldIndex = json == null ? -1 : json.indexOf(quoted);
@@ -669,6 +763,43 @@ public final class AICoreNpcToolExecutor implements ToolExecutor {
             }
         }
         return index > start ? json.substring(start, index) : "";
+    }
+
+    private static String jsonIntegerField(String json, String fieldName) {
+        String quoted = "\"" + fieldName + "\"";
+        int fieldIndex = json == null ? -1 : json.indexOf(quoted);
+        if (fieldIndex < 0) {
+            return "";
+        }
+        int colonIndex = json.indexOf(':', fieldIndex + quoted.length());
+        if (colonIndex < 0) {
+            return "";
+        }
+        int index = colonIndex + 1;
+        while (index < json.length() && Character.isWhitespace(json.charAt(index))) {
+            index++;
+        }
+        if (index < json.length() && json.charAt(index) == '"') {
+            int quoteEnd = json.indexOf('"', index + 1);
+            return quoteEnd > index ? json.substring(index + 1, quoteEnd) : "";
+        }
+        int start = index;
+        if (index < json.length() && (json.charAt(index) == '-' || json.charAt(index) == '+')) {
+            index++;
+        }
+        while (index < json.length() && Character.isDigit(json.charAt(index))) {
+            index++;
+        }
+        if (index == start || (index == start + 1 && (json.charAt(start) == '-' || json.charAt(start) == '+'))) {
+            return "";
+        }
+        while (index < json.length() && Character.isWhitespace(json.charAt(index))) {
+            index++;
+        }
+        if (index < json.length() && json.charAt(index) != ',' && json.charAt(index) != '}') {
+            return "invalid";
+        }
+        return json.substring(start, index).trim();
     }
 
     private static double maxDistance(ToolCall call, double defaultValue) {
@@ -728,5 +859,8 @@ public final class AICoreNpcToolExecutor implements ToolExecutor {
         private static DigPreconditions failed(String reason) {
             return new DigPreconditions(null, null, null, reason);
         }
+    }
+
+    private record CraftRequest(ResourceLocation recipeId, int count, BlockPos craftingTablePos) {
     }
 }

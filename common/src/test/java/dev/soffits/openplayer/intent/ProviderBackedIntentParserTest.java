@@ -10,6 +10,8 @@ public final class ProviderBackedIntentParserTest {
         acceptsStructuredToolJsonWithArguments();
         defaultsStructuredToolJsonPriorityToNormal();
         acceptsPathfinderGotoStructuredToolJson();
+        acceptsCraftStructuredToolJson();
+        preservesCraftingTableStructuredToolJson();
         rejectsFacadeOnlyStructuredToolJson();
         providerPromptExcludesFacadeOnlyTools();
         rejectsAdminStructuredToolJson();
@@ -45,6 +47,25 @@ public final class ProviderBackedIntentParserTest {
         CommandIntent intent = parser.parse("ignored");
         require(intent.kind() == IntentKind.GOTO, "pathfinder_goto goal_block must bridge to bounded GOTO intent");
         require("1 64 2".equals(intent.instruction()), "pathfinder_goto goal coordinates must become runtime instruction");
+    }
+
+    private static void acceptsCraftStructuredToolJson() throws Exception {
+        ProviderBackedIntentParser parser = new ProviderBackedIntentParser(
+                input -> ProviderIntent.structuredTool("NORMAL", "{\"tool\":\"craft\",\"args\":{\"recipe\":\"minecraft:oak_planks\",\"count\":1}}")
+        );
+        CommandIntent intent = parser.parse("ignored");
+        require(intent.kind() == IntentKind.CRAFT, "craft tool JSON must bridge to craft intent");
+        require("minecraft:oak_planks 1".equals(intent.instruction()), "craft args must become recipe/count instruction");
+    }
+
+    private static void preservesCraftingTableStructuredToolJson() throws Exception {
+        ProviderBackedIntentParser parser = new ProviderBackedIntentParser(
+                input -> ProviderIntent.structuredTool("NORMAL", "{\"tool\":\"craft\",\"args\":{\"recipe\":\"minecraft:iron_pickaxe\",\"count\":1,\"craftingTable\":{\"x\":10,\"y\":64,\"z\":-2}}}")
+        );
+        CommandIntent intent = parser.parse("ignored");
+        require(intent.kind() == IntentKind.CRAFT, "craft tool JSON must bridge to craft intent");
+        require("minecraft:iron_pickaxe 1 table 10 64 -2".equals(intent.instruction()),
+                "craftingTable args must be preserved in the runtime instruction");
     }
 
     private static void rejectsFacadeOnlyStructuredToolJson() {

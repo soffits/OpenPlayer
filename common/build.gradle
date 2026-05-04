@@ -126,6 +126,12 @@ tasks.register('runAutomationInstructionParserTest', JavaExec) {
     mainClass = 'dev.soffits.openplayer.automation.AutomationInstructionParserTest'
 }
 
+tasks.register('runCraftInstructionParserTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.automation.CraftInstructionParserTest'
+}
+
 tasks.register('runBodyLanguageInstructionParserTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
@@ -345,6 +351,7 @@ tasks.named('check') {
     dependsOn tasks.named('runConversationLoopTest')
     dependsOn tasks.named('runConversationStatusRepositoryTest')
     dependsOn tasks.named('runAutomationInstructionParserTest')
+    dependsOn tasks.named('runCraftInstructionParserTest')
     dependsOn tasks.named('runBodyLanguageInstructionParserTest')
     dependsOn tasks.named('runInventoryActionInstructionParserTest')
     dependsOn tasks.named('runInteractionInstructionParserTest')

@@ -24,7 +24,8 @@ public final class RuntimeIntentPolicies {
             IntentKind.ATTACK_TARGET,
             IntentKind.LOCATE_LOADED_BLOCK,
             IntentKind.LOCATE_LOADED_ENTITY,
-            IntentKind.FIND_LOADED_BIOME
+            IntentKind.FIND_LOADED_BIOME,
+            IntentKind.CRAFT
     );
 
     private RuntimeIntentPolicies() {
@@ -51,7 +52,8 @@ public final class RuntimeIntentPolicies {
                     ATTACK_TARGET,
                     LOCATE_LOADED_BLOCK,
                     LOCATE_LOADED_ENTITY,
-                    FIND_LOADED_BIOME -> true;
+                    FIND_LOADED_BIOME,
+                    CRAFT -> true;
             case UNAVAILABLE,
                     OBSERVE,
                     STOP,

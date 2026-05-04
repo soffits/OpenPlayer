@@ -2,6 +2,7 @@ package dev.soffits.openplayer.runtime.validation;
 
 import dev.soffits.openplayer.automation.AutomationInstructionParser;
 import dev.soffits.openplayer.automation.BodyLanguageInstructionParser;
+import dev.soffits.openplayer.automation.CraftInstructionParser;
 import dev.soffits.openplayer.automation.InteractionInstruction;
 import dev.soffits.openplayer.automation.InteractionInstructionParser;
 import dev.soffits.openplayer.automation.TargetAttackInstructionParser;
@@ -52,6 +53,7 @@ public final class RuntimeIntentValidator {
             case FIND_LOADED_BIOME -> requireLoadedSearchInstruction(
                     intent, AdvancedTaskInstructionParser.FIND_LOADED_BIOME_USAGE
             );
+            case CRAFT -> requireCraftInstruction(intent);
             case INVENTORY_QUERY -> requireBlankInstruction(intent, "INVENTORY_QUERY");
             case EQUIP_ITEM -> requireItemOnlyInstruction(intent, "EQUIP_ITEM");
             case GIVE_ITEM -> requireGiveItemInstruction(intent);
@@ -180,6 +182,12 @@ public final class RuntimeIntentValidator {
             return RuntimeIntentValidationResult.rejected(usage);
         }
         return RuntimeIntentValidationResult.accepted();
+    }
+
+    private static RuntimeIntentValidationResult requireCraftInstruction(CommandIntent intent) {
+        return CraftInstructionParser.parseOrNull(intent.instruction()) == null
+                ? RuntimeIntentValidationResult.rejected(CraftInstructionParser.USAGE)
+                : RuntimeIntentValidationResult.accepted();
     }
 
     private static RuntimeIntentValidationResult requireBlankOrPositiveRadius(CommandIntent intent, String kindName) {

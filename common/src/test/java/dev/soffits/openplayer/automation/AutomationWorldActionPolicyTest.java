@@ -24,7 +24,8 @@ public final class AutomationWorldActionPolicyTest {
                 IntentKind.ATTACK_TARGET,
                 IntentKind.LOCATE_LOADED_BLOCK,
                 IntentKind.LOCATE_LOADED_ENTITY,
-                IntentKind.FIND_LOADED_BIOME
+                IntentKind.FIND_LOADED_BIOME,
+                IntentKind.CRAFT
         );
 
         for (IntentKind kind : IntentKind.values()) {
@@ -70,6 +71,8 @@ public final class AutomationWorldActionPolicyTest {
                 "ATTACK_TARGET must use the world-action gate for targeted combat");
         require(RuntimeIntentPolicies.isLocalWorldOrInventoryAction(IntentKind.LOCATE_LOADED_BLOCK),
                 "LOCATE_LOADED_BLOCK must use the world-action gate for loaded-world reconnaissance");
+        require(RuntimeIntentPolicies.isLocalWorldOrInventoryAction(IntentKind.CRAFT),
+                "CRAFT must use the world-action gate for inventory mutation");
         require(!RuntimeIntentPolicies.allIntentKindNames().contains("TRAVEL_NETHER"),
                 "TRAVEL_NETHER must not remain in the runtime intent surface");
         require(VanillaAutomationBackend.PLAYER_LIKE_NAVIGATION_SPEED >= 1.2D,

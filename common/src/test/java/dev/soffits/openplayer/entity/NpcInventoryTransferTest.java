@@ -7,6 +7,7 @@ import net.minecraft.server.Bootstrap;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Ingredient;
 
 public final class NpcInventoryTransferTest {
     private NpcInventoryTransferTest() {
@@ -30,6 +31,7 @@ public final class NpcInventoryTransferTest {
         exactWithdrawFullNpcInventoryRollsBack();
         depositAllRequiresEveryNormalStackToFit();
         containerTransferIgnoresArmorAndOffhand();
+        craftNormalInventoryCommitsOnlyCompleteTransaction();
     }
 
     private static void matchesExactItemsOnly() {
@@ -247,6 +249,30 @@ public final class NpcInventoryTransferTest {
         require(npc.get(35).is(Items.SHIELD), "offhand slot must not be deposited");
         require(NpcInventoryTransfer.countItem(container, Items.DIAMOND_BOOTS, 0, container.size()) == 0,
                 "container must not receive armor slot contents");
+    }
+
+    private static void craftNormalInventoryCommitsOnlyCompleteTransaction() {
+        NonNullList<ItemStack> stacks = emptyInventory();
+        stacks.set(0, new ItemStack(Items.OAK_LOG, 1));
+        require(NpcInventoryTransfer.craftNormalInventory(
+                        stacks,
+                        List.of(Ingredient.of(Items.OAK_LOG)),
+                        new ItemStack(Items.OAK_PLANKS, 4),
+                        1
+                ),
+                "crafting must commit when inputs and output space are available");
+        require(stacks.get(0).is(Items.OAK_PLANKS) && stacks.get(0).getCount() == 4,
+                "crafting must insert the recipe result");
+
+        List<ItemStack> snapshot = NpcInventoryTransfer.copyStacks(stacks);
+        require(!NpcInventoryTransfer.craftNormalInventory(
+                        stacks,
+                        List.of(Ingredient.of(Items.OAK_LOG)),
+                        new ItemStack(Items.OAK_PLANKS, 4),
+                        1
+                ),
+                "crafting must reject missing inputs");
+        require(stacksEqual(stacks, snapshot), "missing-input craft rejection must not mutate inventory");
     }
 
     private static NonNullList<ItemStack> emptyInventory() {

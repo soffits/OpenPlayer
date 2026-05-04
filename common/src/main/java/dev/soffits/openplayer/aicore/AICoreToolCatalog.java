@@ -134,7 +134,7 @@ public final class AICoreToolCatalog {
     private static void addCraftingAndContainers(List<AICoreToolDefinition> defs) {
         add(defs, "recipes_for", "recipes_crafting", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Query server recipes for one output item.", text("itemType"), text("metadata", false), integer("minResultCount", false), object("craftingTable", false));
         add(defs, "recipes_all", "recipes_crafting", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Query all server recipes for one output item.", text("itemType"), text("metadata", false), object("craftingTable", false));
-        add(defs, "craft", "recipes_crafting", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, "unsupported_missing_no_loss_crafting_adapter", "Craft a known recipe without acquiring missing resources.", text("recipe"), integer("count"), object("craftingTable", false));
+        add(defs, "craft", "recipes_crafting", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Craft a known crafting recipe without acquiring missing resources.", text("recipe"), integer("count"), object("craftingTable", false));
 
         add(defs, "open_container", "containers", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Open a loaded reachable block-entity container session.", object("target"));
         add(defs, "window_deposit", "containers", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Deposit items into current generic block-entity container with no-loss semantics.", text("itemType"), text("metadata", false), integer("count"));

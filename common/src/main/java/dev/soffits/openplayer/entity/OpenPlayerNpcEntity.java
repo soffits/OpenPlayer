@@ -32,6 +32,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -337,6 +338,10 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
 
     public boolean withdrawInventoryItemFrom(List<ItemStack> containerStacks, Item item, int count) {
         return NpcInventoryTransfer.withdrawExactItem(internalInventory, containerStacks, item, count);
+    }
+
+    public boolean craftInventoryRecipeNoLoss(List<Ingredient> ingredients, ItemStack result, int crafts) {
+        return NpcInventoryTransfer.craftNormalInventory(internalInventory, ingredients, result, crafts);
     }
 
     public boolean moveInventorySlotItemNoLoss(int sourceSlot, int destinationSlot) {
