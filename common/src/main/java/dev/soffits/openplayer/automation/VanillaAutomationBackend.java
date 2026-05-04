@@ -32,7 +32,10 @@ import dev.soffits.openplayer.entity.NpcInventoryTransfer;
 import dev.soffits.openplayer.entity.OpenPlayerNpcEntity;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentKind;
+import dev.soffits.openplayer.intent.ProviderPlanIntentCodec;
 import dev.soffits.openplayer.runtime.validation.RuntimeIntentPolicies;
+import dev.soffits.openplayer.runtime.validation.RuntimeIntentValidationResult;
+import dev.soffits.openplayer.runtime.validation.RuntimeIntentValidator;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -192,6 +195,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
         private AutomationCommandResult submitPrimitiveIntent(CommandIntent intent) {
             IntentKind kind = intent.kind();
+            if (kind == IntentKind.PROVIDER_PLAN) {
+                return submitProviderPlan(intent);
+            }
             if (kind == IntentKind.STOP) {
                 stopAll();
                 return accepted("STOP accepted");
@@ -540,6 +546,29 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return rejected(AdvancedTaskPolicy.unsupportedReason(kind));
             }
             return rejected("Unsupported intent: " + kind.name());
+        }
+
+        private AutomationCommandResult submitProviderPlan(CommandIntent intent) {
+            List<CommandIntent> steps;
+            try {
+                steps = ProviderPlanIntentCodec.decode(intent.instruction());
+            } catch (IllegalArgumentException exception) {
+                return rejected(exception.getMessage());
+            }
+            for (CommandIntent step : steps) {
+                RuntimeIntentValidationResult validation = RuntimeIntentValidator.validate(step, entity.allowWorldActions());
+                if (!validation.isAccepted()) {
+                    return rejected("PROVIDER_PLAN step rejected: " + validation.message());
+                }
+            }
+            for (CommandIntent step : steps) {
+                AutomationCommandResult result = submitPrimitiveIntent(step);
+                if (result.status() != AutomationCommandStatus.ACCEPTED) {
+                    return rejected("PROVIDER_PLAN step rejected: " + result.message());
+                }
+            }
+            return accepted("PROVIDER_PLAN accepted: " + steps.size()
+                    + " validated primitive step(s) accepted or queued without replanning");
         }
 
         private AutomationCommandResult submitGoto(String instruction) {

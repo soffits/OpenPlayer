@@ -222,6 +222,12 @@ tasks.register('runRuntimeIntentValidatorTest', JavaExec) {
     mainClass = 'dev.soffits.openplayer.runtime.validation.RuntimeIntentValidatorTest'
 }
 
+tasks.register('runInteractivePlannerSessionTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.runtime.planner.InteractivePlannerSessionTest'
+}
+
 tasks.register('runMinecraftPrimitiveToolsTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
@@ -355,6 +361,7 @@ tasks.named('check') {
     dependsOn tasks.named('runSurvivalPolicyTest')
     dependsOn tasks.named('runRuntimeContextFormatterTest')
     dependsOn tasks.named('runRuntimeIntentValidatorTest')
+    dependsOn tasks.named('runInteractivePlannerSessionTest')
     dependsOn tasks.named('runMinecraftPrimitiveToolsTest')
     dependsOn tasks.named('runAICoreToolSchemaParityTest')
     dependsOn tasks.named('runMineflayerApiSurfaceMatrixTest')

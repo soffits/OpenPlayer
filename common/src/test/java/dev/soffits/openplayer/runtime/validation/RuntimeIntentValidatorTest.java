@@ -1,8 +1,10 @@
 package dev.soffits.openplayer.runtime.validation;
 
 import dev.soffits.openplayer.intent.CommandIntent;
+import dev.soffits.openplayer.intent.IntentParseException;
 import dev.soffits.openplayer.intent.IntentKind;
 import dev.soffits.openplayer.intent.IntentPriority;
+import dev.soffits.openplayer.intent.ProviderPlanIntentCodec;
 import java.util.EnumSet;
 import java.util.Set;
 import net.minecraft.SharedConstants;
@@ -25,6 +27,7 @@ public final class RuntimeIntentValidatorTest {
         validatesGotoInstructions();
         validatesRadiusInstructions();
         rejectsNonAutomationConversationKinds();
+        validatesBoundedProviderPlans();
         validatesPhaseFourteenInteractionInstructions();
         validatesPhaseFourteenTargetAttackInstructions();
         validatesAdvancedLoadedReconnaissanceInstructions();
@@ -212,6 +215,22 @@ public final class RuntimeIntentValidatorTest {
                 "OBSERVE cannot be submitted to automation");
     }
 
+    private static void validatesBoundedProviderPlans() {
+        CommandIntent plan = providerPlan(
+                new CommandIntent(IntentKind.REPORT_STATUS, IntentPriority.NORMAL, ""),
+                new CommandIntent(IntentKind.GOTO, IntentPriority.NORMAL, "1 64 2")
+        );
+        require(RuntimeIntentValidator.validate(plan, true).isAccepted(),
+                "PROVIDER_PLAN should accept validated primitive steps");
+        CommandIntent worldActionPlan = providerPlan(
+                new CommandIntent(IntentKind.BREAK_BLOCK, IntentPriority.NORMAL, "1 64 2")
+        );
+        requireRejected(RuntimeIntentValidator.validate(worldActionPlan, false),
+                "PROVIDER_PLAN step rejected: World actions are disabled for this OpenPlayer character");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.PROVIDER_PLAN, "bad"), true),
+                "provider plan step encoding is invalid");
+    }
+
     private static void validatesAdvancedLoadedReconnaissanceInstructions() {
         require(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_LOADED_BLOCK, "minecraft:oak_log"), true).isAccepted(),
                 "LOCATE_LOADED_BLOCK should accept exact block id");
@@ -313,12 +332,25 @@ public final class RuntimeIntentValidatorTest {
                     SWAP_TO_OFFHAND,
                     DROP_ITEM,
                     REPORT_STATUS -> "";
+            case PROVIDER_PLAN -> providerPlanInstruction();
         };
         return intent(kind, instruction);
     }
 
+    private static String providerPlanInstruction() {
+        return providerPlan(new CommandIntent(IntentKind.REPORT_STATUS, IntentPriority.NORMAL, "")).instruction();
+    }
+
     private static CommandIntent intent(IntentKind kind, String instruction) {
         return new CommandIntent(kind, IntentPriority.NORMAL, instruction);
+    }
+
+    private static CommandIntent providerPlan(CommandIntent... steps) {
+        try {
+            return ProviderPlanIntentCodec.encode(java.util.List.of(steps), IntentPriority.NORMAL);
+        } catch (IntentParseException exception) {
+            throw new AssertionError("valid provider plan test instruction must encode", exception);
+        }
     }
 
     private static void requireRejected(RuntimeIntentValidationResult result, String expectedMessage) {

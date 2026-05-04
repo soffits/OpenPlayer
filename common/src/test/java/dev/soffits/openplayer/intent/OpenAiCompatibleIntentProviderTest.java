@@ -17,7 +17,7 @@ public final class OpenAiCompatibleIntentProviderTest {
         systemPromptIncludesPlannedUnsupportedInstruction();
         systemPromptRejectsMacroSurface();
         parsesStructuredToolProviderResponse();
-        parsesStructuredPlanProviderResponseAsNonExecutablePlan();
+        parsesStructuredPlanProviderResponse();
         parsesStructuredChatProviderResponse();
         parsesStructuredUnavailableProviderResponse();
         rejectsOldStyleProviderResponse();
@@ -68,8 +68,12 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must document structured tool JSON");
         require(prompt.contains("if priority is omitted, OpenPlayer treats it as NORMAL"),
                 "system prompt must document deterministic structured priority default");
-        require(prompt.contains("Do not return plan JSON"),
-                "system prompt must not overclaim provider plan execution");
+        require(prompt.contains("For compatibility only, a bounded plan"),
+                "system prompt must document compatibility provider plan execution");
+        require(prompt.contains("accepted or queued never means completed"),
+                "system prompt must not overclaim provider plan completion");
+        require(!prompt.contains("Do not return plan JSON for execution"),
+                "system prompt must not contradict bounded provider plan execution");
         require(prompt.contains("Return JSON only"), "system prompt must constrain output to JSON only");
         require(prompt.contains("no secrets"), "system prompt must prohibit secrets");
     }
@@ -133,6 +137,14 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must constrain loaded reconnaissance to report-only behavior");
         require(prompt.contains("if the requested next primitive is unavailable, return UNAVAILABLE or report_status"),
                 "system prompt must direct missing primitives to unavailable/status diagnostics");
+        require(prompt.contains("Never tell the player to press keyboard controls for the NPC"),
+                "system prompt must forbid keyboard-control claims for NPC actions");
+        require(prompt.contains("if sprintControl is unsupported or no sprint primitive exists"),
+                "system prompt must keep sprint claims tied to runtime capability");
+        require(prompt.contains("If a value is unsupported, unavailable, or absent, say that instead of guessing"),
+                "system prompt must require truthful hunger and status answers from context");
+        require(prompt.contains("inventory_query, exact equip_item item ids, or report_status"),
+                "system prompt must guide self-maintenance through generic primitives only");
     }
 
     private static void systemPromptRejectsMacroSurface() {
@@ -160,12 +172,12 @@ public final class OpenAiCompatibleIntentProviderTest {
         require("NORMAL".equals(intent.priority()), "missing structured tool priority must default to NORMAL");
     }
 
-    private static void parsesStructuredPlanProviderResponseAsNonExecutablePlan() throws Exception {
+    private static void parsesStructuredPlanProviderResponse() throws Exception {
         ProviderIntent intent = OpenAiCompatibleIntentProvider.parseProviderResponse(responseWithContent(
                 "{\"plan\":[{\"tool\":\"report_status\",\"args\":{}}]}"
         ));
         require(intent.hasStructuredToolJson(), "provider response parser must preserve structured plan JSON");
-        require(intent.plan(), "provider response parser must mark plan JSON as non-executable plan output");
+        require(intent.plan(), "provider response parser must mark plan JSON as bounded plan output");
     }
 
     private static void parsesStructuredChatProviderResponse() throws Exception {

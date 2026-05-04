@@ -16,7 +16,6 @@ import net.minecraft.network.chat.Component;
 
 public final class OpenPlayerControlScreen extends Screen {
     private static final Component TITLE = Component.translatable("screen.openplayer.controls.title");
-    private static final Component COMMAND_INPUT = Component.translatable("screen.openplayer.controls.command_input");
     private static final Component PROVIDER_ENDPOINT_INPUT = Component.translatable("screen.openplayer.controls.provider_endpoint_input");
     private static final Component PROVIDER_MODEL_INPUT = Component.translatable("screen.openplayer.controls.provider_model_input");
     private static final Component PROVIDER_API_KEY_INPUT = Component.translatable("screen.openplayer.controls.provider_api_key_input");
@@ -28,10 +27,8 @@ public final class OpenPlayerControlScreen extends Screen {
     private static final Component PROFILE_PROMPT_INPUT = Component.translatable("screen.openplayer.controls.profile_prompt_input");
     private static final Component PROFILE_SETTINGS_INPUT = Component.translatable("screen.openplayer.controls.profile_settings_input");
     private static final int BUTTON_WIDTH = 142;
-    private static final int COMMAND_INPUT_WIDTH = 220;
-    private static final int MAX_COMMAND_TEXT_LENGTH = 512;
+    private static final int CONTROL_INPUT_WIDTH = 220;
     private static final int TAB_TOP = 42;
-    private EditBox commandInput;
     private EditBox providerEndpointInput;
     private EditBox providerModelInput;
     private EditBox providerApiKeyInput;
@@ -42,7 +39,6 @@ public final class OpenPlayerControlScreen extends Screen {
     private EditBox profileRoleInput;
     private EditBox profilePromptInput;
     private EditBox profileSettingsInput;
-    private String commandDraft = "";
     private String providerEndpointDraft = "";
     private String providerModelDraft = "";
     private String providerApiKeyDraft = "";
@@ -73,19 +69,15 @@ public final class OpenPlayerControlScreen extends Screen {
     public void tick() {
         String key = characterKey();
         if (!key.equals(renderedCharacterKey)) {
-            rebuildControlWidgetsPreservingCommandText(true);
+            rebuildControlWidgetsPreservingDrafts(true);
         }
     }
 
-    private void rebuildControlWidgetsPreservingCommandText(boolean keepSelectedVisible) {
-        commandDraft = commandInput == null ? commandDraft : commandInput.getValue();
+    private void rebuildControlWidgetsPreservingDrafts(boolean keepSelectedVisible) {
         providerEndpointDraft = providerEndpointInput == null ? providerEndpointDraft : providerEndpointInput.getValue();
         providerModelDraft = providerModelInput == null ? providerModelDraft : providerModelInput.getValue();
         providerApiKeyDraft = providerApiKeyInput == null ? providerApiKeyDraft : providerApiKeyInput.getValue();
         rebuildControlWidgets(keepSelectedVisible);
-        if (commandInput != null) {
-            commandInput.setValue(commandDraft);
-        }
         if (providerEndpointInput != null) {
             providerEndpointInput.setValue(providerEndpointDraft);
         }
@@ -99,7 +91,6 @@ public final class OpenPlayerControlScreen extends Screen {
 
     private void rebuildControlWidgets(boolean keepSelectedVisible) {
         this.clearWidgets();
-        commandInput = null;
         providerEndpointInput = null;
         providerModelInput = null;
         providerApiKeyInput = null;
@@ -131,7 +122,7 @@ public final class OpenPlayerControlScreen extends Screen {
                         selectedAssignmentId = character.assignmentId();
                         pageIndex = OpenPlayerGalleryPage.pageForItemIndex(characterIndex, visibleAssignments);
                         requestStatusForSelection();
-                        rebuildControlWidgetsPreservingCommandText(true);
+                        rebuildControlWidgetsPreservingDrafts(true);
                     })
                     .bounds(margin, y, listWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
                     .build());
@@ -141,7 +132,7 @@ public final class OpenPlayerControlScreen extends Screen {
             int pagerButtonWidth = Math.max(45, (listWidth - 62) / 2);
             Button previous = Button.builder(Component.translatable("screen.openplayer.controls.previous_page"), button -> {
                         pageIndex = Math.max(0, pageIndex - 1);
-                        rebuildControlWidgetsPreservingCommandText(false);
+                        rebuildControlWidgetsPreservingDrafts(false);
                     })
                     .bounds(margin, pagerTop, pagerButtonWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
                     .build();
@@ -149,7 +140,7 @@ public final class OpenPlayerControlScreen extends Screen {
             this.addRenderableWidget(previous);
             Button next = Button.builder(Component.translatable("screen.openplayer.controls.next_page"), button -> {
                         pageIndex = pageIndex + 1;
-                        rebuildControlWidgetsPreservingCommandText(false);
+                        rebuildControlWidgetsPreservingDrafts(false);
                     })
                     .bounds(margin + listWidth - pagerButtonWidth, pagerTop, pagerButtonWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
                     .build();
@@ -179,7 +170,7 @@ public final class OpenPlayerControlScreen extends Screen {
             ControlPage page = pages[index];
             Button tab = Button.builder(Component.translatable(page.translationKey()), button -> {
                         controlPage = page;
-                        rebuildControlWidgetsPreservingCommandText(true);
+                        rebuildControlWidgetsPreservingDrafts(true);
                     })
                     .bounds(tabsLeft + index * (tabWidth + tabSpacing), TAB_TOP, tabWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
                     .build();
@@ -226,33 +217,16 @@ public final class OpenPlayerControlScreen extends Screen {
                 .build();
         exportButton.active = selectedCharacter() != null;
         this.addRenderableWidget(exportButton);
-        int inputWidth = OpenPlayerControlLayout.clampedControlWidth(rightWidth, COMMAND_INPUT_WIDTH);
-        commandInput = new EditBox(
-                this.font,
-                OpenPlayerControlLayout.centeredLeft(rightLeft, rightWidth, inputWidth),
-                rowTop + rowStep * 3,
-                inputWidth,
-                OpenPlayerControlLayout.BUTTON_HEIGHT,
-                COMMAND_INPUT
-        );
-        commandInput.setMaxLength(MAX_COMMAND_TEXT_LENGTH);
-        commandInput.setHint(COMMAND_INPUT);
-        this.addRenderableWidget(commandInput);
-        Button sendButton = Button.builder(Component.translatable("screen.openplayer.controls.send_to_selected"), button -> sendCommandText())
-                .bounds(leftColumn, rowTop + rowStep * 4, buttonWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
-                .build();
-        sendButton.active = hasSelection;
-        this.addRenderableWidget(sendButton);
         this.addRenderableWidget(Button.builder(Component.translatable("screen.openplayer.controls.profile_page"), button -> {
                     controlPage = ControlPage.PROFILE;
-                    rebuildControlWidgetsPreservingCommandText(true);
+                    rebuildControlWidgetsPreservingDrafts(true);
                 })
-                .bounds(rightColumn, rowTop + rowStep * 4, buttonWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
+                .bounds(OpenPlayerControlLayout.centeredLeft(rightLeft, rightWidth, buttonWidth), rowTop + rowStep * 3, buttonWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
                 .build());
     }
 
     private void addProviderWidgets(int rightLeft, int rightWidth) {
-        int inputWidth = OpenPlayerControlLayout.clampedControlWidth(rightWidth, COMMAND_INPUT_WIDTH);
+        int inputWidth = OpenPlayerControlLayout.clampedControlWidth(rightWidth, CONTROL_INPUT_WIDTH);
         int inputLeft = OpenPlayerControlLayout.centeredLeft(rightLeft, rightWidth, inputWidth);
         int buttonWidth = Math.min(BUTTON_WIDTH, rightWidth);
         int controlsLeft = OpenPlayerControlLayout.centeredLeft(rightLeft, rightWidth, buttonWidth);
@@ -274,7 +248,7 @@ public final class OpenPlayerControlScreen extends Screen {
         this.addRenderableWidget(providerApiKeyInput);
         this.addRenderableWidget(Button.builder(Component.translatable(clearApiKeyOnSave ? "screen.openplayer.controls.clear_key_on_save" : "screen.openplayer.controls.preserve_blank_key"), button -> {
                     clearApiKeyOnSave = !clearApiKeyOnSave;
-                    rebuildControlWidgetsPreservingCommandText(true);
+                    rebuildControlWidgetsPreservingDrafts(true);
                 })
                 .bounds(controlsLeft, providerTop + rowStep * 3, buttonWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
                 .build());
@@ -287,7 +261,7 @@ public final class OpenPlayerControlScreen extends Screen {
     }
 
     private void addProfileWidgets(int rightLeft, int rightWidth) {
-        int inputWidth = OpenPlayerControlLayout.clampedControlWidth(rightWidth, COMMAND_INPUT_WIDTH);
+        int inputWidth = OpenPlayerControlLayout.clampedControlWidth(rightWidth, CONTROL_INPUT_WIDTH);
         int inputLeft = OpenPlayerControlLayout.centeredLeft(rightLeft, rightWidth, inputWidth);
         int buttonWidth = Math.min(BUTTON_WIDTH, Math.max(58, (rightWidth - OpenPlayerControlLayout.BUTTON_SPACING) / 2));
         int buttonsLeft = OpenPlayerControlLayout.centeredLeft(rightLeft, rightWidth, buttonWidth * 2 + OpenPlayerControlLayout.BUTTON_SPACING);
@@ -314,7 +288,7 @@ public final class OpenPlayerControlScreen extends Screen {
         this.addRenderableWidget(Button.builder(Component.translatable("screen.openplayer.controls.new_profile"), button -> {
                     selectedAssignmentId = null;
                     confirmDeleteSelected = false;
-                    rebuildControlWidgetsPreservingCommandText(true);
+                    rebuildControlWidgetsPreservingDrafts(true);
                 })
                 .bounds(buttonsLeft, rowTop + rowStep * 8, buttonWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
                 .build());
@@ -330,7 +304,7 @@ public final class OpenPlayerControlScreen extends Screen {
         this.addRenderableWidget(deleteButton);
         this.addRenderableWidget(Button.builder(Component.translatable("screen.openplayer.controls.imports_page"), button -> {
                     controlPage = ControlPage.IMPORTS;
-                    rebuildControlWidgetsPreservingCommandText(true);
+                    rebuildControlWidgetsPreservingDrafts(true);
                 })
                 .bounds(buttonsLeft + buttonWidth + OpenPlayerControlLayout.BUTTON_SPACING, rowTop + rowStep * 9, buttonWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
                 .build());
@@ -357,13 +331,13 @@ public final class OpenPlayerControlScreen extends Screen {
                 .build());
         List<String> imports = OpenPlayerClientStatus.importFileNames();
         int y = rowTop + 34;
-        int listWidth = OpenPlayerControlLayout.clampedControlWidth(rightWidth, COMMAND_INPUT_WIDTH);
+        int listWidth = OpenPlayerControlLayout.clampedControlWidth(rightWidth, CONTROL_INPUT_WIDTH);
         int listLeft = OpenPlayerControlLayout.centeredLeft(rightLeft, rightWidth, listWidth);
         for (int index = 0; index < Math.min(imports.size(), 6); index++) {
             int importIndex = index;
             Button fileButton = Button.builder(Component.literal(fit((index == selectedImportIndex ? "> " : "") + imports.get(index), listWidth - 10)), button -> {
                         selectedImportIndex = importIndex;
-                        rebuildControlWidgetsPreservingCommandText(true);
+                        rebuildControlWidgetsPreservingDrafts(true);
                     })
                     .bounds(listLeft, y + index * 24, listWidth, OpenPlayerControlLayout.BUTTON_HEIGHT)
                     .build();
@@ -556,19 +530,6 @@ public final class OpenPlayerControlScreen extends Screen {
         }
     }
 
-    private void sendCommandText() {
-        String value = commandInput.getValue().trim();
-        if (!value.isEmpty()) {
-            LocalCharacterListEntry selected = selectedCharacter();
-            if (selected != null) {
-                OpenPlayerRequestSender.sendCommandTextRequest(selected.assignmentId(), value);
-                requestStatusForSelection();
-                commandInput.setValue("");
-                commandDraft = "";
-            }
-        }
-    }
-
     private void sendProfileSave() {
         try {
             OpenPlayerRequestSender.sendCharacterSaveRequest(new LocalCharacterDefinition(
@@ -594,7 +555,7 @@ public final class OpenPlayerControlScreen extends Screen {
             return;
         }
         selectedAssignmentId = null;
-        rebuildControlWidgetsPreservingCommandText(true);
+        rebuildControlWidgetsPreservingDrafts(true);
         profileIdInput.setValue(copyId(selected.characterId()));
         profileDisplayNameInput.setValue(Component.translatable("screen.openplayer.controls.duplicate_profile_display_name", selected.displayName()).getString());
         profileDescriptionInput.setValue(selected.description());
@@ -612,7 +573,7 @@ public final class OpenPlayerControlScreen extends Screen {
         }
         if (!confirmDeleteSelected) {
             confirmDeleteSelected = true;
-            rebuildControlWidgetsPreservingCommandText(true);
+            rebuildControlWidgetsPreservingDrafts(true);
             return;
         }
         OpenPlayerRequestSender.sendCharacterDeleteRequest(selected.characterId());

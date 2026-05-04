@@ -8,12 +8,15 @@ import dev.soffits.openplayer.aicore.ToolResult;
 import dev.soffits.openplayer.aicore.ToolResultStatus;
 import dev.soffits.openplayer.aicore.ToolValidationContext;
 import dev.soffits.openplayer.debug.OpenPlayerRawTrace;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
 public final class ProviderBackedIntentParser implements IntentParser {
     private static final AICoreProviderJsonToolParser TOOL_JSON_PARSER =
-            new AICoreProviderJsonToolParser(MinecraftPrimitiveTools.registry(), 8);
+            new AICoreProviderJsonToolParser(MinecraftPrimitiveTools.registry(), ProviderPlanIntentCodec.MAX_STEPS);
+    private static final int MAX_PROVIDER_TOOL_JSON_LENGTH = 8192;
 
     private final IntentProvider provider;
 
@@ -66,8 +69,7 @@ public final class ProviderBackedIntentParser implements IntentParser {
             throws IntentParseException {
         return switch (providerIntent.type()) {
             case TOOL -> parseStructuredToolCommandIntent(providerIntent, priority);
-            case PLAN -> throw new IntentParseException(
-                    "provider plans are parser-only and are not executable by this provider path");
+            case PLAN -> parseStructuredPlanCommandIntent(providerIntent, priority);
             case CHAT -> new CommandIntent(IntentKind.CHAT, priority, providerIntent.message());
             case UNAVAILABLE -> new CommandIntent(IntentKind.UNAVAILABLE, priority, providerIntent.message());
         };
@@ -78,6 +80,7 @@ public final class ProviderBackedIntentParser implements IntentParser {
         if (!providerIntent.hasStructuredToolJson()) {
             throw new IntentParseException("provider tool JSON is missing");
         }
+        requireBoundedToolJson(providerIntent.toolJson());
         JsonToolParseResult parseResult = TOOL_JSON_PARSER.parse(providerIntent.toolJson());
         if (!parseResult.isAccepted()) {
             throw new IntentParseException(parseResult.error());
@@ -96,6 +99,40 @@ public final class ProviderBackedIntentParser implements IntentParser {
             throw new IntentParseException("intent provider returned a non-executable primitive tool");
         }
         return commandIntent.get();
+    }
+
+    private static CommandIntent parseStructuredPlanCommandIntent(ProviderIntent providerIntent, IntentPriority priority)
+            throws IntentParseException {
+        if (!providerIntent.hasStructuredToolJson()) {
+            throw new IntentParseException("provider plan JSON is missing");
+        }
+        requireBoundedToolJson(providerIntent.toolJson());
+        JsonToolParseResult parseResult = TOOL_JSON_PARSER.parse(providerIntent.toolJson());
+        if (!parseResult.isAccepted()) {
+            throw new IntentParseException(parseResult.error());
+        }
+        if (parseResult.calls().isEmpty()) {
+            throw new IntentParseException("provider plan JSON must contain at least one executable tool");
+        }
+        List<CommandIntent> stepIntents = new ArrayList<>(parseResult.calls().size());
+        for (ToolCall call : parseResult.calls()) {
+            ToolResult validation = MinecraftPrimitiveTools.validate(call, new ToolValidationContext(true));
+            if (validation.status() != ToolResultStatus.SUCCESS) {
+                throw new IntentParseException(validation.reason());
+            }
+            Optional<CommandIntent> commandIntent = MinecraftPrimitiveTools.toCommandIntent(call, priority);
+            if (commandIntent.isEmpty()) {
+                throw new IntentParseException("provider plan contains a non-executable primitive tool");
+            }
+            stepIntents.add(commandIntent.get());
+        }
+        return ProviderPlanIntentCodec.encode(stepIntents, priority);
+    }
+
+    private static void requireBoundedToolJson(String toolJson) throws IntentParseException {
+        if (toolJson.length() > MAX_PROVIDER_TOOL_JSON_LENGTH) {
+            throw new IntentParseException("provider tool JSON is too large");
+        }
     }
 
     private static IntentPriority parsePriority(String value) throws IntentParseException {

@@ -66,7 +66,8 @@ public final class RuntimeIntentPolicies {
                     PAUSE,
                     UNPAUSE,
                     RESET_MEMORY,
-                    BODY_LANGUAGE -> false;
+                    BODY_LANGUAGE,
+                    PROVIDER_PLAN -> false;
         };
     }
 

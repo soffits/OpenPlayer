@@ -13,9 +13,11 @@ import dev.soffits.openplayer.character.LocalAssignmentDefinition;
 import dev.soffits.openplayer.character.LocalAssignmentRepositoryResult;
 import dev.soffits.openplayer.character.LocalCharacterDefinition;
 import dev.soffits.openplayer.character.LocalCharacterRepositoryResult;
+import dev.soffits.openplayer.conversation.ActionLikeRequestDiagnostics;
 import dev.soffits.openplayer.conversation.ConversationHistoryTrimmer;
 import dev.soffits.openplayer.conversation.ConversationContextSnapshot;
 import dev.soffits.openplayer.conversation.ConversationLoop;
+import dev.soffits.openplayer.conversation.ConversationReplyText;
 import dev.soffits.openplayer.conversation.ConversationStatusRepository;
 import dev.soffits.openplayer.conversation.ConversationTurn;
 import dev.soffits.openplayer.debug.OpenPlayerDebugEvents;
@@ -26,6 +28,7 @@ import dev.soffits.openplayer.intent.IntentParseException;
 import dev.soffits.openplayer.OpenPlayerIntentParserConfig;
 import dev.soffits.openplayer.runtime.validation.RuntimeIntentValidationResult;
 import dev.soffits.openplayer.runtime.validation.RuntimeIntentValidator;
+import java.util.ArrayList;
 import java.util.Locale;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -223,6 +226,7 @@ public final class CompanionLifecycleManager {
         ConversationHistoryKey historyKey = new ConversationHistoryKey(ownerId, assignment.id());
         List<ConversationTurn> history = conversationHistory.getOrDefault(historyKey, List.of());
         AiPlayerNpcCommand[] submittedCommand = new AiPlayerNpcCommand[1];
+        CommandIntent[] parsedIntent = new CommandIntent[1];
         String sessionId = session.get().sessionId().value().toString();
         ConversationContextSnapshot contextSnapshot = conversationContextSnapshot(session.get());
         OpenPlayerDebugEvents.record("provider_parse", "attempted", assignment.id(), character.id(), sessionId,
@@ -236,9 +240,15 @@ public final class CompanionLifecycleManager {
                     submittedCommand[0] = command;
                     return submitSelectedCommand(ownerId, assignment.id(), command);
                 },
-                intent -> OpenPlayerDebugEvents.record("provider_parse", "success", assignment.id(), character.id(), sessionId,
-                        "kind=" + intent.kind().name() + " instructionLength=" + intent.instruction().length())
+                intent -> {
+                    parsedIntent[0] = intent;
+                    OpenPlayerDebugEvents.record("provider_parse", "success", assignment.id(), character.id(), sessionId,
+                            "kind=" + intent.kind().name() + " instructionLength=" + intent.instruction().length());
+                }
         );
+        if (submittedCommand[0] == null && parsedIntent[0] != null) {
+            ActionLikeRequestDiagnostics.recordChatIfActionLike(commandText, parsedIntent[0], assignment.id(), character.id(), sessionId);
+        }
         if (result.status() == CommandSubmissionStatus.ACCEPTED && submittedCommand[0] != null
                 && submittedCommand[0].intent().kind() != IntentKind.RESET_MEMORY) {
             appendConversationTurn(historyKey, new ConversationTurn("player", commandText));
@@ -265,15 +275,19 @@ public final class CompanionLifecycleManager {
     public CommandSubmissionResult submitSelectedCommandTextAsync(MinecraftServer server, UUID ownerId, String characterId,
                                                                  String commandText,
                                                                  Consumer<CommandSubmissionResult> completion) {
-        if (server == null) {
-            throw new IllegalArgumentException("server cannot be null");
-        }
         if (completion == null) {
             throw new IllegalArgumentException("completion cannot be null");
         }
         ConversationSubmissionContext context = prepareConversationSubmission(ownerId, characterId, commandText);
         if (context.result() != null) {
             return context.result();
+        }
+        AiPlayerNpcService service = npcService();
+        if (service instanceof InteractivePlannerCommandTextService plannerService) {
+            return submitPlannedConversation(context, plannerService, completion);
+        }
+        if (server == null) {
+            throw new IllegalArgumentException("server cannot be null");
         }
         RuntimeAgentExecutor.submit(server, () -> parseConversation(context.parseRequest()), intent -> {
             CommandSubmissionResult result = finishConversationSubmission(context, intent);
@@ -288,6 +302,89 @@ public final class CompanionLifecycleManager {
             completion.accept(new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, message));
         });
         return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED, "Conversation queued for provider parsing");
+    }
+
+    private CommandSubmissionResult submitPlannedConversation(ConversationSubmissionContext context,
+                                                             InteractivePlannerCommandTextService plannerService,
+                                                             Consumer<CommandSubmissionResult> completion) {
+        List<AiPlayerNpcCommand> submittedCommands = new ArrayList<>();
+        CommandIntent[] lastIntent = new CommandIntent[1];
+        return plannerService.submitPlannedCommandText(
+                new dev.soffits.openplayer.api.NpcSessionId(UUID.fromString(context.sessionId())),
+                new InteractivePlannerCommandTextService.PlannerCommandTextRequest(
+                        context.commandText(),
+                        context.parseRequest().prompt(),
+                        context.assignment().id(),
+                        context.character().id(),
+                        "conversation"
+                ),
+                new InteractivePlannerCommandTextService.PlannerCommandTextCallbacks(
+                        intent -> {
+                            lastIntent[0] = intent;
+                            OpenPlayerDebugEvents.record("provider_parse", "success", context.assignment().id(),
+                                    context.character().id(), context.sessionId(),
+                                    "kind=" + intent.kind().name() + " instructionLength=" + intent.instruction().length());
+                        },
+                        command -> {
+                            submittedCommands.add(command);
+                            conversationStatusRepository.recordAction(context.ownerId(), context.assignment().id(), command.intent());
+                        },
+                        result -> completion.accept(finishPlannedConversationSubmission(context, result, lastIntent[0], submittedCommands))
+                )
+        );
+    }
+
+    private CommandSubmissionResult finishPlannedConversationSubmission(ConversationSubmissionContext context,
+                                                                        CommandSubmissionResult result,
+                                                                        CommandIntent lastIntent,
+                                                                        List<AiPlayerNpcCommand> submittedCommands) {
+        if (submittedCommands.isEmpty() && lastIntent != null) {
+            ActionLikeRequestDiagnostics.recordChatIfActionLike(context.commandText(), lastIntent, context.assignment().id(),
+                    context.character().id(), context.sessionId());
+        }
+        CommandSubmissionResult displayResult = plannerDisplayResult(result, lastIntent);
+        if (!submittedCommands.isEmpty()) {
+            appendConversationTurn(context.historyKey(), new ConversationTurn("player", context.commandText()));
+            for (AiPlayerNpcCommand command : submittedCommands) {
+                appendConversationTurn(context.historyKey(), new ConversationTurn(
+                        "openplayer",
+                        "Action accepted: " + command.intent().kind().name()
+                ));
+            }
+            if (displayResult.status() == CommandSubmissionStatus.ACCEPTED && lastIntent != null
+                    && (lastIntent.kind() == IntentKind.CHAT || lastIntent.kind() == IntentKind.UNAVAILABLE)) {
+                appendConversationTurn(context.historyKey(), new ConversationTurn("openplayer", displayResult.message()));
+                conversationStatusRepository.recordNpcReply(context.ownerId(), context.assignment().id(), displayResult.message());
+            } else if (displayResult.status() != CommandSubmissionStatus.ACCEPTED) {
+                conversationStatusRepository.recordFailure(context.ownerId(), context.assignment().id(), displayResult.message());
+            }
+            return displayResult;
+        }
+        if (displayResult.status() == CommandSubmissionStatus.ACCEPTED) {
+            appendConversationTurn(context.historyKey(), new ConversationTurn("player", context.commandText()));
+            appendConversationTurn(context.historyKey(), new ConversationTurn("openplayer", displayResult.message()));
+            conversationStatusRepository.recordNpcReply(context.ownerId(), context.assignment().id(), displayResult.message());
+        } else {
+            conversationStatusRepository.recordFailure(context.ownerId(), context.assignment().id(), displayResult.message());
+            OpenPlayerDebugEvents.record("conversation", displayResult.status().name(), context.assignment().id(),
+                    context.character().id(), context.sessionId(), displayResult.message());
+        }
+        return displayResult;
+    }
+
+    private static CommandSubmissionResult plannerDisplayResult(CommandSubmissionResult result, CommandIntent lastIntent) {
+        if (result.status() != CommandSubmissionStatus.ACCEPTED || lastIntent == null) {
+            return result;
+        }
+        if (lastIntent.kind() == IntentKind.CHAT) {
+            return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED,
+                    ConversationReplyText.chatReply(lastIntent.instruction()));
+        }
+        if (lastIntent.kind() == IntentKind.UNAVAILABLE) {
+            return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED,
+                    ConversationReplyText.unavailableReply(lastIntent.instruction()));
+        }
+        return result;
     }
 
     private ConversationSubmissionContext prepareConversationSubmission(UUID ownerId, String characterId, String commandText) {
@@ -355,6 +452,10 @@ public final class CompanionLifecycleManager {
                         context.character().id(), context.sessionId(),
                         "kind=" + acceptedIntent.kind().name() + " instructionLength=" + acceptedIntent.instruction().length())
         );
+        if (submittedCommand[0] == null) {
+            ActionLikeRequestDiagnostics.recordChatIfActionLike(context.commandText(), intent, context.assignment().id(),
+                    context.character().id(), context.sessionId());
+        }
         if (result.status() == CommandSubmissionStatus.ACCEPTED && submittedCommand[0] != null
                 && submittedCommand[0].intent().kind() != IntentKind.RESET_MEMORY) {
             appendConversationTurn(context.historyKey(), new ConversationTurn("player", context.commandText()));

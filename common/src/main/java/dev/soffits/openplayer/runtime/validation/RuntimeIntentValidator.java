@@ -10,6 +10,8 @@ import dev.soffits.openplayer.automation.work.WorkRepeatPolicy;
 import dev.soffits.openplayer.automation.InventoryActionInstructionParser;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentKind;
+import dev.soffits.openplayer.intent.ProviderPlanIntentCodec;
+import java.util.List;
 
 public final class RuntimeIntentValidator {
     private RuntimeIntentValidator() {
@@ -61,7 +63,27 @@ public final class RuntimeIntentValidator {
             case UNAVAILABLE -> RuntimeIntentValidationResult.rejected("UNAVAILABLE cannot be submitted to automation");
             case OBSERVE -> RuntimeIntentValidationResult.rejected("OBSERVE cannot be submitted to automation");
             case ATTACK_TARGET -> requireAttackTargetInstruction(intent);
+            case PROVIDER_PLAN -> requireProviderPlanInstruction(intent, allowWorldActions);
         };
+    }
+
+    private static RuntimeIntentValidationResult requireProviderPlanInstruction(
+            CommandIntent intent,
+            boolean allowWorldActions
+    ) {
+        List<CommandIntent> steps;
+        try {
+            steps = ProviderPlanIntentCodec.decode(intent.instruction());
+        } catch (IllegalArgumentException exception) {
+            return RuntimeIntentValidationResult.rejected(exception.getMessage());
+        }
+        for (CommandIntent step : steps) {
+            RuntimeIntentValidationResult validation = validate(step, allowWorldActions);
+            if (!validation.isAccepted()) {
+                return RuntimeIntentValidationResult.rejected("PROVIDER_PLAN step rejected: " + validation.message());
+            }
+        }
+        return RuntimeIntentValidationResult.accepted();
     }
 
     private static RuntimeIntentValidationResult requireBlankInstruction(CommandIntent intent, String kindName) {

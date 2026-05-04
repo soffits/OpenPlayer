@@ -27,6 +27,12 @@ import dev.soffits.openplayer.runtime.context.RuntimeNearbySnapshot.BlockTargetS
 import dev.soffits.openplayer.runtime.context.RuntimeNearbySnapshot.RuntimeEntitySnapshot;
 import dev.soffits.openplayer.runtime.context.RuntimeNearbySnapshot.RuntimeNamedEntitySnapshot;
 import dev.soffits.openplayer.runtime.context.RuntimeWorldSnapshot;
+import dev.soffits.openplayer.runtime.planner.InteractivePlannerConfig;
+import dev.soffits.openplayer.runtime.planner.InteractivePlannerSession;
+import dev.soffits.openplayer.runtime.planner.PlannerObservation;
+import dev.soffits.openplayer.runtime.planner.PlannerObservationStatus;
+import dev.soffits.openplayer.runtime.planner.PlannerTurnResult;
+import dev.soffits.openplayer.runtime.planner.PlannerTurnStatus;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -45,16 +51,21 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
-public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
+public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService, InteractivePlannerCommandTextService {
     private final MinecraftServer server;
     private IntentParser intentParser;
     private final Map<NpcSessionId, RuntimeAiPlayerNpcSession> sessions = new LinkedHashMap<>();
     private final Map<RuntimeNpcIdentityKey, NpcSessionId> sessionIdsByIdentity = new LinkedHashMap<>();
+    private final Map<NpcSessionId, InteractivePlannerSession> plannerSessions = new LinkedHashMap<>();
+    private final Map<NpcSessionId, PlannerCommandTextCallbacks> plannerCallbacks = new LinkedHashMap<>();
+    private final Map<NpcSessionId, PlannerCommandTextRequest> plannerRequests = new LinkedHashMap<>();
+    private final InteractivePlannerConfig plannerConfig = InteractivePlannerConfig.defaults();
 
     public RuntimeAiPlayerNpcService(MinecraftServer server, IntentParser intentParser) {
         if (server == null) {
@@ -205,6 +216,7 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         if (session == null) {
             return false;
         }
+        cancelPlannerSession(sessionId, "despawned");
         removeIndexes(sessionId);
         OpenPlayerNpcEntity entity = entityFor(session);
         if (entity != null) {
@@ -241,6 +253,9 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
                     sessionId.value().toString(), "NPC session entity is unavailable");
             return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "NPC session entity is unavailable");
         }
+        if (command.intent().kind() == dev.soffits.openplayer.intent.IntentKind.STOP) {
+            cancelPlannerSession(sessionId, "stop requested");
+        }
         try {
             return entity.submitRuntimeCommand(command);
         } catch (IllegalArgumentException exception) {
@@ -250,13 +265,21 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
 
     @Override
     public CommandSubmissionResult submitCommandText(NpcSessionId sessionId, String input) {
+        return submitPlannedCommandText(sessionId,
+                new PlannerCommandTextRequest(input, "", null, null, "command_text"), null);
+    }
+
+    @Override
+    public CommandSubmissionResult submitPlannedCommandText(NpcSessionId sessionId, PlannerCommandTextRequest request,
+                                                            PlannerCommandTextCallbacks callbacks) {
         if (sessionId == null) {
             throw new IllegalArgumentException("sessionId cannot be null");
         }
-        if (input == null) {
-            throw new IllegalArgumentException("input cannot be null");
+        if (request == null) {
+            throw new IllegalArgumentException("request cannot be null");
         }
-        OpenPlayerRawTrace.commandText("runtime_service", null, null, sessionId.value().toString(), input);
+        OpenPlayerRawTrace.commandText("runtime_service", request.assignmentId(), request.characterId(),
+                sessionId.value().toString(), request.userRequest());
         synchronized (this) {
             reattachPersistedNpcs();
             if (!sessions.containsKey(sessionId)) {
@@ -265,34 +288,263 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
                 return new CommandSubmissionResult(CommandSubmissionStatus.UNKNOWN_SESSION, "Unknown NPC session");
             }
         }
-        IntentParser parser = intentParser();
-        RuntimeAgentExecutor.submit(server, () -> parseCommandText(parser, sessionId, input), intent -> {
-            OpenPlayerDebugEvents.record("provider_parse", "success", null, null,
-                    sessionId.value().toString(), "kind=" + intent.kind().name() + " instructionLength=" + intent.instruction().length());
-            OpenPlayerRawTrace.parseOutput("runtime_service", sessionId.value().toString(),
-                    "kind=" + intent.kind().name() + " priority=" + intent.priority().name()
-                            + " instruction=" + intent.instruction());
-            submitCommand(sessionId, new AiPlayerNpcCommand(UUID.randomUUID(), intent));
-        }, exception -> {
-            OpenPlayerDebugEvents.record("provider_parse", "rejected", null, null,
-                    sessionId.value().toString(), "Unable to parse command text");
-            String message = exception instanceof CommandTextParseRuntimeException parseException
-                    ? parseException.parseException().getMessage()
-                    : exception.getMessage();
-            OpenPlayerRawTrace.parseRejection("runtime_service", sessionId.value().toString(), input, message);
-        });
-        return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED, "Command text queued for provider parsing");
+        InteractivePlannerSession plannerSession = new InteractivePlannerSession(UUID.randomUUID(), request.userRequest(),
+                request.providerPrompt(), plannerConfig);
+        synchronized (this) {
+            cancelPlannerSession(sessionId, "replaced by new request");
+            plannerSessions.put(sessionId, plannerSession);
+            if (callbacks != null) {
+                plannerCallbacks.put(sessionId, callbacks);
+            }
+            plannerRequests.put(sessionId, request);
+        }
+        schedulePlannerProviderCall(sessionId, plannerSession);
+        return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED, "Command text queued for interactive provider planning");
     }
 
-    private static CommandIntent parseCommandText(IntentParser parser, NpcSessionId sessionId, String input) {
+    private static CommandIntent parseCommandText(IntentParser parser, NpcSessionId sessionId, String input,
+                                                  PlannerCommandTextRequest request) {
         try {
-            OpenPlayerDebugEvents.record("provider_parse", "attempted", null, null,
-                    sessionId.value().toString(), "source=command_text messageLength=" + input.trim().length());
+            String source = request == null ? "command_text" : request.source();
+            String assignmentId = request == null ? null : request.assignmentId();
+            String characterId = request == null ? null : request.characterId();
+            OpenPlayerDebugEvents.record("provider_parse", "attempted", assignmentId, characterId,
+                    sessionId.value().toString(), "source=" + source + " messageLength=" + input.trim().length());
             OpenPlayerRawTrace.parseInput("runtime_service", sessionId.value().toString(), input);
             return parser.parse(input);
         } catch (IntentParseException exception) {
             throw new CommandTextParseRuntimeException(exception);
         }
+    }
+
+    private void schedulePlannerProviderCall(NpcSessionId sessionId, InteractivePlannerSession plannerSession) {
+        PlannerTurnResult budget = plannerSession.beforeProviderCall();
+        if (budget.status() != PlannerTurnStatus.CONTINUE) {
+            finishPlannerSession(sessionId, plannerSession, budget);
+            return;
+        }
+        IntentParser parser = intentParser();
+        String prompt = plannerPrompt(sessionId, plannerSession);
+        PlannerCommandTextRequest request = plannerRequest(sessionId);
+        RuntimeAgentExecutor.submit(server, () -> parseCommandText(parser, sessionId, prompt, request), intent -> {
+            if (!isActivePlannerSession(sessionId, plannerSession)) {
+                return;
+            }
+            recordPlannerIntent(sessionId, intent);
+            OpenPlayerDebugEvents.record("planner", "provider_success", request == null ? null : request.assignmentId(),
+                    request == null ? null : request.characterId(), sessionId.value().toString(),
+                    "kind=" + intent.kind().name() + " instructionLength=" + intent.instruction().length());
+            OpenPlayerRawTrace.parseOutput("planner", sessionId.value().toString(),
+                    "kind=" + intent.kind().name() + " priority=" + intent.priority().name()
+                            + " instruction=" + intent.instruction());
+            PlannerTurnResult result = plannerSession.handleIntent(intent, plannerRuntime(sessionId));
+            continuePlanner(sessionId, plannerSession, result, 0);
+        }, exception -> {
+            if (!isActivePlannerSession(sessionId, plannerSession)) {
+                return;
+            }
+            OpenPlayerDebugEvents.record("planner", "provider_rejected", request == null ? null : request.assignmentId(),
+                    request == null ? null : request.characterId(), sessionId.value().toString(),
+                    "provider response could not be parsed");
+            String message = exception instanceof CommandTextParseRuntimeException parseException
+                    ? parseException.parseException().getMessage()
+                    : exception.getMessage();
+            OpenPlayerRawTrace.parseRejection("planner", sessionId.value().toString(), prompt, message);
+            plannerSession.cancel("provider parse failed");
+            finishPlannerSession(sessionId, plannerSession,
+                    new PlannerTurnResult(PlannerTurnStatus.STOPPED, "Planner stopped: provider parse failed"));
+        });
+    }
+
+    private String plannerPrompt(NpcSessionId sessionId, InteractivePlannerSession plannerSession) {
+        synchronized (this) {
+            RuntimeAiPlayerNpcSession session = sessions.get(sessionId);
+            if (session == null) {
+                return plannerSession.nextPrompt("NPC session is unavailable");
+            }
+            OpenPlayerNpcEntity entity = entityFor(session);
+            if (entity == null) {
+                return plannerSession.nextPrompt("NPC entity is unavailable");
+            }
+            return plannerSession.nextPrompt(RuntimeContextFormatter.format(buildRuntimeContextSnapshot(entity))
+                    + "\n" + automationObservationDetail(entity.runtimeCommandSnapshot()));
+        }
+    }
+
+    private InteractivePlannerSession.PlannerRuntime plannerRuntime(NpcSessionId sessionId) {
+        return new InteractivePlannerSession.PlannerRuntime() {
+            @Override
+            public boolean allowWorldActions() {
+                synchronized (RuntimeAiPlayerNpcService.this) {
+                    RuntimeAiPlayerNpcSession session = sessions.get(sessionId);
+                    return session != null && session.spec().allowWorldActions();
+                }
+            }
+
+            @Override
+            public PlannerObservation submit(CommandIntent intent) {
+                AiPlayerNpcCommand command = new AiPlayerNpcCommand(UUID.randomUUID(), intent);
+                PlannerCommandTextCallbacks callbacks = plannerCallbacks(sessionId);
+                CommandSubmissionResult result = submitCommand(sessionId, command);
+                if (result.status() == CommandSubmissionStatus.ACCEPTED && callbacks != null) {
+                    callbacks.submittedCommandRecorder().accept(command);
+                }
+                OpenPlayerNpcEntity entity;
+                synchronized (RuntimeAiPlayerNpcService.this) {
+                    RuntimeAiPlayerNpcSession session = sessions.get(sessionId);
+                    entity = session == null ? null : entityFor(session);
+                }
+                boolean activeOrQueued = false;
+                String automationDetail = "automation unavailable";
+                if (entity != null) {
+                    AutomationControllerSnapshot snapshot = entity.runtimeCommandSnapshot();
+                    activeOrQueued = snapshot.active() || snapshot.queuedCommandCount() > 0;
+                    automationDetail = automationObservationDetail(snapshot);
+                }
+                PlannerObservationStatus status = plannerStatus(result.status(), activeOrQueued);
+                return PlannerObservation.of(status,
+                        "kind=" + intent.kind().name() + " submission=" + result.status().name().toLowerCase(java.util.Locale.ROOT)
+                                + " message=" + result.message() + " " + automationDetail,
+                        activeOrQueued);
+            }
+        };
+    }
+
+    private void continuePlanner(NpcSessionId sessionId, InteractivePlannerSession plannerSession,
+                                 PlannerTurnResult result, int pollCount) {
+        if (result.status() == PlannerTurnStatus.CONTINUE) {
+            schedulePlannerProviderCall(sessionId, plannerSession);
+            return;
+        }
+        if (result.status() == PlannerTurnStatus.WAITING) {
+            if (pollCount >= plannerSession.config().maxPollsPerTool()) {
+                PlannerTurnResult observed = plannerSession.observeWaiting(PlannerObservation.of(
+                        PlannerObservationStatus.TIMED_OUT,
+                        "queued or active primitive did not complete inside planner poll budget",
+                        false
+                ));
+                continuePlanner(sessionId, plannerSession, observed, 0);
+                return;
+            }
+            schedulePlannerPoll(sessionId, plannerSession, pollCount + 1);
+            return;
+        }
+        finishPlannerSession(sessionId, plannerSession, result);
+    }
+
+    private void schedulePlannerPoll(NpcSessionId sessionId, InteractivePlannerSession plannerSession, int pollCount) {
+        RuntimeAgentExecutor.submit(server, () -> {
+            try {
+                Thread.sleep(plannerSession.config().pollDelay().toMillis());
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("planner poll interrupted", exception);
+            }
+            return pollCount;
+        }, ignored -> {
+            if (!isActivePlannerSession(sessionId, plannerSession)) {
+                return;
+            }
+            PlannerTurnResult result = plannerSession.observeWaiting(plannerObservation(sessionId));
+            continuePlanner(sessionId, plannerSession, result, pollCount);
+        }, exception -> {
+            if (!isActivePlannerSession(sessionId, plannerSession)) {
+                return;
+            }
+            plannerSession.cancel("planner poll failed");
+            finishPlannerSession(sessionId, plannerSession,
+                    new PlannerTurnResult(PlannerTurnStatus.STOPPED, "Planner stopped: poll failed"));
+        });
+    }
+
+    private synchronized PlannerObservation plannerObservation(NpcSessionId sessionId) {
+        RuntimeAiPlayerNpcSession session = sessions.get(sessionId);
+        if (session == null) {
+            return PlannerObservation.of(PlannerObservationStatus.UNAVAILABLE, "NPC session is unavailable", false);
+        }
+        OpenPlayerNpcEntity entity = entityFor(session);
+        if (entity == null) {
+            return PlannerObservation.of(PlannerObservationStatus.UNAVAILABLE, "NPC entity is unavailable", false);
+        }
+        AutomationControllerSnapshot snapshot = entity.runtimeCommandSnapshot();
+        boolean activeOrQueued = snapshot.active() || snapshot.queuedCommandCount() > 0;
+        PlannerObservationStatus status = activeOrQueued ? PlannerObservationStatus.ACTIVE : plannerSnapshotStatus(snapshot);
+        return PlannerObservation.of(status, automationObservationDetail(snapshot), activeOrQueued);
+    }
+
+    private synchronized boolean isActivePlannerSession(NpcSessionId sessionId, InteractivePlannerSession plannerSession) {
+        return plannerSessions.get(sessionId) == plannerSession && !plannerSession.isCancelled();
+    }
+
+    private synchronized void cancelPlannerSession(NpcSessionId sessionId, String reason) {
+        InteractivePlannerSession plannerSession = plannerSessions.remove(sessionId);
+        plannerCallbacks.remove(sessionId);
+        plannerRequests.remove(sessionId);
+        if (plannerSession != null) {
+            plannerSession.cancel(reason);
+            OpenPlayerDebugEvents.record("planner", "cancelled", null, null,
+                    sessionId.value().toString(), OpenPlayerDebugEvents.sanitizeDetail(reason));
+        }
+    }
+
+    private synchronized void finishPlannerSession(NpcSessionId sessionId, InteractivePlannerSession plannerSession,
+                                                    PlannerTurnResult result) {
+        PlannerCommandTextCallbacks callbacks = null;
+        if (plannerSessions.get(sessionId) == plannerSession) {
+            plannerSessions.remove(sessionId);
+            callbacks = plannerCallbacks.remove(sessionId);
+            plannerRequests.remove(sessionId);
+        }
+        OpenPlayerDebugEvents.record("planner", result.status().name().toLowerCase(java.util.Locale.ROOT), null, null,
+                sessionId.value().toString(), OpenPlayerDebugEvents.sanitizeDetail(result.message()));
+        if (callbacks != null) {
+            CommandSubmissionStatus status = result.status() == PlannerTurnStatus.FINISHED
+                    ? CommandSubmissionStatus.ACCEPTED : CommandSubmissionStatus.REJECTED;
+            callbacks.completion().accept(new CommandSubmissionResult(status, result.message()));
+        }
+    }
+
+    private synchronized PlannerCommandTextRequest plannerRequest(NpcSessionId sessionId) {
+        return plannerRequests.get(sessionId);
+    }
+
+    private synchronized PlannerCommandTextCallbacks plannerCallbacks(NpcSessionId sessionId) {
+        return plannerCallbacks.get(sessionId);
+    }
+
+    private void recordPlannerIntent(NpcSessionId sessionId, CommandIntent intent) {
+        PlannerCommandTextCallbacks callbacks = plannerCallbacks(sessionId);
+        if (callbacks != null) {
+            callbacks.acceptedIntentRecorder().accept(intent);
+        }
+    }
+
+    private static PlannerObservationStatus plannerStatus(CommandSubmissionStatus status, boolean activeOrQueued) {
+        return switch (status) {
+            case ACCEPTED -> activeOrQueued ? PlannerObservationStatus.QUEUED : PlannerObservationStatus.COMPLETED;
+            case REJECTED -> PlannerObservationStatus.REJECTED;
+            case UNKNOWN_SESSION -> PlannerObservationStatus.UNAVAILABLE;
+            case UNAVAILABLE -> PlannerObservationStatus.UNAVAILABLE;
+        };
+    }
+
+    private static PlannerObservationStatus plannerSnapshotStatus(AutomationControllerSnapshot snapshot) {
+        return switch (snapshot.monitorStatus()) {
+            case COMPLETED, IDLE -> PlannerObservationStatus.COMPLETED;
+            case CANCELLED -> PlannerObservationStatus.CANCELLED;
+            case TIMED_OUT, STUCK -> PlannerObservationStatus.TIMED_OUT;
+            case ACTIVE -> PlannerObservationStatus.ACTIVE;
+        };
+    }
+
+    private static String automationObservationDetail(AutomationControllerSnapshot snapshot) {
+        String active = snapshot.active() ? snapshot.activeKind().name() : "idle";
+        return "automation active=" + active
+                + " queued=" + snapshot.queuedCommandCount()
+                + " paused=" + snapshot.paused()
+                + " monitor=" + snapshot.monitorStatus().name().toLowerCase(java.util.Locale.ROOT)
+                + " reason=" + safeStatusValue(snapshot.monitorReason())
+                + " ticks=" + snapshot.elapsedTicks() + "/" + snapshot.maxTicks();
     }
 
     private static final class CommandTextParseRuntimeException extends RuntimeException {
@@ -382,6 +634,12 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
     }
 
     synchronized void clearRuntimeSessions() {
+        for (Map.Entry<NpcSessionId, InteractivePlannerSession> entry : plannerSessions.entrySet()) {
+            entry.getValue().cancel("runtime cleared");
+        }
+        plannerSessions.clear();
+        plannerCallbacks.clear();
+        plannerRequests.clear();
         for (RuntimeAiPlayerNpcSession session : sessions.values()) {
             OpenPlayerNpcEntity entity = entityFor(session);
             if (entity != null) {
@@ -546,6 +804,12 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
                 Math.round(entity.getHealth()),
                 Math.round(entity.getMaxHealth()),
                 entity.getAirSupply(),
+                "unsupported",
+                "unsupported",
+                activeEffectsSummary(entity),
+                physicalStatus(entity),
+                "unsupported",
+                Boolean.toString(entity.isSprinting()),
                 itemName(entity.getMainHandItem()),
                 itemName(entity.getOffhandItem()),
                 armorSummary(entity),
@@ -591,6 +855,35 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
     }
 
     private record BlockScanSnapshot(Map<String, Integer> counts, List<BlockTargetSnapshot> targets) {
+    }
+
+    private static String activeEffectsSummary(OpenPlayerNpcEntity entity) {
+        List<String> values = new ArrayList<>();
+        for (MobEffectInstance effect : entity.getActiveEffects()) {
+            String id = BuiltInRegistries.MOB_EFFECT.getKey(effect.getEffect()).toString();
+            values.add(id + " amplifier=" + effect.getAmplifier() + " durationTicks=" + boundedEffectDuration(effect.getDuration()));
+        }
+        values.sort(String::compareTo);
+        if (values.isEmpty()) {
+            return "none";
+        }
+        int limit = Math.min(8, values.size());
+        List<String> limited = new ArrayList<>(values.subList(0, limit));
+        if (values.size() > limit) {
+            limited.add("more=" + (values.size() - limit));
+        }
+        return String.join(", ", limited);
+    }
+
+    private static int boundedEffectDuration(int duration) {
+        return Math.max(0, Math.min(duration, 72000));
+    }
+
+    private static String physicalStatus(OpenPlayerNpcEntity entity) {
+        return "onFire=" + entity.isOnFire()
+                + ", inWater=" + entity.isInWater()
+                + ", onGround=" + entity.onGround()
+                + ", fallDistance=" + Math.round(Math.max(0.0F, Math.min(entity.fallDistance, 256.0F)));
     }
 
     private static double blockDistanceSquared(BlockPos first, BlockPos second) {

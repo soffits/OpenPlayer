@@ -47,6 +47,10 @@ public final class OpenPlayerLanguageParityTest {
                 "capability status UI key must be localized");
         require(english.containsKey("screen.openplayer.controls.no_capability_status"),
                 "empty capability status UI key must be localized");
+        require(!english.containsKey("screen.openplayer.controls.command_input"),
+                "control screen must not expose companion chat input localization");
+        require(!english.containsKey("screen.openplayer.controls.send_to_selected"),
+                "control screen must not expose companion chat send localization");
         String capabilityStatus = english.get("screen.openplayer.controls.capability_status").toLowerCase(java.util.Locale.ROOT);
         require(capabilityStatus.contains("viewer") && capabilityStatus.contains("world"),
                 "status UI must label ServerPlayer-derived lines as viewer/world diagnostics");

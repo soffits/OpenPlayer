@@ -37,6 +37,7 @@ public final class ConversationLoopTest {
         chatIntentReturnsReplyWithoutSubmittingAutomation();
         longChatIntentReturnsFullSanitizedReplyWithoutSubmittingAutomation();
         unavailableIntentReturnsSafeReplyWithoutSubmittingAutomation();
+        actionLikeRequestDiagnosticHeuristicIsConservative();
     }
 
     private static void disabledParserReportsUnavailableWithoutParsing() {
@@ -159,6 +160,17 @@ public final class ConversationLoopTest {
         });
         require(result.status() == CommandSubmissionStatus.ACCEPTED, "UNAVAILABLE intent must return a visible reply");
         require(result.message().contains("safely"), "UNAVAILABLE blank instruction must use a safe fallback");
+    }
+
+    private static void actionLikeRequestDiagnosticHeuristicIsConservative() {
+        require(ActionLikeRequestDiagnostics.isActionLikeRequest("please chop that spruce log"),
+                "English action request must be diagnosed as action-like");
+        require(ActionLikeRequestDiagnostics.isActionLikeRequest("\u5148\u780d\u4e00\u68f5\u6811\u5427"),
+                "Chinese chop request must be diagnosed as action-like");
+        require(!ActionLikeRequestDiagnostics.isActionLikeRequest("how hungry are you?"),
+                "status questions must not be diagnosed as action-like");
+        require(!ActionLikeRequestDiagnostics.isActionLikeRequest("hello there"),
+                "plain chat must not be diagnosed as action-like");
     }
 
     private static IntentParserRuntimeStatus status(boolean enabled) {

@@ -16,6 +16,7 @@ public final class RuntimeContextFormatterTest {
         representativeSnapshotFormatsGoldenOutput();
         emptySectionsRenderNone();
         overflowSectionsIncludeDeterministicFirstValuesAndMoreCount();
+        actionableTargetsExposeUsefulBlocksOutsideNearestLimit();
         countedSummariesAreDeterministicAcrossInsertionOrder();
         snapshotsDefensivelyCopyCollections();
         formattedContextDoesNotContainSensitiveMarkersWithoutSensitiveFields();
@@ -63,8 +64,8 @@ public final class RuntimeContextFormatterTest {
         );
 
         String expected = "world: dimension=minecraft:overworld, npcPosition=10,64,-3, dayTime=6000, isDay=true, raining=false, thundering=false, difficulty=normal\n"
-                + "agent: status=active, health=19/20, air=300, mainhand=minecraft:iron_sword, offhand=minecraft:shield, armor=head=minecraft:iron_helmet, chest=minecraft:iron_chestplate, inventory=minecraft:torch x16, minecraft:bread x5, minecraft:apple x2\n"
-                + "nearbyBlocks: counts=[minecraft:stone x20, minecraft:dirt x7, minecraft:oak_log x3]; nearestTargets=[minecraft:stone @ 10 63 -2, minecraft:oak_log @ 8 64 -3]\n"
+                + "agent: status=active, health=19/20, food=unsupported, saturation=unsupported, air=300, effects=none, physical=unknown, sprintControl=unsupported, sprinting=unknown, mainhand=minecraft:iron_sword, offhand=minecraft:shield, armor=head=minecraft:iron_helmet, chest=minecraft:iron_chestplate, inventory=minecraft:torch x16, minecraft:bread x5, minecraft:apple x2\n"
+                + "nearbyBlocks: counts=[minecraft:stone x20, minecraft:dirt x7, minecraft:oak_log x3]; nearestTargets=[minecraft:stone @ 10 63 -2, minecraft:oak_log @ 8 64 -3]; actionableTargets=[minecraft:oak_log @ 8 64 -3]\n"
                 + "nearbyDroppedItems: minecraft:arrow x3, minecraft:bone x1\n"
                 + "nearbyHostiles: minecraft:skeleton distance=12m direction=south-east+above, minecraft:zombie distance=9m direction=north\n"
                 + "nearbyPlayers: Alex distance=3m direction=near, Steve distance=5m direction=east\n"
@@ -77,7 +78,7 @@ public final class RuntimeContextFormatterTest {
         String formatted = RuntimeContextFormatter.format(emptySnapshot());
 
         require(formatted.contains("armor=none, inventory=none"), "empty armor and inventory must render none");
-        require(formatted.contains("nearbyBlocks: counts=[none]; nearestTargets=[none]"), "empty blocks must render none");
+        require(formatted.contains("nearbyBlocks: counts=[none]; nearestTargets=[none]; actionableTargets=[none]"), "empty blocks must render none");
         require(formatted.contains("nearbyDroppedItems: none"), "empty dropped items must render none");
         require(formatted.contains("nearbyHostiles: none"), "empty hostiles must render none");
         require(formatted.contains("nearbyPlayers: none"), "empty players must render none");
@@ -115,6 +116,29 @@ public final class RuntimeContextFormatterTest {
         require(formatted.contains("Player07 distance=8m direction=east, more=2"), "players overflow must include more count");
         require(formatted.contains("nearbyOpenPlayerNpcs: Npc00 distance=1m direction=east"), "NPC overflow must start lexically");
         require(formatted.contains("Npc07 distance=8m direction=east, more=2"), "NPC overflow must include more count");
+    }
+
+    private static void actionableTargetsExposeUsefulBlocksOutsideNearestLimit() {
+        List<BlockTargetSnapshot> targets = new ArrayList<>();
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        for (int index = 0; index < RuntimeContextFormatter.NEAREST_BLOCK_TARGET_LIMIT; index++) {
+            targets.add(new BlockTargetSnapshot("minecraft:snow", index, 64, 0, index));
+            counts.merge("minecraft:snow", 1, Integer::sum);
+        }
+        targets.add(new BlockTargetSnapshot("minecraft:spruce_log", 20, 65, 0, 400.0D));
+        counts.put("minecraft:spruce_log", 1);
+        RuntimeContextSnapshot snapshot = new RuntimeContextSnapshot(
+                new RuntimeWorldSnapshot("minecraft:overworld", 0, 64, 0, 0L, true, false, false, "normal"),
+                new RuntimeAgentSnapshot("active", 20, 20, 300, "empty", "empty", List.of(), Map.of()),
+                new RuntimeNearbySnapshot(counts, targets, Map.of(), List.of(), List.of(), List.of())
+        );
+
+        String formatted = RuntimeContextFormatter.format(snapshot);
+
+        require(!nearestTargetsSummary(formatted).contains("minecraft:spruce_log @ 20 65 0"),
+                "test setup must keep log outside global nearest target summary");
+        require(formatted.contains("actionableTargets=[minecraft:spruce_log @ 20 65 0]"),
+                "actionable target summary must expose log coordinates present in bounded scan");
     }
 
     private static void countedSummariesAreDeterministicAcrossInsertionOrder() {
@@ -278,7 +302,8 @@ public final class RuntimeContextFormatterTest {
         if (start < 0) {
             throw new AssertionError("missing nearestTargets summary");
         }
-        return line.substring(start);
+        int end = line.indexOf("; actionableTargets=", start);
+        return end < 0 ? line.substring(start) : line.substring(start, end);
     }
 
     private static void require(boolean condition, String message) {

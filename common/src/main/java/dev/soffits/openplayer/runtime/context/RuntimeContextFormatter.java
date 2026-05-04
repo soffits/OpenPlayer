@@ -12,6 +12,7 @@ import java.util.Map;
 public final class RuntimeContextFormatter {
     public static final int BLOCK_COUNT_SUMMARY_LIMIT = 16;
     public static final int NEAREST_BLOCK_TARGET_LIMIT = 12;
+    public static final int ACTIONABLE_BLOCK_TARGET_LIMIT = 6;
     public static final int DROPPED_ITEM_SUMMARY_LIMIT = 8;
     public static final int HOSTILE_SUMMARY_LIMIT = 8;
     public static final int PLAYER_SUMMARY_LIMIT = 8;
@@ -40,7 +41,13 @@ public final class RuntimeContextFormatter {
                 .append("\n");
         builder.append("agent: status=").append(agent.status().toLowerCase(Locale.ROOT))
                 .append(", health=").append(agent.health()).append("/").append(agent.maxHealth())
+                .append(", food=").append(agent.food())
+                .append(", saturation=").append(agent.saturation())
                 .append(", air=").append(agent.air())
+                .append(", effects=").append(agent.activeEffects())
+                .append(", physical=").append(agent.physicalStatus())
+                .append(", sprintControl=").append(agent.sprintControl())
+                .append(", sprinting=").append(agent.sprinting())
                 .append(", mainhand=").append(agent.mainhand())
                 .append(", offhand=").append(agent.offhand())
                 .append(", armor=").append(armorSummary(agent.armor()))
@@ -70,7 +77,7 @@ public final class RuntimeContextFormatter {
 
     private static String blockSummary(Map<String, Integer> counts, List<BlockTargetSnapshot> targets) {
         return "counts=[" + countedSummary(counts, BLOCK_COUNT_SUMMARY_LIMIT) + "]; nearestTargets=["
-                + nearestBlockTargets(targets) + "]";
+                + nearestBlockTargets(targets) + "]; actionableTargets=[" + actionableBlockTargets(targets) + "]";
     }
 
     private static String nearestBlockTargets(List<BlockTargetSnapshot> targets) {
@@ -90,6 +97,54 @@ public final class RuntimeContextFormatter {
             values.add(target.id() + " @ " + target.x() + " " + target.y() + " " + target.z());
         }
         return String.join(", ", values);
+    }
+
+    private static String actionableBlockTargets(List<BlockTargetSnapshot> targets) {
+        if (targets.isEmpty()) {
+            return "none";
+        }
+        List<BlockTargetSnapshot> sorted = new ArrayList<>(targets);
+        sorted.sort(Comparator.comparing(RuntimeContextFormatter::actionableGroup)
+                .thenComparingDouble(BlockTargetSnapshot::distanceSquared)
+                .thenComparing(BlockTargetSnapshot::id)
+                .thenComparingInt(BlockTargetSnapshot::x)
+                .thenComparingInt(BlockTargetSnapshot::y)
+                .thenComparingInt(BlockTargetSnapshot::z));
+        List<String> values = new ArrayList<>();
+        for (BlockTargetSnapshot target : sorted) {
+            if (!isActionableTargetId(target.id())) {
+                continue;
+            }
+            values.add(target.id() + " @ " + target.x() + " " + target.y() + " " + target.z());
+            if (values.size() >= ACTIONABLE_BLOCK_TARGET_LIMIT) {
+                break;
+            }
+        }
+        return values.isEmpty() ? "none" : String.join(", ", values);
+    }
+
+    private static int actionableGroup(BlockTargetSnapshot target) {
+        String id = target.id();
+        if (id.endsWith("_log") || id.endsWith("_wood") || id.endsWith("_stem") || id.endsWith("_hyphae")) {
+            return 0;
+        }
+        if (id.endsWith("_ore") || id.contains("_ore_")) {
+            return 1;
+        }
+        return 2;
+    }
+
+    private static boolean isActionableTargetId(String id) {
+        return id.endsWith("_log")
+                || id.endsWith("_wood")
+                || id.endsWith("_stem")
+                || id.endsWith("_hyphae")
+                || id.endsWith("_ore")
+                || id.contains("_ore_")
+                || id.endsWith(":chest")
+                || id.endsWith(":crafting_table")
+                || id.endsWith(":furnace")
+                || id.endsWith(":barrel");
     }
 
     private static String armorSummary(List<String> armor) {

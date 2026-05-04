@@ -1,5 +1,7 @@
 package dev.soffits.openplayer.intent;
 
+import java.util.List;
+
 public final class ProviderBackedIntentParserTest {
     private ProviderBackedIntentParserTest() {
     }
@@ -11,7 +13,9 @@ public final class ProviderBackedIntentParserTest {
         rejectsFacadeOnlyStructuredToolJson();
         providerPromptExcludesFacadeOnlyTools();
         rejectsAdminStructuredToolJson();
-        rejectsStructuredPlanJson();
+        acceptsStructuredPlanJson();
+        rejectsRemovedToolInsideStructuredPlanJson();
+        rejectsOverMaxStructuredPlanJson();
         acceptsStructuredChat();
         acceptsStructuredUnavailable();
     }
@@ -66,12 +70,41 @@ public final class ProviderBackedIntentParserTest {
         requireRejected(parser, "rejected_admin_capability", "admin tool JSON must be policy gated");
     }
 
-    private static void rejectsStructuredPlanJson() {
+    private static void acceptsStructuredPlanJson() throws Exception {
         ProviderBackedIntentParser parser = new ProviderBackedIntentParser(
-                input -> ProviderIntent.structuredPlan("NORMAL", "{\"plan\":[{\"tool\":\"report_status\",\"args\":{}}]}")
+                input -> ProviderIntent.structuredPlan("HIGH", "{\"plan\":[{\"tool\":\"move_to\",\"args\":{\"x\":1,\"y\":64,\"z\":2}},{\"tool\":\"look_at\",\"args\":{\"x\":3,\"y\":65,\"z\":4}}]}")
         );
-        requireRejected(parser, "provider plans are parser-only and are not executable by this provider path",
-                "provider plan JSON must not fake multi-step execution");
+        CommandIntent intent = parser.parse("ignored");
+        require(intent.kind() == IntentKind.PROVIDER_PLAN, "provider plan must bridge to internal plan intent");
+        require(intent.priority() == IntentPriority.HIGH, "provider plan priority must be preserved");
+        List<CommandIntent> steps = ProviderPlanIntentCodec.decode(intent.instruction());
+        require(steps.size() == 2, "provider plan must preserve two executable primitive steps");
+        require(steps.get(0).kind() == IntentKind.GOTO, "move_to plan step must become GOTO");
+        require("1 64 2".equals(steps.get(0).instruction()), "move_to plan args must become runtime instruction");
+        require(steps.get(1).kind() == IntentKind.LOOK, "look_at plan step must become LOOK");
+        require("3 65 4".equals(steps.get(1).instruction()), "look_at plan args must become runtime instruction");
+    }
+
+    private static void rejectsRemovedToolInsideStructuredPlanJson() {
+        ProviderBackedIntentParser parser = new ProviderBackedIntentParser(
+                input -> ProviderIntent.structuredPlan("NORMAL", "{\"plan\":[{\"tool\":\"collectblock_collect\",\"args\":{}}]}")
+        );
+        requireRejected(parser, "unknown tool: collectblock_collect",
+                "provider plans must reject removed narrow tools before any execution claim");
+    }
+
+    private static void rejectsOverMaxStructuredPlanJson() {
+        ProviderBackedIntentParser parser = new ProviderBackedIntentParser(
+                input -> ProviderIntent.structuredPlan("NORMAL", "{\"plan\":["
+                        + "{\"tool\":\"report_status\",\"args\":{}},"
+                        + "{\"tool\":\"report_status\",\"args\":{}},"
+                        + "{\"tool\":\"report_status\",\"args\":{}},"
+                        + "{\"tool\":\"report_status\",\"args\":{}},"
+                        + "{\"tool\":\"report_status\",\"args\":{}},"
+                        + "{\"tool\":\"report_status\",\"args\":{}}]}")
+        );
+        requireRejected(parser, "plan step count is out of bounds",
+                "provider plans over max step count must reject before execution claim");
     }
 
     private static void acceptsStructuredChat() throws Exception {

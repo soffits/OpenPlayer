@@ -9,11 +9,31 @@ public record RuntimeAgentSnapshot(
         int health,
         int maxHealth,
         int air,
+        String food,
+        String saturation,
+        String activeEffects,
+        String physicalStatus,
+        String sprintControl,
+        String sprinting,
         String mainhand,
         String offhand,
         List<String> armor,
         Map<String, Integer> inventoryCounts
 ) {
+    public RuntimeAgentSnapshot(
+            String status,
+            int health,
+            int maxHealth,
+            int air,
+            String mainhand,
+            String offhand,
+            List<String> armor,
+            Map<String, Integer> inventoryCounts
+    ) {
+        this(status, health, maxHealth, air, "unsupported", "unsupported", "none", "unknown", "unsupported",
+                "unknown", mainhand, offhand, armor, inventoryCounts);
+    }
+
     public RuntimeAgentSnapshot {
         if (status == null || status.isBlank()) {
             throw new IllegalArgumentException("status cannot be blank");
@@ -40,10 +60,23 @@ public record RuntimeAgentSnapshot(
             throw new IllegalArgumentException("inventoryCounts cannot be null");
         }
         status = status.trim();
+        food = requireText(food, "food");
+        saturation = requireText(saturation, "saturation");
+        activeEffects = requireText(activeEffects, "activeEffects");
+        physicalStatus = requireText(physicalStatus, "physicalStatus");
+        sprintControl = requireText(sprintControl, "sprintControl");
+        sprinting = requireText(sprinting, "sprinting");
         mainhand = mainhand.trim();
         offhand = offhand.trim();
         armor = List.copyOf(armor);
         inventoryCounts = copyCounts(inventoryCounts, "inventoryCounts");
+    }
+
+    private static String requireText(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(fieldName + " cannot be blank");
+        }
+        return value.trim();
     }
 
     private static Map<String, Integer> copyCounts(Map<String, Integer> counts, String fieldName) {

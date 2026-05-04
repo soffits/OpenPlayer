@@ -27,15 +27,6 @@ public final class OpenPlayerRequestSender {
         NetworkManager.sendToServer(OpenPlayerConstants.STOP_REQUEST_PACKET_ID, characterPayload(characterId));
     }
 
-    public static void sendCommandTextRequest(String characterId, String commandText) {
-        if (commandText == null) {
-            throw new IllegalArgumentException("commandText cannot be null");
-        }
-        FriendlyByteBuf buffer = characterPayload(characterId);
-        buffer.writeUtf(commandText);
-        NetworkManager.sendToServer(OpenPlayerConstants.COMMAND_TEXT_REQUEST_PACKET_ID, buffer);
-    }
-
     public static void sendStatusRequest() {
         NetworkManager.sendToServer(OpenPlayerConstants.STATUS_REQUEST_PACKET_ID, emptyPayload());
     }
