@@ -6,7 +6,6 @@ import dev.soffits.openplayer.automation.InteractionInstruction;
 import dev.soffits.openplayer.automation.InteractionInstructionParser;
 import dev.soffits.openplayer.automation.TargetAttackInstructionParser;
 import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser;
-import dev.soffits.openplayer.automation.advanced.AdvancedTaskPolicy;
 import dev.soffits.openplayer.automation.building.BuildPlanParser;
 import dev.soffits.openplayer.automation.work.FishingWorkPolicy;
 import dev.soffits.openplayer.automation.work.FarmingWorkPolicy;
@@ -64,8 +63,8 @@ public final class RuntimeIntentValidator {
             case LOCATE_STRUCTURE -> requireLocateStructureInstruction(intent);
             case USE_PORTAL -> requireUsePortalInstruction(intent);
             case TRAVEL_NETHER -> requireTravelNetherInstruction(intent);
-            case LOCATE_STRONGHOLD,
-                    END_GAME_TASK -> RuntimeIntentValidationResult.rejected(AdvancedTaskPolicy.unsupportedReason(kind));
+            case LOCATE_STRONGHOLD -> requireLocateStrongholdInstruction(intent);
+            case END_GAME_TASK -> requireEndGameTaskInstruction(intent);
             case FISH -> requireFishInstruction(intent);
             case DEFEND_OWNER -> requireBlankOrPositiveRadius(intent, "DEFEND_OWNER");
             case INVENTORY_QUERY -> requireBlankInstruction(intent, "INVENTORY_QUERY");
@@ -250,6 +249,20 @@ public final class RuntimeIntentValidator {
     private static RuntimeIntentValidationResult requireTravelNetherInstruction(CommandIntent intent) {
         if (AdvancedTaskInstructionParser.parseTravelNetherOrNull(intent.instruction()) == null) {
             return RuntimeIntentValidationResult.rejected(AdvancedTaskInstructionParser.TRAVEL_NETHER_USAGE);
+        }
+        return RuntimeIntentValidationResult.accepted();
+    }
+
+    private static RuntimeIntentValidationResult requireLocateStrongholdInstruction(CommandIntent intent) {
+        if (AdvancedTaskInstructionParser.parseLocateStrongholdOrNull(intent.instruction()) == null) {
+            return RuntimeIntentValidationResult.rejected(AdvancedTaskInstructionParser.LOCATE_STRONGHOLD_USAGE);
+        }
+        return RuntimeIntentValidationResult.accepted();
+    }
+
+    private static RuntimeIntentValidationResult requireEndGameTaskInstruction(CommandIntent intent) {
+        if (AdvancedTaskInstructionParser.parseEndGameTaskOrNull(intent.instruction()) == null) {
+            return RuntimeIntentValidationResult.rejected(AdvancedTaskInstructionParser.END_GAME_TASK_USAGE);
         }
         return RuntimeIntentValidationResult.accepted();
     }

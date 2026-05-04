@@ -790,6 +790,12 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (kind == IntentKind.TRAVEL_NETHER) {
                 return submitPortalTravel(intent.instruction(), true);
             }
+            if (kind == IntentKind.LOCATE_STRONGHOLD) {
+                return reportStrongholdDiagnostic(intent.instruction());
+            }
+            if (kind == IntentKind.END_GAME_TASK) {
+                return reportEndGameTaskDiagnostic(intent.instruction());
+            }
             if (AdvancedTaskPolicy.isUnsupportedAdvancedKind(kind)) {
                 return rejected(AdvancedTaskPolicy.unsupportedReason(kind));
             }
@@ -3110,7 +3116,82 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         }
 
         private String statusSummary() {
-            return snapshot().summary();
+            return snapshot().summary() + " endgame_task_tree=" + endgameTaskTreeSummary();
+        }
+
+        private AutomationCommandResult reportStrongholdDiagnostic(String instruction) {
+            if (AdvancedTaskInstructionParser.parseLocateStrongholdOrNull(instruction) == null) {
+                return rejected(AdvancedTaskInstructionParser.LOCATE_STRONGHOLD_USAGE);
+            }
+            return rejected("LOCATE_STRONGHOLD diagnostic: " + endgameTaskTreeSummary()
+                    + " truth=no_locate_api no_chunk_generation eye_throw_adapter=missing");
+        }
+
+        private AutomationCommandResult reportEndGameTaskDiagnostic(String instruction) {
+            AdvancedTaskInstructionParser.EndGameTaskInstruction parsed =
+                    AdvancedTaskInstructionParser.parseEndGameTaskOrNull(instruction);
+            if (parsed == null) {
+                return rejected(AdvancedTaskInstructionParser.END_GAME_TASK_USAGE);
+            }
+            return rejected("END_GAME_TASK diagnostic phase=" + parsed.phase() + ": " + endgameTaskTreeSummary()
+                    + " truth=task_tree_foundation_only no_end_travel_or_dragon_success_claim");
+        }
+
+        private String endgameTaskTreeSummary() {
+            ServerLevel serverLevel = serverLevel();
+            String dimensionId = serverLevel == null ? "unknown" : dimensionId(serverLevel);
+            return EndgamePreparationDiagnostics.summary(dimensionId, endgameInventoryCounts());
+        }
+
+        private EndgamePreparationDiagnostics.InventoryCounts endgameInventoryCounts() {
+            List<ItemStack> stacks = entity.inventorySnapshot();
+            return new EndgamePreparationDiagnostics.InventoryCounts(
+                    untaggedNormalInventoryCount(stacks, Items.ENDER_EYE),
+                    untaggedNormalInventoryCount(stacks, Items.BLAZE_POWDER),
+                    untaggedNormalInventoryCount(stacks, Items.BLAZE_ROD),
+                    untaggedNormalInventoryCount(stacks, Items.ENDER_PEARL),
+                    normalFoodCount(stacks),
+                    normalBedCount(stacks),
+                    normalBlockItemCount(stacks)
+            );
+        }
+
+        private int normalFoodCount(List<ItemStack> stacks) {
+            int count = 0;
+            int end = Math.min(stacks.size(), NpcInventoryTransfer.FIRST_EQUIPMENT_SLOT);
+            for (int index = NpcInventoryTransfer.FIRST_NORMAL_SLOT; index < end; index++) {
+                ItemStack stack = stacks.get(index);
+                if (!stack.isEmpty() && stack.getItem().isEdible()) {
+                    count += stack.getCount();
+                }
+            }
+            return count;
+        }
+
+        private int normalBedCount(List<ItemStack> stacks) {
+            int count = 0;
+            int end = Math.min(stacks.size(), NpcInventoryTransfer.FIRST_EQUIPMENT_SLOT);
+            for (int index = NpcInventoryTransfer.FIRST_NORMAL_SLOT; index < end; index++) {
+                ItemStack stack = stacks.get(index);
+                if (!stack.isEmpty() && stack.getItem() instanceof BlockItem blockItem
+                        && blockItem.getBlock() instanceof BedBlock) {
+                    count += stack.getCount();
+                }
+            }
+            return count;
+        }
+
+        private int normalBlockItemCount(List<ItemStack> stacks) {
+            int count = 0;
+            int end = Math.min(stacks.size(), NpcInventoryTransfer.FIRST_EQUIPMENT_SLOT);
+            for (int index = NpcInventoryTransfer.FIRST_NORMAL_SLOT; index < end; index++) {
+                ItemStack stack = stacks.get(index);
+                if (!stack.isEmpty() && stack.getItem() instanceof BlockItem blockItem
+                        && !(blockItem.getBlock() instanceof BedBlock)) {
+                    count += stack.getCount();
+                }
+            }
+            return count;
         }
 
         private AutomationCommandResult applyBodyLanguage(BodyLanguageInstruction instruction) {

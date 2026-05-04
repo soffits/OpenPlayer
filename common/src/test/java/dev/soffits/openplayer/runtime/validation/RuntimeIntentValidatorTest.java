@@ -34,7 +34,7 @@ public final class RuntimeIntentValidatorTest {
         validatesPhaseFourteenTargetAttackInstructions();
         validatesAdvancedLoadedReconnaissanceInstructions();
         validatesPortalTravelInstructions();
-        rejectsUnsupportedAdvancedInstructionsWithDeterministicReasons();
+        validatesEndgameDiagnosticInstructions();
         rejectsPlannedIntentKinds();
         gatesPlannedWorldActionKindsBeforeUnimplementedRejection();
         rejectsPlannedNonGatedKindsAsUnimplemented();
@@ -446,11 +446,19 @@ public final class RuntimeIntentValidatorTest {
     }
 
 
-    private static void rejectsUnsupportedAdvancedInstructionsWithDeterministicReasons() {
-        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_STRONGHOLD, ""), true),
-                "LOCATE_STRONGHOLD is unsupported: stronghold location needs a separate reviewed safe phase");
-        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.END_GAME_TASK, "dragon"), true),
-                "END_GAME_TASK is unsupported: End/dragon/speedrun tasks need separate reviewed safe phases");
+    private static void validatesEndgameDiagnosticInstructions() {
+        require(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_STRONGHOLD, ""), true).isAccepted(),
+                "LOCATE_STRONGHOLD should accept blank diagnostic instruction");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_STRONGHOLD, "source=diagnostic"), true).isAccepted(),
+                "LOCATE_STRONGHOLD should accept explicit diagnostic source");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.END_GAME_TASK, "dragon"), true).isAccepted(),
+                "END_GAME_TASK should accept diagnostic dragon phase");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.END_GAME_TASK, ""), true).isAccepted(),
+                "END_GAME_TASK should accept blank plan diagnostic");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_STRONGHOLD, "source=locate"), true),
+                "LOCATE_STRONGHOLD requires blank or instruction: source=diagnostic");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.END_GAME_TASK, "speedrun"), true),
+                "END_GAME_TASK requires blank or instruction: plan, prepare, stronghold, portal, travel, dragon, or recovery");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_STRONGHOLD, ""), false),
                 "World actions are disabled for this OpenPlayer character");
     }
@@ -535,10 +543,7 @@ public final class RuntimeIntentValidatorTest {
     }
 
     private static EnumSet<IntentKind> plannedGatedKinds() {
-        return EnumSet.of(
-                IntentKind.LOCATE_STRONGHOLD,
-                IntentKind.END_GAME_TASK
-        );
+        return EnumSet.noneOf(IntentKind.class);
     }
 
     private static EnumSet<IntentKind> plannedNonGatedKinds() {

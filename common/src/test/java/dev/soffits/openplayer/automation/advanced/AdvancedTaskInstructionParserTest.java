@@ -13,6 +13,8 @@ public final class AdvancedTaskInstructionParserTest {
         rejectsInvalidLocateStructureInstruction();
         parsesPortalTravelInstructions();
         rejectsInvalidPortalTravelInstructions();
+        parsesEndgameDiagnosticInstructions();
+        rejectsInvalidEndgameDiagnosticInstructions();
     }
 
     private static void parsesStrictLoadedSearchInstruction() {
@@ -166,6 +168,32 @@ public final class AdvancedTaskInstructionParserTest {
                 "TRAVEL_NETHER should reject target key");
         require(AdvancedTaskInstructionParser.parseTravelNetherOrNull("radius=0") == null,
                 "TRAVEL_NETHER should reject zero radius");
+    }
+
+    private static void parsesEndgameDiagnosticInstructions() {
+        require(AdvancedTaskInstructionParser.parseLocateStrongholdOrNull("") != null,
+                "LOCATE_STRONGHOLD should accept blank diagnostic instruction");
+        require(AdvancedTaskInstructionParser.parseLocateStrongholdOrNull("source=diagnostic") != null,
+                "LOCATE_STRONGHOLD should accept explicit diagnostic source");
+        AdvancedTaskInstructionParser.EndGameTaskInstruction blank =
+                AdvancedTaskInstructionParser.parseEndGameTaskOrNull(" ");
+        require(blank != null && blank.phase().equals("plan"),
+                "END_GAME_TASK should default blank instruction to plan");
+        AdvancedTaskInstructionParser.EndGameTaskInstruction dragon =
+                AdvancedTaskInstructionParser.parseEndGameTaskOrNull("dragon");
+        require(dragon != null && dragon.phase().equals("dragon"),
+                "END_GAME_TASK should accept reviewed diagnostic phases");
+    }
+
+    private static void rejectsInvalidEndgameDiagnosticInstructions() {
+        require(AdvancedTaskInstructionParser.parseLocateStrongholdOrNull("source=locate") == null,
+                "LOCATE_STRONGHOLD should reject hidden locate source syntax");
+        require(AdvancedTaskInstructionParser.parseLocateStrongholdOrNull("minecraft:stronghold") == null,
+                "LOCATE_STRONGHOLD should reject structure ids that imply hidden locate search");
+        require(AdvancedTaskInstructionParser.parseEndGameTaskOrNull("speedrun") == null,
+                "END_GAME_TASK should reject speedrun success framing");
+        require(AdvancedTaskInstructionParser.parseEndGameTaskOrNull("dragon now") == null,
+                "END_GAME_TASK should reject free-form execution prose");
     }
 
     private static void require(boolean condition, String message) {

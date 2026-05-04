@@ -12,7 +12,7 @@ public final class AdvancedTaskPolicy {
         }
         return switch (kind) {
             case LOCATE_STRONGHOLD,
-                    END_GAME_TASK -> true;
+                    END_GAME_TASK -> false;
             case UNAVAILABLE,
                     OBSERVE,
                     STOP,

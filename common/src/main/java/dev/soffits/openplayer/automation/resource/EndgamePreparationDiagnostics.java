@@ -1,14 +1,118 @@
 package dev.soffits.openplayer.automation.resource;
 
+import java.util.List;
+
 public final class EndgamePreparationDiagnostics {
+    public static final int RECOMMENDED_EYE_COUNT = 12;
+    public static final int RECOMMENDED_FOOD_COUNT = 16;
+    public static final int RECOMMENDED_BLOCK_COUNT = 64;
+
     private EndgamePreparationDiagnostics() {
+    }
+
+    public static EndgameTaskTree taskTree(String dimensionId, InventoryCounts inventoryCounts) {
+        if (inventoryCounts == null) {
+            throw new IllegalArgumentException("inventoryCounts cannot be null");
+        }
+        String normalizedDimension = normalizedDimension(dimensionId);
+        EndgameTaskNode resourcePrep = new EndgameTaskNode(
+                "resource_prep",
+                resourcePrepStatus(inventoryCounts),
+                "eyes=" + inventoryCounts.eyesOfEnder() + "/" + RECOMMENDED_EYE_COUNT
+                        + " food=" + inventoryCounts.food() + "/" + RECOMMENDED_FOOD_COUNT
+                        + " blocks=" + inventoryCounts.blocks() + "/" + RECOMMENDED_BLOCK_COUNT,
+                List.of(
+                        EndgameTaskNode.leaf("blaze_resources", blazeStatus(inventoryCounts),
+                                "blaze_rods=" + inventoryCounts.blazeRods()
+                                        + " blaze_powder=" + inventoryCounts.blazePowder()
+                                        + " primitive=GET_ITEM_or_ATTACK_TARGET_loaded_blaze"),
+                        EndgameTaskNode.leaf("pearl_eye_resources", pearlEyeStatus(inventoryCounts),
+                                "ender_pearls=" + inventoryCounts.enderPearls()
+                                        + " eyes=" + inventoryCounts.eyesOfEnder()
+                                        + " primitive=GET_ITEM_recipe_if_materials_available"),
+                        EndgameTaskNode.leaf("food_and_blocks", safetyMaterialStatus(inventoryCounts),
+                                "food=" + inventoryCounts.food() + " beds=" + inventoryCounts.beds()
+                                        + " blocks=" + inventoryCounts.blocks()
+                                        + " primitive=COLLECT_FOOD_SMELT_ITEM_GET_ITEM")
+                )
+        );
+        EndgameTaskNode netherPrep = new EndgameTaskNode(
+                "nether_prep",
+                normalizedDimension.equals("minecraft:the_nether") ? EndgameTaskStatus.READY : EndgameTaskStatus.AVAILABLE_PRIMITIVE,
+                "current_dimension=" + normalizedDimension + " primitive=TRAVEL_NETHER_OR_USE_PORTAL",
+                List.of(
+                        EndgameTaskNode.leaf("fortress_or_blaze_search", EndgameTaskStatus.MISSING_PRIMITIVE,
+                                "no_fortress_search_adapter_no_hidden_locate_api"),
+                        EndgameTaskNode.leaf("loaded_blaze_combat", EndgameTaskStatus.AVAILABLE_PRIMITIVE,
+                                "ATTACK_TARGET_loaded_reviewed_hostiles_only_no_fake_drops")
+                )
+        );
+        EndgameTaskNode stronghold = new EndgameTaskNode(
+                "stronghold_estimation_search",
+                inventoryCounts.eyesOfEnder() > 0 ? EndgameTaskStatus.MISSING_PRIMITIVE : EndgameTaskStatus.BLOCKED_BY_MATERIALS,
+                "eye_throw_triangulation_adapter_missing loaded_world_diagnostics_only no_locate_api eyes="
+                        + inventoryCounts.eyesOfEnder(),
+                List.of(
+                        EndgameTaskNode.leaf("eye_throw_observation", EndgameTaskStatus.MISSING_PRIMITIVE,
+                                "needs_reviewed_use_item_and_observation_adapter"),
+                        EndgameTaskNode.leaf("loaded_world_diagnostics", EndgameTaskStatus.MISSING_PRIMITIVE,
+                                "no_reviewed_stronghold_evidence_scanner_yet")
+                )
+        );
+        EndgameTaskNode portalPrep = new EndgameTaskNode(
+                "end_portal_prep",
+                inventoryCounts.eyesOfEnder() >= RECOMMENDED_EYE_COUNT
+                        ? EndgameTaskStatus.MISSING_PRIMITIVE : EndgameTaskStatus.BLOCKED_BY_MATERIALS,
+                "requires_visible_portal_frame_state_and_inventory_safety eyes=" + inventoryCounts.eyesOfEnder(),
+                List.of(
+                        EndgameTaskNode.leaf("portal_frame_state", EndgameTaskStatus.MISSING_PRIMITIVE,
+                                "needs_loaded_end_portal_room_adapter"),
+                        EndgameTaskNode.leaf("insert_eyes", EndgameTaskStatus.MISSING_PRIMITIVE,
+                                "needs_reviewed_block_interaction_adapter_for_portal_frames")
+                )
+        );
+        EndgameTaskNode endTravel = EndgameTaskNode.leaf(
+                "end_travel",
+                EndgameTaskStatus.MISSING_PRIMITIVE,
+                "no_forced_dimension_change requires_visible_completed_portal_and_recovery_plan"
+        );
+        EndgameTaskNode dragon = new EndgameTaskNode(
+                "dragon_fight_primitives",
+                EndgameTaskStatus.MISSING_PRIMITIVE,
+                "cancellable_task_tree_only no_dragon_completion_claim",
+                List.of(
+                        EndgameTaskNode.leaf("crystal_handling", EndgameTaskStatus.MISSING_PRIMITIVE,
+                                "needs_reviewed_movement_ranged_combat_or_block_adapter"),
+                        EndgameTaskNode.leaf("dragon_combat", EndgameTaskStatus.MISSING_PRIMITIVE,
+                                "needs_reviewed_combat_positioning_and_safety_adapter"),
+                        EndgameTaskNode.leaf("bed_pearl_block_tactics", EndgameTaskStatus.MISSING_PRIMITIVE,
+                                "needs_safe_npc_specific_bed_pearl_block_placement_adapters")
+                )
+        );
+        EndgameTaskNode recovery = EndgameTaskNode.leaf(
+                "recovery",
+                recoveryStatus(normalizedDimension, inventoryCounts),
+                "dimension=" + normalizedDimension + " food=" + inventoryCounts.food()
+                        + " blocks=" + inventoryCounts.blocks() + " no_fake_return_or_respawn_claim"
+        );
+        EndgameTaskNode root = new EndgameTaskNode(
+                "endgame_phase21",
+                EndgameTaskStatus.UNSAFE_OR_UNKNOWN,
+                "diagnostic_task_tree_only no_speedrun_completion_claim dimension=" + normalizedDimension,
+                List.of(resourcePrep, netherPrep, stronghold, portalPrep, endTravel, dragon, recovery)
+        );
+        return new EndgameTaskTree(root);
+    }
+
+    public static String summary(String dimensionId, InventoryCounts inventoryCounts) {
+        return taskTree(dimensionId, inventoryCounts).boundedSummary();
     }
 
     public static String hintForItem(String itemId, String dimensionId) {
         if (itemId == null || itemId.isBlank()) {
             throw new IllegalArgumentException("itemId cannot be blank");
         }
-        String normalizedDimension = dimensionId == null || dimensionId.isBlank() ? "unknown" : dimensionId.trim();
+        String normalizedDimension = normalizedDimension(dimensionId);
         return switch (itemId) {
             case "minecraft:blaze_rod", "minecraft:blaze_powder" ->
                     "endgame_prep=blaze_resource_chain current_dimension=" + normalizedDimension
@@ -28,5 +132,66 @@ public final class EndgamePreparationDiagnostics {
                             + "truth=preparation_is_visible_inventory_or_loaded_world_only";
             default -> "";
         };
+    }
+
+    private static String normalizedDimension(String dimensionId) {
+        return dimensionId == null || dimensionId.isBlank() ? "unknown" : dimensionId.trim();
+    }
+
+    private static EndgameTaskStatus resourcePrepStatus(InventoryCounts counts) {
+        if (counts.eyesOfEnder() >= RECOMMENDED_EYE_COUNT
+                && counts.food() >= RECOMMENDED_FOOD_COUNT
+                && counts.blocks() >= RECOMMENDED_BLOCK_COUNT) {
+            return EndgameTaskStatus.READY;
+        }
+        return EndgameTaskStatus.BLOCKED_BY_MATERIALS;
+    }
+
+    private static EndgameTaskStatus blazeStatus(InventoryCounts counts) {
+        if (counts.blazePowder() > 0 || counts.blazeRods() > 0) {
+            return EndgameTaskStatus.AVAILABLE_PRIMITIVE;
+        }
+        return EndgameTaskStatus.BLOCKED_BY_MATERIALS;
+    }
+
+    private static EndgameTaskStatus pearlEyeStatus(InventoryCounts counts) {
+        if (counts.eyesOfEnder() >= RECOMMENDED_EYE_COUNT) {
+            return EndgameTaskStatus.READY;
+        }
+        if (counts.enderPearls() > 0 && (counts.blazePowder() > 0 || counts.blazeRods() > 0)) {
+            return EndgameTaskStatus.AVAILABLE_PRIMITIVE;
+        }
+        return EndgameTaskStatus.BLOCKED_BY_MATERIALS;
+    }
+
+    private static EndgameTaskStatus safetyMaterialStatus(InventoryCounts counts) {
+        if (counts.food() >= RECOMMENDED_FOOD_COUNT && counts.blocks() >= RECOMMENDED_BLOCK_COUNT) {
+            return EndgameTaskStatus.READY;
+        }
+        return EndgameTaskStatus.BLOCKED_BY_MATERIALS;
+    }
+
+    private static EndgameTaskStatus recoveryStatus(String dimensionId, InventoryCounts counts) {
+        if (!dimensionId.equals("minecraft:the_end") && counts.food() > 0 && counts.blocks() > 0) {
+            return EndgameTaskStatus.AVAILABLE_PRIMITIVE;
+        }
+        return EndgameTaskStatus.UNSAFE_OR_UNKNOWN;
+    }
+
+    public record InventoryCounts(
+            int eyesOfEnder,
+            int blazePowder,
+            int blazeRods,
+            int enderPearls,
+            int food,
+            int beds,
+            int blocks
+    ) {
+        public InventoryCounts {
+            if (eyesOfEnder < 0 || blazePowder < 0 || blazeRods < 0 || enderPearls < 0
+                    || food < 0 || beds < 0 || blocks < 0) {
+                throw new IllegalArgumentException("inventory counts cannot be negative");
+            }
+        }
     }
 }

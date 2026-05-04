@@ -477,6 +477,10 @@ The first twelve phases establish a bounded first-party runtime foundation, but 
 - Partial progress, missing materials, unsafe dimension state, and recovery options are reported truthfully.
 - No speedrun or dragon-completion claim unless the complete dependency chain exists and local integration QA covers it.
 
+**Status:** Phase 21 now provides a deterministic task-tree diagnostic foundation for endgame preparation. `REPORT_STATUS` includes an `endgame_task_tree` summary with resource preparation, Nether/blaze resources, pearl/eye resources, stronghold estimation/search, End portal preparation, End travel, dragon-fight primitive, and recovery nodes. `LOCATE_STRONGHOLD` accepts blank or `source=diagnostic` and returns a rich missing-adapter diagnostic instead of using `/locate`, hidden server stronghold APIs, chunk generation, or fake triangulation. `END_GAME_TASK` accepts blank or a reviewed diagnostic phase (`plan`, `prepare`, `stronghold`, `portal`, `travel`, `dragon`, `recovery`) and returns the same visible plan rather than claiming End travel, dragon completion, or speedrun success. Implemented nodes distinguish available reviewed primitives such as `TRAVEL_NETHER`, `USE_PORTAL`, `GET_ITEM`, `SMELT_ITEM`, `COLLECT_FOOD`, and `ATTACK_TARGET` from missing adapters such as fortress search, eye-of-ender observation/triangulation, End portal room/frame interaction, End travel orchestration, crystal handling, dragon combat positioning, bed/pearl tactics, and End recovery.
+
+This phase does not add stronghold location execution, eye-of-ender throwing, End portal activation, forced dimension changes, dragon-fight execution, opaque bot dependencies, command APIs, or any speedrun/dragon success claim.
+
 ### Phase 22: Task Tree UI, QA Hardening, and Release Candidate
 
 **Objective:** Make advanced automation observable, cancellable, and release-ready.
