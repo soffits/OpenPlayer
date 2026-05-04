@@ -141,6 +141,12 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must document status observation for smelting");
         require(prompt.contains("completion is only after requested output is transferred into NPC normal inventory"),
                 "system prompt must prevent fake smelting success");
+        require(prompt.contains("explicit vanilla levers, wooden trapdoors, and wooden fence gates"),
+                "system prompt must document narrow Phase 14 interaction block scope");
+        require(prompt.contains("doors, buttons, iron trapdoors"),
+                "system prompt must document unsupported interaction semantics");
+        require(prompt.contains("friendly mobs, neutral mobs, or arbitrary non-hostile entities"),
+                "system prompt must document narrow explicit attack target scope");
         require(prompt.contains("For COLLECT_FOOD, instruction must be blank or only a positive radius number"),
                 "system prompt must document COLLECT_FOOD radius syntax");
         require(prompt.contains("do not include the literal COLLECT_FOOD in instruction"),

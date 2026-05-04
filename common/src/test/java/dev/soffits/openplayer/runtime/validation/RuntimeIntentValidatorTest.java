@@ -30,6 +30,8 @@ public final class RuntimeIntentValidatorTest {
         validatesSurvivalRadiusInstructions();
         validatesWorkLoopInstructions();
         validatesBuildStructureInstructions();
+        validatesPhaseFourteenInteractionInstructions();
+        validatesPhaseFourteenTargetAttackInstructions();
         validatesAdvancedLoadedReconnaissanceInstructions();
         rejectsUnsupportedAdvancedInstructionsWithDeterministicReasons();
         rejectsPlannedIntentKinds();
@@ -48,7 +50,7 @@ public final class RuntimeIntentValidatorTest {
             RuntimeIntentValidationResult result = RuntimeIntentValidator.validate(validIntent(kind), false);
             if (RuntimeIntentPolicies.isLocalWorldOrInventoryAction(kind)) {
                 requireRejected(result, "World actions are disabled for this OpenPlayer character");
-            } else if (kind == IntentKind.INTERACT || kind == IntentKind.CHAT
+            } else if (kind == IntentKind.CHAT
                     || kind == IntentKind.UNAVAILABLE || kind == IntentKind.OBSERVE || plannedKinds().contains(kind)) {
                 require(!result.isAccepted(), kind + " must not be accepted by automation");
             } else {
@@ -297,8 +299,6 @@ public final class RuntimeIntentValidatorTest {
                 "UNAVAILABLE cannot be submitted to automation");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.OBSERVE, ""), true),
                 "OBSERVE cannot be submitted to automation");
-        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.INTERACT, "target"), true),
-                "INTERACT is not implemented by the vanilla runtime");
     }
 
     private static void rejectsPlannedIntentKinds() {
@@ -357,6 +357,35 @@ public final class RuntimeIntentValidatorTest {
                 "FIND_LOADED_BIOME requires instruction: <biome_id> [radius]");
     }
 
+    private static void validatesPhaseFourteenInteractionInstructions() {
+        require(RuntimeIntentValidator.validate(intent(IntentKind.INTERACT, "block 1 64 -2"), true).isAccepted(),
+                "INTERACT should accept safe block coordinate syntax");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.INTERACT, "entity minecraft:villager 4"), true),
+                "INTERACT supports only block <x> <y> <z> in the vanilla runtime");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.INTERACT, "right_click minecraft:lever"), true),
+                "INTERACT requires instruction: block <x> <y> <z> or entity <entity_type_or_uuid> [radius]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.INTERACT, "block 1 64 -2 use_item"), true),
+                "INTERACT requires instruction: block <x> <y> <z> or entity <entity_type_or_uuid> [radius]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.INTERACT, "block 1 64 -2"), false),
+                "World actions are disabled for this OpenPlayer character");
+    }
+
+    private static void validatesPhaseFourteenTargetAttackInstructions() {
+        require(RuntimeIntentValidator.validate(intent(IntentKind.ATTACK_TARGET, "minecraft:zombie"), true).isAccepted(),
+                "ATTACK_TARGET should accept exact entity type syntax");
+        require(RuntimeIntentValidator.validate(intent(IntentKind.ATTACK_TARGET, "entity minecraft:zombie 12"), true).isAccepted(),
+                "ATTACK_TARGET should accept entity-prefixed type and radius syntax");
+        require(RuntimeIntentValidator.validate(
+                intent(IntentKind.ATTACK_TARGET, "entity 123e4567-e89b-12d3-a456-426614174000 8"), true
+        ).isAccepted(), "ATTACK_TARGET should accept UUID syntax");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.ATTACK_TARGET, "zombie"), true),
+                "ATTACK_TARGET requires instruction: [entity] <entity_type_or_uuid> [radius]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.ATTACK_TARGET, "minecraft:zombie 0"), true),
+                "ATTACK_TARGET requires instruction: [entity] <entity_type_or_uuid> [radius]");
+        requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.ATTACK_TARGET, "minecraft:zombie"), false),
+                "World actions are disabled for this OpenPlayer character");
+    }
+
 
     private static void rejectsUnsupportedAdvancedInstructionsWithDeterministicReasons() {
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.LOCATE_STRUCTURE, "minecraft:village"), true),
@@ -406,7 +435,8 @@ public final class RuntimeIntentValidatorTest {
         String instruction = switch (kind) {
             case MOVE, LOOK, PATROL, BREAK_BLOCK, PLACE_BLOCK -> "1 64 1";
             case ATTACK_NEAREST, GUARD_OWNER -> "12";
-            case INTERACT, CHAT, UNAVAILABLE -> "details";
+            case INTERACT -> "block 1 64 1";
+            case CHAT, UNAVAILABLE -> "details";
             case GOTO -> "owner";
             case INVENTORY_QUERY -> "";
             case EQUIP_ITEM -> "minecraft:iron_sword";
@@ -428,8 +458,8 @@ public final class RuntimeIntentValidatorTest {
             case TRAVEL_NETHER,
                     LOCATE_STRONGHOLD,
                     END_GAME_TASK -> "";
-            case ATTACK_TARGET,
-                    DEFEND_OWNER -> "";
+            case ATTACK_TARGET -> "minecraft:zombie";
+            case DEFEND_OWNER -> "";
             case PAUSE,
                     UNPAUSE,
                     RESET_MEMORY -> "";
@@ -456,7 +486,6 @@ public final class RuntimeIntentValidatorTest {
 
     private static EnumSet<IntentKind> plannedGatedKinds() {
         return EnumSet.of(
-                IntentKind.ATTACK_TARGET,
                 IntentKind.LOCATE_STRUCTURE,
                 IntentKind.EXPLORE_CHUNKS,
                 IntentKind.USE_PORTAL,

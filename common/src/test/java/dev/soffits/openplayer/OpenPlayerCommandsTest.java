@@ -20,6 +20,10 @@ public final class OpenPlayerCommandsTest {
                 "queue kind parser must accept uppercase names");
         require(OpenPlayerCommands.parseQueueIntentKind(" body_language ") == IntentKind.BODY_LANGUAGE,
                 "queue kind parser must trim surrounding whitespace");
+        require(OpenPlayerCommands.parseQueueIntentKind("INTERACT") == IntentKind.INTERACT,
+                "queue kind parser must accept implemented INTERACT");
+        require(OpenPlayerCommands.parseQueueIntentKind("attack_target") == IntentKind.ATTACK_TARGET,
+                "queue kind parser must accept implemented ATTACK_TARGET");
     }
 
     private static void rejectsUnknownQueueIntentKinds() {
@@ -36,8 +40,6 @@ public final class OpenPlayerCommandsTest {
                 "queue kind parser must reject UNAVAILABLE even though it is a valid enum name");
         require(OpenPlayerCommands.parseQueueIntentKind("observe") == null,
                 "queue kind parser must reject OBSERVE even though it is a valid enum name");
-        require(OpenPlayerCommands.parseQueueIntentKind("INTERACT") == null,
-                "queue kind parser must reject INTERACT even though it is a valid enum name");
     }
 
     private static void suggestsOnlyQueueAppropriateIntentKinds() {
@@ -51,8 +53,10 @@ public final class OpenPlayerCommandsTest {
                 "queue suggestions must not include UNAVAILABLE");
         require(!OpenPlayerCommands.queueSuggestedIntentKinds().contains(IntentKind.OBSERVE),
                 "queue suggestions must not include OBSERVE");
-        require(!OpenPlayerCommands.queueSuggestedIntentKinds().contains(IntentKind.INTERACT),
-                "queue suggestions must not include unimplemented INTERACT");
+        require(OpenPlayerCommands.queueSuggestedIntentKinds().contains(IntentKind.INTERACT),
+                "queue suggestions must include implemented INTERACT");
+        require(OpenPlayerCommands.queueSuggestedIntentKinds().contains(IntentKind.ATTACK_TARGET),
+                "queue suggestions must include implemented ATTACK_TARGET");
     }
 
     private static void require(boolean condition, String message) {

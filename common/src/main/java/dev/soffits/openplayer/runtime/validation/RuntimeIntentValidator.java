@@ -2,6 +2,9 @@ package dev.soffits.openplayer.runtime.validation;
 
 import dev.soffits.openplayer.automation.AutomationInstructionParser;
 import dev.soffits.openplayer.automation.BodyLanguageInstructionParser;
+import dev.soffits.openplayer.automation.InteractionInstruction;
+import dev.soffits.openplayer.automation.InteractionInstructionParser;
+import dev.soffits.openplayer.automation.TargetAttackInstructionParser;
 import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser;
 import dev.soffits.openplayer.automation.advanced.AdvancedTaskPolicy;
 import dev.soffits.openplayer.automation.building.BuildPlanParser;
@@ -70,12 +73,12 @@ public final class RuntimeIntentValidator {
             case WITHDRAW_ITEM -> requireItemCountInstruction(intent, "WITHDRAW_ITEM");
             case GET_ITEM -> requireItemCountInstruction(intent, "GET_ITEM");
             case SMELT_ITEM -> requireItemCountInstruction(intent, "SMELT_ITEM");
-            case INTERACT -> RuntimeIntentValidationResult.rejected("INTERACT is not implemented by the vanilla runtime");
+            case INTERACT -> requireInteractInstruction(intent);
             case BODY_LANGUAGE -> requireBodyLanguageInstruction(intent);
             case CHAT -> RuntimeIntentValidationResult.rejected("CHAT cannot be submitted to automation");
             case UNAVAILABLE -> RuntimeIntentValidationResult.rejected("UNAVAILABLE cannot be submitted to automation");
             case OBSERVE -> RuntimeIntentValidationResult.rejected("OBSERVE cannot be submitted to automation");
-            case ATTACK_TARGET -> rejectUnimplemented(kind);
+            case ATTACK_TARGET -> requireAttackTargetInstruction(intent);
         };
     }
 
@@ -150,6 +153,24 @@ public final class RuntimeIntentValidator {
     private static RuntimeIntentValidationResult requireBodyLanguageInstruction(CommandIntent intent) {
         if (BodyLanguageInstructionParser.parseOrNull(intent.instruction()) == null) {
             return RuntimeIntentValidationResult.rejected(BodyLanguageInstructionParser.USAGE);
+        }
+        return RuntimeIntentValidationResult.accepted();
+    }
+
+    private static RuntimeIntentValidationResult requireInteractInstruction(CommandIntent intent) {
+        InteractionInstruction instruction = InteractionInstructionParser.parseOrNull(intent.instruction());
+        if (instruction == null) {
+            return RuntimeIntentValidationResult.rejected(InteractionInstructionParser.USAGE);
+        }
+        if (instruction.kind() != InteractionInstruction.InteractionTargetKind.BLOCK) {
+            return RuntimeIntentValidationResult.rejected("INTERACT supports only block <x> <y> <z> in the vanilla runtime");
+        }
+        return RuntimeIntentValidationResult.accepted();
+    }
+
+    private static RuntimeIntentValidationResult requireAttackTargetInstruction(CommandIntent intent) {
+        if (TargetAttackInstructionParser.parseOrNull(intent.instruction()) == null) {
+            return RuntimeIntentValidationResult.rejected(TargetAttackInstructionParser.USAGE);
         }
         return RuntimeIntentValidationResult.accepted();
     }

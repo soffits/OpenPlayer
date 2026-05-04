@@ -28,6 +28,7 @@ public final class AutomationWorldActionPolicyTest {
                 IntentKind.COLLECT_FOOD,
                 IntentKind.FARM_NEARBY,
                 IntentKind.FISH,
+                IntentKind.INTERACT,
                 IntentKind.ATTACK_TARGET,
                 IntentKind.DEFEND_OWNER,
                 IntentKind.BUILD_STRUCTURE,
@@ -79,6 +80,10 @@ public final class AutomationWorldActionPolicyTest {
                 "RESET_MEMORY planned intent must not use the world-action gate yet");
         require(!RuntimeIntentPolicies.isLocalWorldOrInventoryAction(IntentKind.BODY_LANGUAGE),
                 "BODY_LANGUAGE planned intent must not use the world-action gate yet");
+        require(RuntimeIntentPolicies.isLocalWorldOrInventoryAction(IntentKind.INTERACT),
+                "INTERACT must use the world-action gate for safe runtime interactions");
+        require(RuntimeIntentPolicies.isLocalWorldOrInventoryAction(IntentKind.ATTACK_TARGET),
+                "ATTACK_TARGET must use the world-action gate for targeted combat");
         require(RuntimeIntentPolicies.isLocalWorldOrInventoryAction(IntentKind.LOCATE_LOADED_BLOCK),
                 "LOCATE_LOADED_BLOCK must use the world-action gate for loaded-world reconnaissance");
         require(RuntimeIntentPolicies.isLocalWorldOrInventoryAction(IntentKind.TRAVEL_NETHER),

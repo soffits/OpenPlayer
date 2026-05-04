@@ -138,6 +138,24 @@ tasks.register('runInventoryActionInstructionParserTest', JavaExec) {
     mainClass = 'dev.soffits.openplayer.automation.InventoryActionInstructionParserTest'
 }
 
+tasks.register('runInteractionInstructionParserTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.automation.InteractionInstructionParserTest'
+}
+
+tasks.register('runTargetAttackInstructionParserTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.automation.TargetAttackInstructionParserTest'
+}
+
+tasks.register('runPhaseFourteenSafetyPolicyTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.automation.PhaseFourteenSafetyPolicyTest'
+}
+
 tasks.register('runAutomationWorldActionPolicyTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
@@ -275,6 +293,9 @@ tasks.named('check') {
     dependsOn tasks.named('runAutomationInstructionParserTest')
     dependsOn tasks.named('runBodyLanguageInstructionParserTest')
     dependsOn tasks.named('runInventoryActionInstructionParserTest')
+    dependsOn tasks.named('runInteractionInstructionParserTest')
+    dependsOn tasks.named('runTargetAttackInstructionParserTest')
+    dependsOn tasks.named('runPhaseFourteenSafetyPolicyTest')
     dependsOn tasks.named('runAutomationWorldActionPolicyTest')
     dependsOn tasks.named('runAutomationControllerMonitorTest')
     dependsOn tasks.named('runAutomationControllerSnapshotTest')

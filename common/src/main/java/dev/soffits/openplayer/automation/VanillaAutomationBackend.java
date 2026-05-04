@@ -4,6 +4,7 @@ import dev.soffits.openplayer.api.NpcOwnerId;
 import dev.soffits.openplayer.automation.AutomationInstructionParser.Coordinate;
 import dev.soffits.openplayer.automation.AutomationInstructionParser.GotoInstruction;
 import dev.soffits.openplayer.automation.InventoryActionInstructionParser.ParsedItemInstruction;
+import dev.soffits.openplayer.automation.InteractionInstruction.InteractionTargetKind;
 import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser;
 import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser.LoadedSearchInstruction;
 import dev.soffits.openplayer.automation.advanced.AdvancedTaskPolicy;
@@ -45,6 +46,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Queue;
+import java.util.UUID;
 import net.minecraft.core.Direction;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -54,20 +56,26 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.Container;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.LeverBlock;
+import net.minecraft.world.level.block.TrapDoorBlock;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 public final class VanillaAutomationBackend implements AutomationBackend {
@@ -603,6 +611,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             if (kind == IntentKind.BUILD_STRUCTURE) {
                 return submitBuildStructure(intent.instruction());
             }
+            if (kind == IntentKind.INTERACT) {
+                return submitInteract(intent.instruction());
+            }
             if (kind == IntentKind.ATTACK_NEAREST) {
                 double radius = AutomationInstructionParser.parseOptionalRadiusOrNegative(
                         intent.instruction(), ATTACK_DEFAULT_RADIUS, ATTACK_MAX_RADIUS
@@ -612,6 +623,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 }
                 queuedCommands.add(QueuedCommand.attackNearest(radius));
                 return accepted("ATTACK_NEAREST accepted");
+            }
+            if (kind == IntentKind.ATTACK_TARGET) {
+                return submitAttackTarget(intent.instruction());
             }
             if (kind == IntentKind.GUARD_OWNER) {
                 if (ownerId == null) {
@@ -706,6 +720,49 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             queuedCommands.add(QueuedCommand.buildStructure(plan, material));
             return accepted("BUILD_STRUCTURE accepted: primitive=" + plan.primitive().name().toLowerCase()
                     + " blocks=" + plan.blockCount() + " material=" + plan.materialId());
+        }
+
+        private AutomationCommandResult submitInteract(String instruction) {
+            InteractionInstruction interaction = InteractionInstructionParser.parseOrNull(instruction);
+            if (interaction == null) {
+                return rejected(InteractionInstructionParser.USAGE);
+            }
+            if (interaction.kind() == InteractionTargetKind.ENTITY) {
+                return rejected("INTERACT entity is unsupported: safe non-destructive entity adapters are not implemented");
+            }
+            BlockPos blockPos = BlockPos.containing(
+                    interaction.coordinate().x(), interaction.coordinate().y(), interaction.coordinate().z()
+            );
+            ServerLevel serverLevel = serverLevel();
+            if (serverLevel == null || !serverLevel.hasChunkAt(blockPos)) {
+                return rejected("INTERACT target chunk is not loaded");
+            }
+            if (entity.distanceToSqr(Vec3.atCenterOf(blockPos)) > BLOCK_TASK_MAX_DISTANCE * BLOCK_TASK_MAX_DISTANCE) {
+                return rejected("INTERACT target is outside the start distance");
+            }
+            BlockState state = serverLevel.getBlockState(blockPos);
+            if (!isSupportedSafeInteractBlock(state)) {
+                return rejected("INTERACT unsupported block: " + blockId(state.getBlock()));
+            }
+            queuedCommands.add(QueuedCommand.interactBlock(blockPos));
+            return accepted("INTERACT accepted: block " + blockPos.toShortString());
+        }
+
+        private AutomationCommandResult submitAttackTarget(String instruction) {
+            TargetAttackInstruction attackInstruction = TargetAttackInstructionParser.parseOrNull(instruction);
+            if (attackInstruction == null) {
+                return rejected(TargetAttackInstructionParser.USAGE);
+            }
+            ServerLevel serverLevel = serverLevel();
+            if (serverLevel == null) {
+                return rejected("ATTACK_TARGET requires a server level");
+            }
+            LivingEntity target = resolveAttackTarget(serverLevel, attackInstruction, entity.position());
+            if (target == null) {
+                return rejected("ATTACK_TARGET found no safe hostile target in loaded range: " + attackInstruction.targetId());
+            }
+            queuedCommands.add(QueuedCommand.attackTarget(target, attackInstruction.radius()));
+            return accepted("ATTACK_TARGET accepted: " + entityTypeId(target));
         }
 
         private AutomationCommandResult submitGotoCoordinate(Coordinate coordinate) {
@@ -920,8 +977,10 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                     || command.kind() == IntentKind.BREAK_BLOCK
                     || command.kind() == IntentKind.PLACE_BLOCK
                     || command.kind() == IntentKind.BUILD_STRUCTURE
+                    || command.kind() == IntentKind.INTERACT
                     || command.kind() == IntentKind.SMELT_ITEM
                     || command.kind() == IntentKind.ATTACK_NEAREST
+                    || command.kind() == IntentKind.ATTACK_TARGET
                     || command.kind() == IntentKind.GUARD_OWNER
                     || command.kind() == IntentKind.DEFEND_OWNER
                     || command.kind() == IntentKind.PATROL) {
@@ -980,8 +1039,16 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 smeltItem(activeCommand);
                 return;
             }
+            if (activeCommand.kind() == IntentKind.INTERACT) {
+                interactBlock(activeCommand);
+                return;
+            }
             if (activeCommand.kind() == IntentKind.ATTACK_NEAREST) {
                 attackNearest(activeCommand);
+                return;
+            }
+            if (activeCommand.kind() == IntentKind.ATTACK_TARGET) {
+                attackSpecificTarget(activeCommand);
                 return;
             }
             if (activeCommand.kind() == IntentKind.GUARD_OWNER) {
@@ -1615,19 +1682,83 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
         }
 
+        private void attackSpecificTarget(QueuedCommand command) {
+            ServerLevel serverLevel = serverLevel();
+            if (serverLevel == null) {
+                failActiveCommand("server_level_unavailable");
+                return;
+            }
+            Entity targetEntity = command.entityTarget();
+            if (!(targetEntity instanceof LivingEntity target) || !target.isAlive()) {
+                stopNavigation();
+                failActiveCommand("attack_target_unavailable");
+                return;
+            }
+            if (!target.level().dimension().equals(serverLevel.dimension()) || !isBlockLoaded(target.blockPosition())) {
+                stopNavigation();
+                failActiveCommand("attack_target_unavailable");
+                return;
+            }
+            if (!isSafeAttackTarget(target) || !isWithinStartDistance(command, target.position(), command.radius())) {
+                stopNavigation();
+                failActiveCommand("attack_target_unsafe_or_outside_radius");
+                return;
+            }
+            if (attackTarget(target)) {
+                completeActiveCommand();
+            }
+        }
+
+        private void interactBlock(QueuedCommand command) {
+            ServerLevel serverLevel = serverLevel();
+            if (serverLevel == null) {
+                failActiveCommand("server_level_unavailable");
+                return;
+            }
+            BlockPos blockPos = command.blockTarget();
+            if (!canUseBlockTarget(serverLevel, command, blockPos)) {
+                failActiveCommand("interact_target_unloaded_or_outside_radius");
+                return;
+            }
+            BlockState state = serverLevel.getBlockState(blockPos);
+            if (!isSupportedSafeInteractBlock(state)) {
+                failActiveCommand("interact_unsupported_block=" + blockId(state.getBlock()));
+                return;
+            }
+            lookAtBlock(blockPos);
+            if (!isWithinInteractionDistance(blockPos)) {
+                moveNearBlock(blockPos);
+                return;
+            }
+            stopNavigation();
+            if (!entity.getMainHandItem().isEmpty()) {
+                failActiveCommand("interact_requires_empty_main_hand");
+                return;
+            }
+            if (!hasLineOfSightToBlock(serverLevel, blockPos)) {
+                failActiveCommand("interact_no_line_of_sight");
+                return;
+            }
+            if (!canAcquireInteractionCooldown()) {
+                return;
+            }
+            if (!acquireInteractionCooldown() || !toggleSafeInteractBlock(serverLevel, blockPos, state)) {
+                rollbackInteractionCooldown();
+                failActiveCommand("interact_state_change_failed");
+                return;
+            }
+            entity.swingMainHandAction();
+            completeActiveCommand();
+        }
+
         private LivingEntity nearestAttackTarget(ServerLevel serverLevel, double radius, Vec3 center) {
             if (serverLevel == null || center == null) {
                 return null;
             }
-            ServerPlayer owner = owner();
             List<LivingEntity> targets = serverLevel.getEntitiesOfClass(
                     LivingEntity.class,
                     entity.getBoundingBox().inflate(radius),
-                    target -> target.isAlive()
-                            && target != entity
-                            && !(target instanceof Player)
-                            && !(target instanceof OpenPlayerNpcEntity)
-                            && (owner == null || !target.getUUID().equals(owner.getUUID()))
+                    target -> isSafeAttackTarget(target)
                             && center.distanceToSqr(target.position()) <= radius * radius
                             && entity.hasLineOfSight(target)
             );
@@ -1649,6 +1780,43 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                     .min(Comparator.comparingDouble((LivingEntity target) -> entity.distanceToSqr(target))
                             .thenComparing(target -> target.getUUID().toString()))
                     .orElse(null);
+        }
+
+        private LivingEntity resolveAttackTarget(ServerLevel serverLevel,
+                                                 TargetAttackInstruction instruction,
+                                                 Vec3 center) {
+            if (instruction.targetsUuid()) {
+                List<LivingEntity> targets = serverLevel.getEntitiesOfClass(
+                        LivingEntity.class,
+                        entity.getBoundingBox().inflate(instruction.radius()),
+                        target -> target.getUUID().equals(instruction.targetUuid())
+                                && isSafeAttackTarget(target)
+                                && center.distanceToSqr(target.position()) <= instruction.radius() * instruction.radius()
+                                && entity.hasLineOfSight(target)
+                );
+                return targets.stream().findFirst().orElse(null);
+            }
+            ResourceLocation id = ResourceLocation.tryParse(instruction.targetId());
+            if (id == null || !BuiltInRegistries.ENTITY_TYPE.containsKey(id)) {
+                return null;
+            }
+            EntityType<?> entityType = BuiltInRegistries.ENTITY_TYPE.get(id);
+            List<LivingEntity> targets = serverLevel.getEntitiesOfClass(
+                    LivingEntity.class,
+                    entity.getBoundingBox().inflate(instruction.radius()),
+                    target -> target.getType() == entityType
+                            && isSafeAttackTarget(target)
+                            && center.distanceToSqr(target.position()) <= instruction.radius() * instruction.radius()
+                            && entity.hasLineOfSight(target)
+            );
+            return targets.stream()
+                    .min(Comparator.comparingDouble((LivingEntity target) -> entity.distanceToSqr(target))
+                            .thenComparing(target -> target.getUUID().toString()))
+                    .orElse(null);
+        }
+
+        private boolean isSafeAttackTarget(LivingEntity target) {
+            return PhaseFourteenSafetyPolicy.isSafeExplicitAttackTarget(target, owner(), entity);
         }
 
         private LivingEntity nearestGuardTarget(ServerLevel serverLevel, ServerPlayer owner, double radius) {
@@ -2363,8 +2531,44 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             return null;
         }
 
+        private boolean hasLineOfSightToBlock(ServerLevel serverLevel, BlockPos blockPos) {
+            Vec3 eyePosition = entity.getEyePosition();
+            Vec3 targetPosition = Vec3.atCenterOf(blockPos);
+            BlockHitResult result = serverLevel.clip(new ClipContext(
+                    eyePosition,
+                    targetPosition,
+                    ClipContext.Block.COLLIDER,
+                    ClipContext.Fluid.NONE,
+                    entity
+            ));
+            return result.getType() == HitResult.Type.MISS || result.getBlockPos().equals(blockPos);
+        }
+
+        private static boolean isSupportedSafeInteractBlock(BlockState state) {
+            return PhaseFourteenSafetyPolicy.isSafeEmptyHandInteractBlock(state.getBlock());
+        }
+
+        private static boolean toggleSafeInteractBlock(ServerLevel serverLevel, BlockPos blockPos, BlockState state) {
+            Block block = state.getBlock();
+            BlockState updatedState;
+            if (block instanceof LeverBlock) {
+                updatedState = state.setValue(LeverBlock.POWERED, !state.getValue(LeverBlock.POWERED));
+            } else if (block instanceof TrapDoorBlock) {
+                updatedState = state.setValue(TrapDoorBlock.OPEN, !state.getValue(TrapDoorBlock.OPEN));
+            } else if (block instanceof FenceGateBlock) {
+                updatedState = state.setValue(FenceGateBlock.OPEN, !state.getValue(FenceGateBlock.OPEN));
+            } else {
+                return false;
+            }
+            return serverLevel.setBlock(blockPos, updatedState, Block.UPDATE_ALL);
+        }
+
         private static Item itemByIdOrNull(ResourceLocation id) {
             return BuiltInRegistries.ITEM.getOptional(id).orElse(null);
+        }
+
+        private static String blockId(Block block) {
+            return BuiltInRegistries.BLOCK.getKey(block).toString();
         }
 
         private static String itemId(Item item) {
@@ -2503,8 +2707,18 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return command;
             }
 
+            private static QueuedCommand interactBlock(BlockPos blockPos) {
+                return new QueuedCommand(
+                        IntentKind.INTERACT, null, 0.0D, blockPos.immutable(), null, false, null, null, null, 0, false
+                );
+            }
+
             private static QueuedCommand attackNearest(double radius) {
                 return new QueuedCommand(IntentKind.ATTACK_NEAREST, null, radius);
+            }
+
+            private static QueuedCommand attackTarget(Entity target, double radius) {
+                return new QueuedCommand(IntentKind.ATTACK_TARGET, null, radius, null, target, false, null, null, null, 0, false);
             }
 
             private static QueuedCommand selfDefense(double radius) {

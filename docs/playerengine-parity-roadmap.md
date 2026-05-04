@@ -329,12 +329,14 @@ The first twelve phases establish a bounded first-party runtime foundation, but 
 
 ### Phase 14: Interaction and Targeted Combat Refinement
 
+**Status:** Implemented as a safe subset. `INTERACT block <x> <y> <z>` queues loaded, nearby, empty-hand, line-of-sight/reach-bounded toggles for explicit vanilla levers, wooden trapdoors, and wooden fence gates only; doors, buttons, iron trapdoors, powered-only blocks, and modded/custom blocks are out of scope. `INTERACT entity ...` parser schema remains deterministic, but runtime validation rejects entity interaction until a reviewed non-destructive entity adapter exists. `ATTACK_TARGET [entity] <entity_type_or_uuid> [radius]` resolves loaded in-range targets by UUID or entity type and attacks only explicitly allowlisted hostile/danger vanilla entity types. Trading, breeding, buckets, item-use-on-block, villager/container UI, modded/custom interaction, generic item interaction, players, owners, OpenPlayer NPCs, passive/friendly/neutral entities, and arbitrary non-hostile combat remain unsupported.
+
 **Objective:** Implement safe `INTERACT` and richer `ATTACK_TARGET` semantics without arbitrary entity/block use.
 
 **Capabilities:**
 
-- `INTERACT block <x> <y> <z>` for loaded nearby whitelisted interactions such as door/button/lever/use-on-empty-hand where no inventory loss can occur.
-- `INTERACT entity <entity_type_or_uuid> [radius]` for safe non-destructive entity interactions when vanilla semantics are predictable.
+- `INTERACT block <x> <y> <z>` for loaded nearby whitelisted empty-hand vanilla lever, wooden trapdoor, and wooden fence gate toggles where no inventory loss can occur.
+- `INTERACT entity <entity_type_or_uuid> [radius]` remains parser-recognized only; runtime validation rejects it until safe non-destructive entity interactions are reviewed.
 - `ATTACK_TARGET <entity_type_or_uuid> [radius]` with owner/same-dimension checks and hostile/explicit-target policy.
 - Clear rejection for villagers, trading, animal breeding, buckets, item-use-on-block, or modded interactions until specific adapters exist.
 
