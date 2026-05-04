@@ -9,7 +9,10 @@ public final class OpenPlayerClientStatus {
     private static String parserStatus = "unknown";
     private static boolean parserAvailable;
     private static String endpointStatus = "unknown";
+    private static String providerEndpointValue = "";
     private static String modelStatus = "unknown";
+    private static String providerModelValue = "";
+    private static long providerStatusVersion;
     private static String apiKeyStatus = "unknown";
     private static String automationStatus = "unknown";
     private static String providerTestCode = "not_run";
@@ -27,8 +30,10 @@ public final class OpenPlayerClientStatus {
     public static void update(
             boolean parserAvailable,
             String endpoint,
+            String endpointValue,
             String endpointSource,
             boolean modelConfigured,
+            String modelValue,
             String modelSource,
             boolean apiKeyPresent,
             String apiKeySource,
@@ -39,6 +44,9 @@ public final class OpenPlayerClientStatus {
     ) {
         OpenPlayerClientStatus.parserAvailable = parserAvailable;
         parserStatus = parserAvailable ? "enabled" : "disabled";
+        providerEndpointValue = endpointValue == null ? "" : endpointValue;
+        providerModelValue = modelValue == null ? "" : modelValue;
+        providerStatusVersion++;
         endpointStatus = endpoint + " [" + endpointSource + "]";
         modelStatus = (modelConfigured ? "configured" : "not configured") + " [" + modelSource + "]";
         apiKeyStatus = (apiKeyPresent ? "present" : "not present") + " [" + apiKeySource + "]";
@@ -59,8 +67,20 @@ public final class OpenPlayerClientStatus {
         return endpointStatus;
     }
 
+    public static String providerEndpointValue() {
+        return providerEndpointValue;
+    }
+
     public static String modelStatus() {
         return modelStatus;
+    }
+
+    public static String providerModelValue() {
+        return providerModelValue;
+    }
+
+    public static long providerStatusVersion() {
+        return providerStatusVersion;
     }
 
     public static String apiKeyStatus() {

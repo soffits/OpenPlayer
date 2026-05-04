@@ -32,9 +32,11 @@ import dev.soffits.openplayer.intent.IntentProviderException;
 import dev.soffits.openplayer.intent.IntentParser;
 import dev.soffits.openplayer.runtime.CompanionLifecycleManager;
 import dev.soffits.openplayer.runtime.OpenPlayerRuntime;
+import dev.soffits.openplayer.runtime.RuntimeAgentExecutor;
 import io.netty.buffer.Unpooled;
 import java.util.List;
 import java.util.UUID;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -335,9 +337,7 @@ public final class OpenPlayerNetworking {
         OpenPlayerRawTrace.commandText("network_assignment", sender.getUUID().toString(), trimmedAssignmentId, null,
                 trimmedCommandText);
         sendCompanionChatEcho(sender, trimmedAssignmentId, trimmedCommandText);
-        CommandSubmissionResult result = COMPANION_LIFECYCLE_MANAGER.submitSelectedCommandText(
-                sender.getUUID(), trimmedAssignmentId, trimmedCommandText
-        );
+        CommandSubmissionResult result = submitSelectedCommandTextAsync(sender, trimmedAssignmentId, trimmedCommandText);
         OpenPlayerDebugEvents.record("command_submission", result.status().name(), trimmedAssignmentId, null, null,
                 result.message());
         sendSelectedCommandTextResultMessage(sender, trimmedAssignmentId, result);
@@ -358,13 +358,28 @@ public final class OpenPlayerNetworking {
         OpenPlayerRawTrace.commandText("network_assignment", sender.getUUID().toString(), trimmedAssignmentId, null,
                 trimmedCommandText);
         sendCompanionChatEcho(sender, trimmedAssignmentId, trimmedCommandText);
-        CommandSubmissionResult result = COMPANION_LIFECYCLE_MANAGER.submitSelectedCommandText(
-                sender.getUUID(), trimmedAssignmentId, trimmedCommandText
-        );
+        CommandSubmissionResult result = submitSelectedCommandTextAsync(sender, trimmedAssignmentId, trimmedCommandText);
         OpenPlayerDebugEvents.record("command_submission", result.status().name(), trimmedAssignmentId, null, null, result.message());
         sendCharacterListResponse(sender);
         sendStatusResponse(sender);
         return result;
+    }
+
+    private static CommandSubmissionResult submitSelectedCommandTextAsync(ServerPlayer sender, String assignmentId,
+                                                                         String commandText) {
+        UUID senderId = sender.getUUID();
+        MinecraftServer server = sender.server;
+        return COMPANION_LIFECYCLE_MANAGER.submitSelectedCommandTextAsync(server, senderId, assignmentId, commandText, result -> {
+            ServerPlayer player = server.getPlayerList().getPlayer(senderId);
+            if (player == null) {
+                return;
+            }
+            OpenPlayerDebugEvents.record("command_submission", result.status().name(), assignmentId, null, null,
+                    result.message());
+            sendSelectedCommandTextResultMessage(player, assignmentId, result);
+            sendCharacterListResponse(player);
+            sendStatusResponse(player);
+        });
     }
 
     public static boolean submitAssignmentCommandText(ServerPlayer sender, String assignmentId, String commandText) {
@@ -587,27 +602,50 @@ public final class OpenPlayerNetworking {
             return;
         }
         IntentParser intentParser = OpenPlayerRuntime.intentParser();
-        try {
-            OpenPlayerDebugEvents.record("provider_parse", "attempted", null, null, null, "source=provider_test prompt=connectivity");
-            CommandIntent intent = intentParser.parse(PROVIDER_TEST_PROMPT);
-            if (intent == null || intent.kind() == null || intent.priority() == null) {
-                OpenPlayerDebugEvents.record("provider_test", "invalid", null, null, null, "missing_intent_fields");
-                sendProviderTestResponse(sender, "invalid", "");
+        UUID senderId = sender.getUUID();
+        MinecraftServer server = sender.server;
+        sendProviderTestResponse(sender, "running", "");
+        sendStatusResponse(sender);
+        RuntimeAgentExecutor.submit(server, () -> parseProviderTest(intentParser), intent -> {
+            ServerPlayer player = server.getPlayerList().getPlayer(senderId);
+            if (player == null) {
                 return;
             }
-            OpenPlayerDebugEvents.record("provider_parse", "success", null, null, null,
-                    "kind=" + intent.kind().name() + " instructionLength=" + intent.instruction().length());
-            OpenPlayerDebugEvents.record("provider_test", "success", null, null, null, "kind=" + intent.kind().name());
-            sendProviderTestResponse(sender, "success", intent.kind().name());
-        } catch (IntentParseException exception) {
-            String code = providerFailureCode(exception);
-            String detail = providerFailureDetail(exception);
+            if (intent == null || intent.kind() == null || intent.priority() == null) {
+                OpenPlayerDebugEvents.record("provider_test", "invalid", null, null, null, "missing_intent_fields");
+                sendProviderTestResponse(player, "invalid", "");
+            } else {
+                OpenPlayerDebugEvents.record("provider_parse", "success", null, null, null,
+                        "kind=" + intent.kind().name() + " instructionLength=" + intent.instruction().length());
+                OpenPlayerDebugEvents.record("provider_test", "success", null, null, null, "kind=" + intent.kind().name());
+                sendProviderTestResponse(player, "success", intent.kind().name());
+            }
+            sendStatusResponse(player);
+            sendCharacterListResponse(player);
+        }, exception -> {
+            ServerPlayer player = server.getPlayerList().getPlayer(senderId);
+            if (player == null) {
+                return;
+            }
+            IntentParseException parseException = exception instanceof ProviderTestParseRuntimeException providerException
+                    ? providerException.parseException()
+                    : new IntentParseException("intent provider failed", exception);
+            String code = providerFailureCode(parseException);
+            String detail = providerFailureDetail(parseException);
             OpenPlayerDebugEvents.record("provider_test", code, null, null, null,
                     detail.isBlank() ? code : "detail=" + detail);
-            sendProviderTestResponse(sender, code, detail);
-        } finally {
-            sendStatusResponse(sender);
-            sendCharacterListResponse(sender);
+            sendProviderTestResponse(player, code, detail);
+            sendStatusResponse(player);
+            sendCharacterListResponse(player);
+        });
+    }
+
+    private static CommandIntent parseProviderTest(IntentParser intentParser) {
+        try {
+            OpenPlayerDebugEvents.record("provider_parse", "attempted", null, null, null, "source=provider_test prompt=connectivity");
+            return intentParser.parse(PROVIDER_TEST_PROMPT);
+        } catch (IntentParseException exception) {
+            throw new ProviderTestParseRuntimeException(exception);
         }
     }
 
@@ -620,8 +658,10 @@ public final class OpenPlayerNetworking {
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
         buffer.writeBoolean(status.intentParser().enabled());
         writeBoundedUtf(buffer, status.intentParser().endpointStatus(), 128);
+        writeBoundedUtf(buffer, status.intentParser().endpointValue(), OpenPlayerIntentParserConfig.MAX_ENDPOINT_LENGTH);
         writeBoundedUtf(buffer, status.intentParser().endpointSource(), 32);
         buffer.writeBoolean(status.intentParser().modelConfigured());
+        writeBoundedUtf(buffer, status.intentParser().modelValue(), OpenPlayerIntentParserConfig.MAX_MODEL_LENGTH);
         writeBoundedUtf(buffer, status.intentParser().modelSource(), 32);
         buffer.writeBoolean(status.intentParser().apiKeyPresent());
         writeBoundedUtf(buffer, status.intentParser().apiKeySource(), 32);
@@ -785,6 +825,19 @@ public final class OpenPlayerNetworking {
 
     static boolean mayManageLocalProfiles(boolean singleplayerOwner, boolean sufficientPermission) {
         return singleplayerOwner || sufficientPermission;
+    }
+
+    private static final class ProviderTestParseRuntimeException extends RuntimeException {
+        private final IntentParseException parseException;
+
+        private ProviderTestParseRuntimeException(IntentParseException parseException) {
+            super(parseException);
+            this.parseException = parseException;
+        }
+
+        private IntentParseException parseException() {
+            return parseException;
+        }
     }
 
     private static void rejectLocalProfileOperation(ServerPlayer player) {

@@ -74,6 +74,10 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
         this.intentParser = intentParser;
     }
 
+    synchronized IntentParser intentParser() {
+        return intentParser;
+    }
+
     public synchronized void reattachPersistedNpcs() {
         int reattached = 0;
         int invalid = 0;
@@ -261,24 +265,47 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService {
                 return new CommandSubmissionResult(CommandSubmissionStatus.UNKNOWN_SESSION, "Unknown NPC session");
             }
         }
-        CommandIntent intent;
-        try {
-            OpenPlayerDebugEvents.record("provider_parse", "attempted", null, null,
-                    sessionId.value().toString(), "source=command_text messageLength=" + input.trim().length());
-            OpenPlayerRawTrace.parseInput("runtime_service", sessionId.value().toString(), input);
-            intent = intentParser.parse(input);
+        IntentParser parser = intentParser();
+        RuntimeAgentExecutor.submit(server, () -> parseCommandText(parser, sessionId, input), intent -> {
             OpenPlayerDebugEvents.record("provider_parse", "success", null, null,
                     sessionId.value().toString(), "kind=" + intent.kind().name() + " instructionLength=" + intent.instruction().length());
             OpenPlayerRawTrace.parseOutput("runtime_service", sessionId.value().toString(),
                     "kind=" + intent.kind().name() + " priority=" + intent.priority().name()
                             + " instruction=" + intent.instruction());
-        } catch (IntentParseException exception) {
+            submitCommand(sessionId, new AiPlayerNpcCommand(UUID.randomUUID(), intent));
+        }, exception -> {
             OpenPlayerDebugEvents.record("provider_parse", "rejected", null, null,
                     sessionId.value().toString(), "Unable to parse command text");
-            OpenPlayerRawTrace.parseRejection("runtime_service", sessionId.value().toString(), input, exception.getMessage());
-            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Unable to parse command text");
+            String message = exception instanceof CommandTextParseRuntimeException parseException
+                    ? parseException.parseException().getMessage()
+                    : exception.getMessage();
+            OpenPlayerRawTrace.parseRejection("runtime_service", sessionId.value().toString(), input, message);
+        });
+        return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED, "Command text queued for provider parsing");
+    }
+
+    private static CommandIntent parseCommandText(IntentParser parser, NpcSessionId sessionId, String input) {
+        try {
+            OpenPlayerDebugEvents.record("provider_parse", "attempted", null, null,
+                    sessionId.value().toString(), "source=command_text messageLength=" + input.trim().length());
+            OpenPlayerRawTrace.parseInput("runtime_service", sessionId.value().toString(), input);
+            return parser.parse(input);
+        } catch (IntentParseException exception) {
+            throw new CommandTextParseRuntimeException(exception);
         }
-        return submitCommand(sessionId, new AiPlayerNpcCommand(UUID.randomUUID(), intent));
+    }
+
+    private static final class CommandTextParseRuntimeException extends RuntimeException {
+        private final IntentParseException parseException;
+
+        private CommandTextParseRuntimeException(IntentParseException parseException) {
+            super(parseException);
+            this.parseException = parseException;
+        }
+
+        private IntentParseException parseException() {
+            return parseException;
+        }
     }
 
     @Override

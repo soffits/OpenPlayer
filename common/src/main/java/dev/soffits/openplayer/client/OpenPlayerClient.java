@@ -63,8 +63,10 @@ public final class OpenPlayerClient {
     private static void receiveStatusResponse(net.minecraft.network.FriendlyByteBuf buffer, NetworkManager.PacketContext context) {
         boolean parserAvailable = buffer.readBoolean();
         String endpoint = buffer.readUtf(128);
+        String endpointValue = buffer.readUtf(512);
         String endpointSource = buffer.readUtf(32);
         boolean modelConfigured = buffer.readBoolean();
+        String modelValue = buffer.readUtf(128);
         String modelSource = buffer.readUtf(32);
         boolean apiKeyPresent = buffer.readBoolean();
         String apiKeySource = buffer.readUtf(32);
@@ -83,8 +85,10 @@ public final class OpenPlayerClient {
         context.queue(() -> OpenPlayerClientStatus.update(
                 parserAvailable,
                 endpoint,
+                endpointValue,
                 endpointSource,
                 modelConfigured,
+                modelValue,
                 modelSource,
                 apiKeyPresent,
                 apiKeySource,

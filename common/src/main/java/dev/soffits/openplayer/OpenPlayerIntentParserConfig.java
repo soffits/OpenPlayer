@@ -51,8 +51,10 @@ public final class OpenPlayerIntentParserConfig {
         return new IntentParserRuntimeStatus(
                 enabled(endpoint, model, apiKey),
                 safeEndpointStatus(endpoint.value()),
+                safeEndpointValue(endpoint.value()),
                 endpoint.source(),
                 hasValue(model.value()),
+                safeModelValue(model.value()),
                 model.source(),
                 hasValue(apiKey.value()),
                 apiKey.source()
@@ -115,6 +117,28 @@ public final class OpenPlayerIntentParserConfig {
         } catch (URISyntaxException exception) {
             return "configured";
         }
+    }
+
+    private static String safeEndpointValue(String value) {
+        if (!hasValue(value)) {
+            return "";
+        }
+        try {
+            URI uri = new URI(value.trim());
+            URI safeUri = new URI(uri.getScheme(), null, uri.getHost(), uri.getPort(), uri.getPath(), uri.getQuery(), uri.getFragment());
+            String rendered = safeUri.toString();
+            return rendered.length() > MAX_ENDPOINT_LENGTH ? "" : rendered;
+        } catch (URISyntaxException exception) {
+            return "";
+        }
+    }
+
+    private static String safeModelValue(String value) {
+        if (!hasValue(value)) {
+            return "";
+        }
+        String trimmed = value.trim();
+        return trimmed.length() > MAX_MODEL_LENGTH ? "" : trimmed;
     }
 
     private static boolean hasValue(String value) {

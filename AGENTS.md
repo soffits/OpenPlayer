@@ -43,6 +43,7 @@ OpenPlayer is an AGPL-3.0-only Minecraft mod developed as a legally clean, local
 
 ## Code Style
 
+- Do not add non-English text to code, tests, comments, docs, prompts, commit messages, branch names, metadata, or generated release notes inputs; translated locale resource values under `assets/openplayer/lang/*.json` are the only exception.
 - Use strict, explicit Java types.
 - Prefer self-documenting names over comments.
 - Do not add dead code, speculative abstractions, or compatibility shims without a concrete need.
@@ -52,7 +53,7 @@ OpenPlayer is an AGPL-3.0-only Minecraft mod developed as a legally clean, local
 ## UI Conventions
 
 - All user-facing Minecraft UI text must be translatable via `assets/openplayer/lang/*.json`; avoid hard-coded `Component.literal("English UI text")` except dynamic values, ids, commands, file names, and developer/debug-only text.
-- Add new UI translation keys to `en_us.json`, `ja_jp.json`, and `fr_fr.json` for now.
+- Add new UI translation keys to every locale file under `assets/openplayer/lang/*.json`, keeping key and placeholder parity.
 
 ## Verification
 

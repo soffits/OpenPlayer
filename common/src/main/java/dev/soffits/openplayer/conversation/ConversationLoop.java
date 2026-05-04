@@ -73,22 +73,9 @@ public final class ConversationLoop {
         if (acceptedIntentRecorder == null) {
             throw new IllegalArgumentException("acceptedIntentRecorder cannot be null");
         }
-        IntentParserRuntimeStatus status = statusSupplier.get();
-        if (status == null || !status.enabled()) {
-            return new CommandSubmissionResult(CommandSubmissionStatus.UNAVAILABLE,
-                    "Conversation unavailable: intent parser disabled");
-        }
-
-        String prompt;
-        try {
-            prompt = ConversationPromptAssembler.assemble(
-                    character,
-                    playerMessage,
-                    ConversationHistoryTrimmer.trim(history, MAX_HISTORY_TURNS, MAX_HISTORY_CHARACTERS),
-                    contextSnapshot
-            );
-        } catch (IllegalArgumentException exception) {
-            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, exception.getMessage());
+        ConversationParseRequest request = prepare(character, playerMessage, history, contextSnapshot);
+        if (request.immediateResult() != null) {
+            return request.immediateResult();
         }
 
         CommandIntent intent;
@@ -98,9 +85,49 @@ public final class ConversationLoop {
                 return new CommandSubmissionResult(CommandSubmissionStatus.UNAVAILABLE,
                         "Conversation unavailable: intent parser disabled");
             }
-            intent = ConversationIntentValidator.requireConversationIntent(intentParser.parse(prompt));
+            intent = ConversationIntentValidator.requireConversationIntent(intentParser.parse(request.prompt()));
         } catch (IntentParseException exception) {
             return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, conversationFailureMessage(exception));
+        }
+        return submitIntent(intent, submitter, acceptedIntentRecorder);
+    }
+
+    public ConversationParseRequest prepare(LocalCharacterDefinition character, String playerMessage,
+                                            List<ConversationTurn> history,
+                                            ConversationContextSnapshot contextSnapshot) {
+        if (character == null) {
+            throw new IllegalArgumentException("character cannot be null");
+        }
+        if (contextSnapshot == null) {
+            throw new IllegalArgumentException("contextSnapshot cannot be null");
+        }
+        IntentParserRuntimeStatus status = statusSupplier.get();
+        if (status == null || !status.enabled()) {
+            return new ConversationParseRequest("", new CommandSubmissionResult(CommandSubmissionStatus.UNAVAILABLE,
+                    "Conversation unavailable: intent parser disabled"));
+        }
+        try {
+            return new ConversationParseRequest(ConversationPromptAssembler.assemble(
+                    character,
+                    playerMessage,
+                    ConversationHistoryTrimmer.trim(history, MAX_HISTORY_TURNS, MAX_HISTORY_CHARACTERS),
+                    contextSnapshot
+            ), null);
+        } catch (IllegalArgumentException exception) {
+            return new ConversationParseRequest("", new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, exception.getMessage()));
+        }
+    }
+
+    public CommandSubmissionResult submitIntent(CommandIntent intent, CommandSubmitter submitter,
+                                                Consumer<CommandIntent> acceptedIntentRecorder) {
+        if (intent == null) {
+            throw new IllegalArgumentException("intent cannot be null");
+        }
+        if (submitter == null) {
+            throw new IllegalArgumentException("submitter cannot be null");
+        }
+        if (acceptedIntentRecorder == null) {
+            throw new IllegalArgumentException("acceptedIntentRecorder cannot be null");
         }
         acceptedIntentRecorder.accept(intent);
         if (intent.kind() == IntentKind.CHAT) {
@@ -114,7 +141,21 @@ public final class ConversationLoop {
         return submitter.submit(new AiPlayerNpcCommand(UUID.randomUUID(), intent));
     }
 
-    private static String conversationFailureMessage(IntentParseException exception) {
+    public CommandIntent parsePrepared(ConversationParseRequest request) throws IntentParseException {
+        if (request == null) {
+            throw new IllegalArgumentException("request cannot be null");
+        }
+        if (request.immediateResult() != null) {
+            throw new IllegalArgumentException("request has an immediate result");
+        }
+        IntentParser intentParser = intentParserSupplier.get();
+        if (intentParser == null) {
+            throw new IntentParseException("intent parser disabled");
+        }
+        return ConversationIntentValidator.requireConversationIntent(intentParser.parse(request.prompt()));
+    }
+
+    public static String conversationFailureMessage(IntentParseException exception) {
         Throwable cause = exception.getCause();
         if (cause instanceof IntentProviderException providerException) {
             String message = providerException.getMessage();
@@ -138,5 +179,13 @@ public final class ConversationLoop {
     @FunctionalInterface
     public interface CommandSubmitter {
         CommandSubmissionResult submit(AiPlayerNpcCommand command);
+    }
+
+    public record ConversationParseRequest(String prompt, CommandSubmissionResult immediateResult) {
+        public ConversationParseRequest {
+            if (prompt == null) {
+                throw new IllegalArgumentException("prompt cannot be null");
+            }
+        }
     }
 }

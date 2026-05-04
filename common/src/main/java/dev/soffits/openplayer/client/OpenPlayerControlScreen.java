@@ -46,6 +46,9 @@ public final class OpenPlayerControlScreen extends Screen {
     private String providerEndpointDraft = "";
     private String providerModelDraft = "";
     private String providerApiKeyDraft = "";
+    private String lastHydratedProviderEndpoint = "";
+    private String lastHydratedProviderModel = "";
+    private long hydratedProviderStatusVersion = -1L;
     private boolean clearApiKeyOnSave;
     private boolean profileAllowWorldActions;
     private boolean confirmDeleteSelected;
@@ -156,6 +159,7 @@ public final class OpenPlayerControlScreen extends Screen {
 
         addPageTabs(rightLeft, rightWidth);
         if (controlPage == ControlPage.PROVIDER) {
+            hydrateProviderDraftsFromStatus();
             addProviderWidgets(rightLeft, rightWidth);
         } else if (controlPage == ControlPage.PROFILE) {
             addProfileWidgets(rightLeft, rightWidth);
@@ -257,10 +261,12 @@ public final class OpenPlayerControlScreen extends Screen {
         providerEndpointInput = new EditBox(this.font, inputLeft, providerTop, inputWidth, OpenPlayerControlLayout.BUTTON_HEIGHT, PROVIDER_ENDPOINT_INPUT);
         providerEndpointInput.setMaxLength(512);
         providerEndpointInput.setHint(PROVIDER_ENDPOINT_INPUT);
+        providerEndpointInput.setValue(providerEndpointDraft);
         this.addRenderableWidget(providerEndpointInput);
         providerModelInput = new EditBox(this.font, inputLeft, providerTop + rowStep, inputWidth, OpenPlayerControlLayout.BUTTON_HEIGHT, PROVIDER_MODEL_INPUT);
         providerModelInput.setMaxLength(128);
         providerModelInput.setHint(PROVIDER_MODEL_INPUT);
+        providerModelInput.setValue(providerModelDraft);
         this.addRenderableWidget(providerModelInput);
         providerApiKeyInput = new EditBox(this.font, inputLeft, providerTop + rowStep * 2, inputWidth, OpenPlayerControlLayout.BUTTON_HEIGHT, PROVIDER_API_KEY_INPUT);
         providerApiKeyInput.setMaxLength(512);
@@ -647,6 +653,24 @@ public final class OpenPlayerControlScreen extends Screen {
         clearApiKeyOnSave = false;
     }
 
+    private void hydrateProviderDraftsFromStatus() {
+        long statusVersion = OpenPlayerClientStatus.providerStatusVersion();
+        if (hydratedProviderStatusVersion == statusVersion) {
+            return;
+        }
+        String endpointValue = OpenPlayerClientStatus.providerEndpointValue();
+        String modelValue = OpenPlayerClientStatus.providerModelValue();
+        if (providerEndpointDraft.isBlank() || providerEndpointDraft.equals(lastHydratedProviderEndpoint)) {
+            providerEndpointDraft = endpointValue;
+        }
+        if (providerModelDraft.isBlank() || providerModelDraft.equals(lastHydratedProviderModel)) {
+            providerModelDraft = modelValue;
+        }
+        lastHydratedProviderEndpoint = endpointValue;
+        lastHydratedProviderModel = modelValue;
+        hydratedProviderStatusVersion = statusVersion;
+    }
+
     private void sendProviderTest() {
         OpenPlayerClientStatus.updateProviderTestResult("running", "");
         OpenPlayerRequestSender.sendProviderTestRequest();
@@ -674,7 +698,9 @@ public final class OpenPlayerControlScreen extends Screen {
         parts.add(OpenPlayerClientStatus.characterListStatus());
         parts.add(OpenPlayerClientStatus.parserStatus());
         parts.add(OpenPlayerClientStatus.endpointStatus());
+        parts.add(OpenPlayerClientStatus.providerEndpointValue());
         parts.add(OpenPlayerClientStatus.modelStatus());
+        parts.add(OpenPlayerClientStatus.providerModelValue());
         parts.add(OpenPlayerClientStatus.apiKeyStatus());
         parts.add(OpenPlayerClientStatus.providerTestStatus());
         for (LocalCharacterListEntry character : OpenPlayerClientStatus.characters()) {

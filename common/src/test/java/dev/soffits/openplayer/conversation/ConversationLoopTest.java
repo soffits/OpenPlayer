@@ -143,7 +143,7 @@ public final class ConversationLoopTest {
         });
 
         require(result.status() == CommandSubmissionStatus.ACCEPTED, "long CHAT intent must return a visible reply");
-        require(result.message().equals(reply + " Keep chopping nearby logs afterward."),
+        require(result.message().equals(ConversationReplyText.sanitizeProviderReply(reply + " Keep chopping nearby logs afterward.")),
                 "long CHAT reply must preserve the full sanitized provider instruction");
         require(result.message().length() > ConversationStatusRepository.MAX_EVENT_TEXT_LENGTH,
                 "long CHAT reply must not be truncated to status summary length");
@@ -162,7 +162,8 @@ public final class ConversationLoopTest {
     }
 
     private static IntentParserRuntimeStatus status(boolean enabled) {
-        return new IntentParserRuntimeStatus(enabled, "test", "test", true, "test", true, "test");
+        return new IntentParserRuntimeStatus(enabled, "test", "https://example.invalid/v1/chat/completions", "test",
+                true, "test-model", "test", true, "test");
     }
 
     private static void require(boolean condition, String message) {

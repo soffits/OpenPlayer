@@ -16,8 +16,8 @@ public final class ConversationStatusRepositoryTest {
         storesOnlyBoundedEvents();
         evictsOldAssignmentKeysAfterRepositoryCap();
         sanitizesAndTruncatesPublicText();
-        storesNetworkSafeEventLinesForLongCjkReplies();
-        splitsLongCjkRepliesIntoSafeChatChunks();
+        storesNetworkSafeEventLinesForLongReplies();
+        splitsLongRepliesIntoSafeChatChunks();
         recordsDeterministicActionSummaryWithoutProviderText();
     }
 
@@ -56,7 +56,7 @@ public final class ConversationStatusRepositoryTest {
                 "sanitized text must be truncated to the public bound");
     }
 
-    private static void storesNetworkSafeEventLinesForLongCjkReplies() {
+    private static void storesNetworkSafeEventLinesForLongReplies() {
         ConversationStatusRepository repository = new ConversationStatusRepository();
         String reply = "Yes, aim at the lowest log, hold the break action until it drops, then keep going. A wooden axe helps a lot. ".repeat(3);
         repository.recordNpcReply(OWNER_ID, "alex_01", reply);
@@ -67,13 +67,13 @@ public final class ConversationStatusRepositoryTest {
         require(eventLine.startsWith("action: "), "conversation event line must keep the event prefix");
     }
 
-    private static void splitsLongCjkRepliesIntoSafeChatChunks() {
+    private static void splitsLongRepliesIntoSafeChatChunks() {
         String reply = ConversationReplyText.sanitizeProviderReply(
                 "Yes, aim at the lowest log, hold the break action until it drops, then keep going. A wooden axe helps a lot. ".repeat(3)
         );
         List<String> chunks = ConversationReplyText.displayChunks(reply);
 
-        require(chunks.size() > 1, "long CJK replies must be split into multiple chat chunks");
+        require(chunks.size() > 1, "long replies must be split into multiple chat chunks");
         for (String chunk : chunks) {
             require(chunk.length() <= ConversationReplyText.CHAT_REPLY_CHUNK_LENGTH,
                     "each chat chunk must fit the configured chat reply chunk bound");

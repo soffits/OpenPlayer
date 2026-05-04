@@ -22,6 +22,7 @@ import dev.soffits.openplayer.debug.OpenPlayerDebugEvents;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentParser;
 import dev.soffits.openplayer.intent.IntentKind;
+import dev.soffits.openplayer.intent.IntentParseException;
 import dev.soffits.openplayer.OpenPlayerIntentParserConfig;
 import dev.soffits.openplayer.runtime.validation.RuntimeIntentValidationResult;
 import dev.soffits.openplayer.runtime.validation.RuntimeIntentValidator;
@@ -32,6 +33,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
+import java.util.function.Consumer;
+import net.minecraft.server.MinecraftServer;
 
 public final class CompanionLifecycleManager {
     private static final int MAX_ACTIVE_ASSIGNMENTS_PER_OWNER = 4;
@@ -255,6 +258,122 @@ public final class CompanionLifecycleManager {
             conversationStatusRepository.recordFailure(ownerId, assignment.id(), result.message());
             OpenPlayerDebugEvents.record("conversation", result.status().name(), assignment.id(), character.id(), sessionId,
                     result.message());
+        }
+        return result;
+    }
+
+    public CommandSubmissionResult submitSelectedCommandTextAsync(MinecraftServer server, UUID ownerId, String characterId,
+                                                                 String commandText,
+                                                                 Consumer<CommandSubmissionResult> completion) {
+        if (server == null) {
+            throw new IllegalArgumentException("server cannot be null");
+        }
+        if (completion == null) {
+            throw new IllegalArgumentException("completion cannot be null");
+        }
+        ConversationSubmissionContext context = prepareConversationSubmission(ownerId, characterId, commandText);
+        if (context.result() != null) {
+            return context.result();
+        }
+        RuntimeAgentExecutor.submit(server, () -> parseConversation(context.parseRequest()), intent -> {
+            CommandSubmissionResult result = finishConversationSubmission(context, intent);
+            completion.accept(result);
+        }, exception -> {
+            String message = exception instanceof ConversationParseRuntimeException parseException
+                    ? ConversationLoop.conversationFailureMessage(parseException.parseException())
+                    : "Conversation provider response could not be parsed";
+            conversationStatusRepository.recordFailure(ownerId, context.assignment().id(), message);
+            OpenPlayerDebugEvents.record("conversation", CommandSubmissionStatus.REJECTED.name(), context.assignment().id(),
+                    context.character().id(), context.sessionId(), message);
+            completion.accept(new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, message));
+        });
+        return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED, "Conversation queued for provider parsing");
+    }
+
+    private ConversationSubmissionContext prepareConversationSubmission(UUID ownerId, String characterId, String commandText) {
+        if (commandText == null) {
+            throw new IllegalArgumentException("commandText cannot be null");
+        }
+        Optional<ResolvedAssignment> resolvedAssignment = findAssignment(characterId);
+        if (resolvedAssignment.isEmpty()) {
+            OpenPlayerDebugEvents.record("conversation", "unknown_assignment", characterId, null, null, "assignment_not_found");
+            return ConversationSubmissionContext.immediate(rejectedUnknownAssignment());
+        }
+        LocalAssignmentDefinition assignment = resolvedAssignment.get().assignment();
+        LocalCharacterDefinition character = resolvedAssignment.get().character();
+        if (!hasConversationConfig(character)) {
+            OpenPlayerDebugEvents.record("conversation", "unavailable", assignment.id(), character.id(), null,
+                    "conversation_config_missing messageLength=" + commandText.trim().length());
+            return ConversationSubmissionContext.immediate(new CommandSubmissionResult(CommandSubmissionStatus.UNAVAILABLE,
+                    "Conversation unavailable: conversation config missing"));
+        }
+        conversationStatusRepository.recordPlayerMessage(ownerId, assignment.id(), commandText);
+        Optional<AiPlayerNpcSession> session = findActiveSession(ownerId, resolvedAssignment.get());
+        if (session.isEmpty()) {
+            conversationStatusRepository.recordFailure(ownerId, assignment.id(), "Companion is not spawned");
+            OpenPlayerDebugEvents.record("conversation", "unknown_session", assignment.id(), character.id(), null,
+                    "companion_not_spawned messageLength=" + commandText.trim().length());
+            return ConversationSubmissionContext.immediate(new CommandSubmissionResult(CommandSubmissionStatus.UNKNOWN_SESSION,
+                    "Companion is not spawned"));
+        }
+        ConversationHistoryKey historyKey = new ConversationHistoryKey(ownerId, assignment.id());
+        List<ConversationTurn> history = conversationHistory.getOrDefault(historyKey, List.of());
+        String sessionId = session.get().sessionId().value().toString();
+        ConversationContextSnapshot contextSnapshot = conversationContextSnapshot(session.get());
+        OpenPlayerDebugEvents.record("provider_parse", "attempted", assignment.id(), character.id(), sessionId,
+                "source=conversation messageLength=" + commandText.trim().length());
+        ConversationLoop.ConversationParseRequest parseRequest = conversationLoop.prepare(
+                character,
+                commandText,
+                history,
+                contextSnapshot
+        );
+        if (parseRequest.immediateResult() != null) {
+            return ConversationSubmissionContext.immediate(parseRequest.immediateResult());
+        }
+        return new ConversationSubmissionContext(ownerId, commandText, assignment, character, historyKey, sessionId,
+                parseRequest, null);
+    }
+
+    private CommandIntent parseConversation(ConversationLoop.ConversationParseRequest parseRequest) {
+        try {
+            return conversationLoop.parsePrepared(parseRequest);
+        } catch (IntentParseException exception) {
+            throw new ConversationParseRuntimeException(exception);
+        }
+    }
+
+    private CommandSubmissionResult finishConversationSubmission(ConversationSubmissionContext context, CommandIntent intent) {
+        AiPlayerNpcCommand[] submittedCommand = new AiPlayerNpcCommand[1];
+        CommandSubmissionResult result = conversationLoop.submitIntent(
+                intent,
+                command -> {
+                    submittedCommand[0] = command;
+                    return submitSelectedCommand(context.ownerId(), context.assignment().id(), command);
+                },
+                acceptedIntent -> OpenPlayerDebugEvents.record("provider_parse", "success", context.assignment().id(),
+                        context.character().id(), context.sessionId(),
+                        "kind=" + acceptedIntent.kind().name() + " instructionLength=" + acceptedIntent.instruction().length())
+        );
+        if (result.status() == CommandSubmissionStatus.ACCEPTED && submittedCommand[0] != null
+                && submittedCommand[0].intent().kind() != IntentKind.RESET_MEMORY) {
+            appendConversationTurn(context.historyKey(), new ConversationTurn("player", context.commandText()));
+            appendConversationTurn(context.historyKey(), new ConversationTurn(
+                    "openplayer",
+                    "Action accepted: " + submittedCommand[0].intent().kind().name()
+            ));
+            conversationStatusRepository.recordAction(context.ownerId(), context.assignment().id(), submittedCommand[0].intent());
+        } else if (result.status() == CommandSubmissionStatus.ACCEPTED && submittedCommand[0] != null
+                && submittedCommand[0].intent().kind() == IntentKind.RESET_MEMORY) {
+            return result;
+        } else if (result.status() == CommandSubmissionStatus.ACCEPTED) {
+            appendConversationTurn(context.historyKey(), new ConversationTurn("player", context.commandText()));
+            appendConversationTurn(context.historyKey(), new ConversationTurn("openplayer", result.message()));
+            conversationStatusRepository.recordNpcReply(context.ownerId(), context.assignment().id(), result.message());
+        } else {
+            conversationStatusRepository.recordFailure(context.ownerId(), context.assignment().id(), result.message());
+            OpenPlayerDebugEvents.record("conversation", result.status().name(), context.assignment().id(), context.character().id(),
+                    context.sessionId(), result.message());
         }
         return result;
     }
@@ -504,5 +623,28 @@ public final class CompanionLifecycleManager {
     }
 
     private record ConversationHistoryKey(UUID ownerId, String assignmentId) {
+    }
+
+    private record ConversationSubmissionContext(UUID ownerId, String commandText, LocalAssignmentDefinition assignment,
+                                                 LocalCharacterDefinition character, ConversationHistoryKey historyKey,
+                                                 String sessionId,
+                                                 ConversationLoop.ConversationParseRequest parseRequest,
+                                                 CommandSubmissionResult result) {
+        private static ConversationSubmissionContext immediate(CommandSubmissionResult result) {
+            return new ConversationSubmissionContext(null, "", null, null, null, "", null, result);
+        }
+    }
+
+    private static final class ConversationParseRuntimeException extends RuntimeException {
+        private final IntentParseException parseException;
+
+        private ConversationParseRuntimeException(IntentParseException parseException) {
+            super(parseException);
+            this.parseException = parseException;
+        }
+
+        private IntentParseException parseException() {
+            return parseException;
+        }
     }
 }
