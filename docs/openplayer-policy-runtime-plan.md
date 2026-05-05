@@ -207,24 +207,75 @@ Acceptance criteria:
 - Provider receives only relevant capability docs for the current objective.
 - Multiple NPCs can coordinate work without duplicate target claims.
 
-### Phase 5: Building Validation And Optional Sandboxed Experiments
+### Phase 5: Building Validation And Steve-Style Multi-Agent Action Runtime
 
-Goal: support more ambitious building/runtime extensibility while keeping unsafe features out of the default gameplay path.
+Goal: turn ambitious building and team tasks into verifiable, conflict-free action projects rather than independent NPC guesses.
+
+Reference inspected:
+
+- `YuvDwi/Steve` at commit `034afb5` (`2026-01-17 Integrate plugin system into ActionExecutor with async planning`).
+- Relevant paths: `ActionExecutor`, `CollaborativeBuildManager`, `ActionRegistry`/`PluginManager`, `AgentStateMachine`, `WorldKnowledge`, and `CodeExecutionEngine`.
+
+Adopt for OpenPlayer, clean-room style:
+
+1. Async planning handoff.
+   - Steve starts an async LLM planning future and keeps the game tick responsive while planning.
+   - OpenPlayer should formalize this as `PlannerJob` / `PlannerMailbox`: one active planning job per NPC or team objective, cancellable, visible in status UI, and never blocking the server thread.
+2. Action registry and capability plugins.
+   - Steve's `ActionRegistry`/`ActionPlugin` shows a useful extension shape: action factories registered by id instead of one giant switch.
+   - OpenPlayer should expose a Java-native, validator-backed `CapabilityRegistry` for built-in actions and future addon mods.
+   - Provider-visible tools must be generated from the validated registry, not handwritten prompt drift.
+3. Agent state machine and event stream.
+   - Steve models states such as planning, executing, paused, failed, completed and publishes transition events.
+   - OpenPlayer should add explicit runtime states for each NPC/team objective and write safe events for planner state transitions, action start/finish/failure, retry, handoff, and cancellation.
+4. Collaborative build/project manager.
+   - Steve's strongest concrete multi-agent idea is shared structure work: split a build plan into spatial sections, claim work atomically, track progress, and let agents help unfinished sections.
+   - OpenPlayer should generalize this into `TeamTaskBlackboard` + `WorkClaimRegistry`:
+     - claimed block positions,
+     - claimed entities/items/containers,
+     - assigned build sections,
+     - delivery promises,
+     - stalled/failed claims with retry owner,
+     - dynamic rebalancing when a NPC finishes early or fails.
+5. Incremental tick-based actions.
+   - Steve's action classes tick incrementally and keep long tasks from freezing the game.
+   - OpenPlayer should make every long primitive expose `start/tick/cancel/result/progress`, with bounded work per tick and deterministic progress snapshots.
+6. World knowledge cache.
+   - Steve keeps a compact local world summary: nearby blocks, entities, biome, players.
+   - OpenPlayer already has runtime context snapshots; this phase should promote them into per-NPC/team `WorldFactMemory` with bounded refresh cadence, source timestamps, and no raw provider text.
+7. Optional idle/team behavior.
+   - Steve uses idle follow when no task is active.
+   - OpenPlayer can support profile-controlled idle modes such as follow owner, guard, regroup, or standby, but they must be policy-bound and interruptible.
+
+Do not adopt directly:
+
+- Freeform LLM-generated JavaScript execution as a default gameplay path. Steve has a GraalVM `CodeExecutionEngine`; OpenPlayer should keep this out of the normal agent runtime. If ever explored, it must be disabled by default, permission-gated, audited, sandboxed, and unnecessary for survival/building goals.
+- Cheat-like execution shortcuts such as teleporting/flying/setBlock-driven building as normal behavior. OpenPlayer should prefer vanilla server-side NPC primitives and truthful missing-capability failures.
+- Raw action strings or provider-created task ids without schema validation. All Steve-inspired extension points must remain validator-backed.
+- Copying Steve source. Only architecture ideas and behavior surfaces are used as clean-room inspiration.
+
+Acceptance criteria:
+
+- Multiple NPCs can work on a shared build/resource/delivery objective without duplicate claims or conflicting block edits.
+- Users can inspect each NPC's state: planning, executing, paused, blocked, retrying, completed, or failed.
+- Provider-visible tool docs are generated from the same registered capabilities that the runtime can actually execute.
+- Team objectives rebalance when an agent finishes early, fails, despawns, or becomes policy-blocked.
+- Building tasks can be debugged by objective diff and work-claim history.
+
+### Phase 6: Optional Sandboxed Experiments And Evaluation Controls
+
+Goal: keep unsafe/high-power experiments out of the default companion path while leaving room for controlled research.
 
 Scope:
 
-1. Blueprint diff and building validation.
-   - Build plans report expected block, actual block, coordinate, action needed, mismatch score, and progress.
-   - Building corrections should be guided by structured diff, not blind provider guesses.
-2. Optional sandboxed code/script experiments.
+1. Optional sandboxed code/script experiments.
    - Freeform LLM code execution is intentionally unsafe for default OpenPlayer runtime.
    - If ever added, it must be sandboxed, disabled by default, permission-gated, audited, and never required for survival tasks.
-3. Evaluation-only bootstrap controls.
+2. Evaluation-only bootstrap controls.
    - Cheat/bootstrap-heavy setup may be useful for benchmarks.
    - Normal companion gameplay must not depend on cheat commands, OP permissions, or hidden macro success.
 
 Acceptance criteria:
 
-- Building tasks can be debugged by objective diff.
 - Experimental scripting cannot affect default safety boundaries.
 - Evaluation conveniences remain isolated from normal gameplay.
