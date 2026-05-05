@@ -5,6 +5,9 @@ import net.minecraft.resources.ResourceLocation;
 public final class OpenPlayerConstants {
     public static final String MOD_ID = "openplayer";
     public static final String MOD_NAME = "OpenPlayer";
+    public static final int NPC_ACTIVE_CHUNK_TICKET_RADIUS = 2;
+    public static final int NPC_ACTIVE_CHUNK_TICKET_REFRESH_TICKS = 20;
+    public static final int NPC_ACTIVE_CHUNK_TICKET_TIMEOUT_TICKS = 100;
     public static final String LOCAL_CHARACTER_SESSION_ROLE_PREFIX = "openplayer-local-character-";
     public static final String LOCAL_ASSIGNMENT_SESSION_ROLE_PREFIX = "openplayer-local-assignment-";
     public static final ResourceLocation SPAWN_REQUEST_PACKET_ID = id("spawn_request");

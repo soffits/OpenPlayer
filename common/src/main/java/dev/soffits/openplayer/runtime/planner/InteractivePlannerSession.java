@@ -8,6 +8,7 @@ import dev.soffits.openplayer.aicore.ToolValidationContext;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentKind;
 import dev.soffits.openplayer.intent.ProviderPlanIntentCodec;
+import dev.soffits.openplayer.runtime.planner.PlannerFailureClassifier.PlannerFailureKind;
 import dev.soffits.openplayer.runtime.validation.RuntimeIntentValidationResult;
 import dev.soffits.openplayer.runtime.validation.RuntimeIntentValidator;
 import java.util.ArrayList;
@@ -86,9 +87,12 @@ public final class InteractivePlannerSession {
         StringBuilder builder = new StringBuilder();
         builder.append("OpenPlayer interactive planner request.\n");
         builder.append("User request: ").append(userRequest).append("\n");
-        builder.append("Return one compact JSON action only: one primitive tool, chat, unavailable, or a legacy bounded plan. ");
-        builder.append("After each tool result, use observations to decide the next primitive or final response. ");
-        builder.append("Do not claim completion unless an observation says completed. Do not use removed macro tools.\n");
+        builder.append("Act as a long-horizon autonomous planner over bounded Minecraft primitives. ");
+        builder.append("Return one compact JSON action only: one primitive tool, chat, unavailable, or a compatibility bounded plan. ");
+        builder.append("Decompose the user goal into the next safe primitive, wait for real observations, then continue with the next primitive. ");
+        builder.append("After retryable failures, use observations and runtime context to choose an alternative primitive or diagnostic step. ");
+        builder.append("Ask the user or return unavailable only when the goal is ambiguous, unsafe, policy-denied, or missing a real adapter. ");
+        builder.append("Do not claim completion unless an observation says completed. Do not use hidden Java macros or removed macro tools.\n");
         if (!providerPromptContext.isBlank()) {
             builder.append("Companion conversation context:\n")
                     .append(bound(providerPromptContext, config.maxPromptCharacters() / 2)).append("\n");
@@ -144,6 +148,15 @@ public final class InteractivePlannerSession {
             return new PlannerTurnResult(PlannerTurnStatus.WAITING, observation.detail());
         }
         waitingForPrimitive = false;
+        PlannerFailureKind failureKind = PlannerFailureClassifier.classify(observation.status(), observation.detail());
+        if (failureKind == PlannerFailureKind.TERMINAL) {
+            return new PlannerTurnResult(PlannerTurnStatus.STOPPED,
+                    "Planner stopped after terminal primitive observation: " + bound(observation.detail(), 96));
+        }
+        if (failureKind == PlannerFailureKind.RETRYABLE) {
+            return stopAfterNoProgress(observation.detail());
+        }
+        noProgressCount = 0;
         return stopIfNeeded();
     }
 
@@ -195,12 +208,14 @@ public final class InteractivePlannerSession {
         ToolResult toolValidation = MinecraftPrimitiveTools.validate(toolCall.get(), new ToolValidationContext(runtime.allowWorldActions()));
         if (toolValidation.status() != ToolResultStatus.SUCCESS) {
             addObservation(statusFromToolResult(toolValidation), "tool rejected: " + toolValidation.reason(), false);
-            return stopAfterNoProgress("tool rejected");
+            return new PlannerTurnResult(PlannerTurnStatus.STOPPED,
+                    "Planner stopped after terminal tool validation: " + bound(toolValidation.reason(), 96));
         }
         RuntimeIntentValidationResult validation = RuntimeIntentValidator.validate(intent, runtime.allowWorldActions());
         if (!validation.isAccepted()) {
             addObservation(PlannerObservationStatus.REJECTED, "runtime policy rejected: " + validation.message(), false);
-            return stopAfterNoProgress("runtime policy rejected");
+            return new PlannerTurnResult(PlannerTurnStatus.STOPPED,
+                    "Planner stopped after terminal runtime policy rejection: " + bound(validation.message(), 96));
         }
         toolSteps++;
         PlannerObservation submission = runtime.submit(intent);
@@ -209,6 +224,11 @@ public final class InteractivePlannerSession {
                 || submission.status() == PlannerObservationStatus.FAILED
                 || submission.status() == PlannerObservationStatus.UNAVAILABLE
                 || submission.status() == PlannerObservationStatus.TIMED_OUT) {
+            PlannerFailureKind failureKind = PlannerFailureClassifier.classify(submission.status(), submission.detail());
+            if (failureKind == PlannerFailureKind.TERMINAL) {
+                return new PlannerTurnResult(PlannerTurnStatus.STOPPED,
+                        "Planner stopped after terminal primitive result: " + bound(submission.detail(), 96));
+            }
             return stopAfterNoProgress(submission.detail());
         }
         noProgressCount = 0;

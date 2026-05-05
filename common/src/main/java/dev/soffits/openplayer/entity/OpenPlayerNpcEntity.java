@@ -21,8 +21,10 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.Entity.RemovalReason;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.PathfinderMob;
@@ -83,6 +85,7 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
 
     private final RuntimeCommandExecutor runtimeCommandExecutor = new RuntimeCommandExecutor(this);
     private final AICoreNpcSessionState aicoreSessionState = new AICoreNpcSessionState();
+    private final NpcActiveChunkTickets activeChunkTickets = new NpcActiveChunkTickets(getUUID());
     private final NonNullList<ItemStack> internalInventory = NonNullList.withSize(INVENTORY_SIZE, ItemStack.EMPTY);
     private final Map<String, Boolean> aicoreControlStates = new LinkedHashMap<>();
     private UUID persistedOwnerId;
@@ -111,9 +114,18 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
     public void tick() {
         super.tick();
         runtimeCommandExecutor.tick();
-        if (!level().isClientSide && allowWorldActions) {
-            collectNearbyItems();
+        if (!level().isClientSide) {
+            updateActiveChunkTickets();
+            if (allowWorldActions) {
+                collectNearbyItems();
+            }
         }
+    }
+
+    @Override
+    public void remove(RemovalReason reason) {
+        activeChunkTickets.release();
+        super.remove(reason);
     }
 
     public void setRuntimeOwnerId(NpcOwnerId ownerId) {
@@ -217,10 +229,24 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
 
     public void stopRuntimeCommands() {
         runtimeCommandExecutor.stopAll();
+        activeChunkTickets.release();
     }
 
     public AutomationControllerSnapshot runtimeCommandSnapshot() {
         return runtimeCommandExecutor.snapshot();
+    }
+
+    private void updateActiveChunkTickets() {
+        if (!(level() instanceof ServerLevel serverLevel) || !isAlive()) {
+            activeChunkTickets.release();
+            return;
+        }
+        AutomationControllerSnapshot snapshot = runtimeCommandExecutor.snapshot();
+        if (snapshot.active() || snapshot.queuedCommandCount() > 0) {
+            activeChunkTickets.update(serverLevel, blockPosition());
+            return;
+        }
+        activeChunkTickets.release();
     }
 
     public int selectedHotbarSlot() {

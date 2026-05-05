@@ -19,6 +19,10 @@ public final class InteractivePlannerSessionTest {
         pollBudgetBoundaryObservationKeepsWaitingWhenStillActive();
         activePrimitiveStopsTruthfullyWhenToolWaitBudgetExhausts();
         completedWaitingObservationAllowsNextProviderIteration();
+        retryableSubmissionFailureAllowsAlternativeProviderIteration();
+        terminalPolicyFailureStopsWithoutRetry();
+        promptRequiresLongHorizonPrimitiveDecomposition();
+        classifierSeparatesRetryableAndTerminalFailures();
         defaultBudgetsAllowSlowMultiTurnPlanning();
         tinyWallTimeBudgetStopsSession();
         stopsWhenToolStepBudgetIsExhausted();
@@ -174,6 +178,100 @@ public final class InteractivePlannerSessionTest {
         require(second.status() == PlannerTurnStatus.FINISHED, "final chat must finish the planner");
     }
 
+    private static void retryableSubmissionFailureAllowsAlternativeProviderIteration() {
+        InteractivePlannerSession session = new InteractivePlannerSession(
+                UUID.randomUUID(),
+                "collect nearby logs",
+                testConfig(6, 6, 4, 4)
+        );
+        require(session.beforeProviderCall().status() == PlannerTurnStatus.CONTINUE,
+                "first provider call must be allowed");
+        PlannerTurnResult failed = session.handleIntent(
+                new CommandIntent(IntentKind.MOVE, IntentPriority.NORMAL, "1 64 1"),
+                new FakeRuntime(true, PlannerObservation.of(
+                        PlannerObservationStatus.REJECTED,
+                        "kind=MOVE submission=rejected message=MOVE target chunk is not loaded",
+                        false
+                ))
+        );
+        require(failed.status() == PlannerTurnStatus.CONTINUE,
+                "retryable navigation rejection must allow another provider strategy");
+        require(session.beforeProviderCall().status() == PlannerTurnStatus.CONTINUE,
+                "provider call must be allowed after retryable primitive rejection");
+        String prompt = session.nextPrompt("nearby loaded block target available");
+        require(prompt.contains("target chunk is not loaded"),
+                "retry prompt must include the rejected primitive observation");
+    }
+
+    private static void terminalPolicyFailureStopsWithoutRetry() {
+        InteractivePlannerSession session = new InteractivePlannerSession(
+                UUID.randomUUID(),
+                "break a block",
+                testConfig(6, 6, 4)
+        );
+        require(session.beforeProviderCall().status() == PlannerTurnStatus.CONTINUE,
+                "first provider call must be allowed");
+        PlannerTurnResult result = session.handleIntent(
+                new CommandIntent(IntentKind.BREAK_BLOCK, IntentPriority.NORMAL, "1 64 1"),
+                new FakeRuntime(true, PlannerObservation.of(
+                        PlannerObservationStatus.REJECTED,
+                        "runtime policy rejected: world actions are disabled",
+                        false
+                ))
+        );
+        require(result.status() == PlannerTurnStatus.STOPPED,
+                "terminal policy rejection must stop without repeated provider retries");
+        require(result.message().contains("terminal"), "terminal stop message must be explicit");
+    }
+
+    private static void promptRequiresLongHorizonPrimitiveDecomposition() {
+        InteractivePlannerSession session = new InteractivePlannerSession(
+                UUID.randomUUID(),
+                "make useful progress",
+                testConfig(4, 4, 4)
+        );
+        String prompt = session.nextPrompt("runtime context");
+        require(prompt.contains("long-horizon autonomous planner"),
+                "planner prompt must require long-horizon autonomy");
+        require(prompt.contains("After retryable failures"),
+                "planner prompt must instruct alternative strategy after retryable failures");
+        require(prompt.contains("missing a real adapter"),
+                "planner prompt must reserve user asks for real capability gaps");
+    }
+
+    private static void classifierSeparatesRetryableAndTerminalFailures() {
+        require(PlannerFailureClassifier.classify(
+                PlannerObservationStatus.REJECTED,
+                "kind=MOVE submission=rejected message=MOVE target chunk is not loaded"
+        ) == PlannerFailureClassifier.PlannerFailureKind.RETRYABLE,
+                "unloaded navigation target should remain retryable");
+        require(PlannerFailureClassifier.classify(
+                PlannerObservationStatus.TIMED_OUT,
+                "automation active=idle queued=0 monitor=stuck reason=path blocked"
+        ) == PlannerFailureClassifier.PlannerFailureKind.RETRYABLE,
+                "stuck/path timeout should allow a new strategy within planner budgets");
+        require(PlannerFailureClassifier.classify(
+                PlannerObservationStatus.TIMED_OUT,
+                "tool wait budget exhausted while primitive remains active or queued"
+        ) == PlannerFailureClassifier.PlannerFailureKind.RETRYABLE,
+                "timeout details without a terminal class should remain retryable to the classifier");
+        require(PlannerFailureClassifier.classify(
+                PlannerObservationStatus.FAILED,
+                "inventory_full while picking up item"
+        ) == PlannerFailureClassifier.PlannerFailureKind.RETRYABLE,
+                "underscored inventory runtime reasons should normalize to retryable");
+        require(PlannerFailureClassifier.classify(
+                PlannerObservationStatus.REJECTED,
+                "runtime policy rejected: World actions are disabled for this OpenPlayer character"
+        ) == PlannerFailureClassifier.PlannerFailureKind.TERMINAL,
+                "world action policy rejection must be terminal");
+        require(PlannerFailureClassifier.classify(
+                PlannerObservationStatus.UNAVAILABLE,
+                "missing adapter for villager trading UI"
+        ) == PlannerFailureClassifier.PlannerFailureKind.TERMINAL,
+                "missing adapter should be terminal instead of retrying forever");
+    }
+
     private static void stopsWhenToolStepBudgetIsExhausted() {
         InteractivePlannerSession session = new InteractivePlannerSession(
                 UUID.randomUUID(),
@@ -202,10 +300,10 @@ public final class InteractivePlannerSessionTest {
         InteractivePlannerConfig config = InteractivePlannerConfig.defaults();
         require(config.maxWallTime().compareTo(Duration.ofMinutes(8L)) >= 0,
                 "default wall time must cover slow multi-turn provider latency");
-        require(config.maxProviderCalls() >= 12,
-                "default provider call budget must cover about a dozen planner turns");
-        require(config.maxToolSteps() >= 12,
-                "default tool step budget must cover about a dozen planner turns");
+        require(config.maxProviderCalls() >= 24,
+                "default provider call budget must cover long-horizon planner turns");
+        require(config.maxToolSteps() >= 24,
+                "default tool step budget must cover long-horizon primitive chains");
         require(config.maxIterations() > 0, "iteration budget must remain finite");
         require(config.maxProviderCalls() > 0, "provider call budget must remain finite");
         require(config.maxToolSteps() > 0, "tool step budget must remain finite");
@@ -258,7 +356,13 @@ public final class InteractivePlannerSessionTest {
     }
 
     private static InteractivePlannerConfig testConfig(int maxIterations, int maxProviderCalls, int maxToolSteps) {
-        return new InteractivePlannerConfig(maxIterations, maxProviderCalls, maxToolSteps, 1200, 4000, 1,
+        return testConfig(maxIterations, maxProviderCalls, maxToolSteps, 1);
+    }
+
+    private static InteractivePlannerConfig testConfig(int maxIterations, int maxProviderCalls, int maxToolSteps,
+                                                       int maxNoProgressCount) {
+        return new InteractivePlannerConfig(maxIterations, maxProviderCalls, maxToolSteps, 1200, 4000,
+                maxNoProgressCount,
                 Duration.ofSeconds(10L), Duration.ofMillis(1L), Duration.ofSeconds(2L), 1);
     }
 

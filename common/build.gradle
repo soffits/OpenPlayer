@@ -108,6 +108,12 @@ tasks.register('runNpcHotbarSelectionTest', JavaExec) {
     mainClass = 'dev.soffits.openplayer.entity.NpcHotbarSelectionTest'
 }
 
+tasks.register('runNpcChunkTicketModelTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.entity.NpcChunkTicketModelTest'
+}
+
 tasks.register('runConversationLoopTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
@@ -354,6 +360,7 @@ tasks.named('check') {
     dependsOn tasks.named('runOpenPlayerDebugEventsTest')
     dependsOn tasks.named('runOpenPlayerRawTraceTest')
     dependsOn tasks.named('runNpcHotbarSelectionTest')
+    dependsOn tasks.named('runNpcChunkTicketModelTest')
     dependsOn tasks.named('runConversationLoopTest')
     dependsOn tasks.named('runConversationStatusRepositoryTest')
     dependsOn tasks.named('runAutomationInstructionParserTest')

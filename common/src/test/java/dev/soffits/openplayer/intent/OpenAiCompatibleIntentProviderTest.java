@@ -135,8 +135,10 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must document report-only loaded reconnaissance");
         require(prompt.contains("they do not navigate, mutate the world, load chunks, run long-range locate searches, or imply a plan"),
                 "system prompt must constrain loaded reconnaissance to report-only behavior");
-        require(prompt.contains("if the requested next primitive is unavailable, return UNAVAILABLE or report_status"),
-                "system prompt must direct missing primitives to unavailable/status diagnostics");
+        require(prompt.contains("change strategy after retryable rejected, failed, unavailable, or timed-out observations"),
+                "system prompt must direct retryable failures into alternative primitive strategies");
+        require(prompt.contains("missing a real adapter, return UNAVAILABLE or ask through chat"),
+                "system prompt must direct missing adapters to unavailable or a user ask");
         require(prompt.contains("Never tell the player to press keyboard controls for the NPC"),
                 "system prompt must forbid keyboard-control claims for NPC actions");
         require(prompt.contains("if sprintControl is unsupported or no sprint primitive exists"),
@@ -157,10 +159,10 @@ public final class OpenAiCompatibleIntentProviderTest {
             require(!prompt.contains("kind must be one of " + removedKind),
                     "system prompt must not expose removed macro kind as provider kind: " + removedKind);
         }
-        require(prompt.contains("Do not emit high-level goals or macro task chains"),
-                "system prompt must forbid macro task chains");
-        require(prompt.contains("acquiring resources, making workstations, smelting, farming, fishing, defending an owner, building structures, exploring chunks, locating structures, using portals, Nether travel"),
-                "system prompt must name removed macro categories");
+        require(prompt.contains("High-level user goals must be solved by repeated bounded primitive tool calls"),
+                "system prompt must make high-level goals proactive through primitive loops");
+        require(prompt.contains("resource, workstation, smelting, farming, fishing, defending, building, exploring, locating, portal, Nether travel"),
+                "system prompt must name categories that cannot be hidden Java macros");
     }
 
     private static void parsesStructuredToolProviderResponse() throws Exception {
