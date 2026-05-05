@@ -11,26 +11,12 @@ import net.minecraft.resources.ResourceLocation;
 
 public final class MovementPolicyLoader {
     public static final ResourceLocation DEFAULT_POLICY_ID = OpenPlayerConstants.id("companion_safe");
-    private static final MovementProfile SERVER_CAPS = new MovementProfile(
-            DEFAULT_POLICY_ID,
-            true,
-            false,
-            3,
-            true,
-            true,
-            BlockSafetyPolicy.boundedDefault(),
-            EntitySafetyPolicy.boundedDefault()
-    );
-    private static final MovementProfile BUILT_IN_DEFAULT = new MovementProfile(
-            DEFAULT_POLICY_ID,
-            true,
-            false,
-            3,
-            true,
-            true,
-            BlockSafetyPolicy.boundedDefault(),
-            EntitySafetyPolicy.boundedDefault()
-    ).boundBy(SERVER_CAPS);
+    static final ResourceLocation SERVER_CAPS_ID = OpenPlayerConstants.id("server_caps");
+    private static final MovementProfile SERVER_CAPS = loadBundledProfile(SERVER_CAPS_ID)
+            .orElseGet(MovementPolicyLoader::emergencyServerCaps);
+    private static final MovementProfile BUILT_IN_DEFAULT = loadBundledProfile(DEFAULT_POLICY_ID)
+            .orElseGet(MovementPolicyLoader::emergencyDefaultPolicy)
+            .boundBy(SERVER_CAPS);
 
     private MovementPolicyLoader() {
     }
@@ -39,9 +25,13 @@ public final class MovementPolicyLoader {
         return BUILT_IN_DEFAULT;
     }
 
+    public static MovementProfile serverCaps() {
+        return SERVER_CAPS;
+    }
+
     public static MovementProfile effectivePolicy(String selectedPolicyId) {
         ResourceLocation parsed = parsePolicyId(selectedPolicyId).orElse(DEFAULT_POLICY_ID);
-        return loadBundledPolicy(parsed).orElse(BUILT_IN_DEFAULT).boundBy(SERVER_CAPS);
+        return loadBundledProfile(parsed).orElse(BUILT_IN_DEFAULT).boundBy(SERVER_CAPS);
     }
 
     public static Optional<ResourceLocation> parsePolicyId(String value) {
@@ -55,28 +45,29 @@ public final class MovementPolicyLoader {
         }
     }
 
-    private static Optional<MovementProfile> loadBundledPolicy(ResourceLocation id) {
-        if (!DEFAULT_POLICY_ID.equals(id)) {
+    private static Optional<MovementProfile> loadBundledProfile(ResourceLocation id) {
+        if (!"openplayer".equals(id.getNamespace())) {
             return Optional.empty();
         }
         String path = "data/" + id.getNamespace() + "/movement_policies/" + id.getPath() + ".json";
         try (InputStream stream = MovementPolicyLoader.class.getClassLoader().getResourceAsStream(path)) {
             if (stream == null) {
-                return Optional.of(BUILT_IN_DEFAULT);
+                return Optional.empty();
             }
             String json = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
-            return Optional.of(parseCompanionSafe(json));
+            return Optional.of(parseProfile(json, id));
         } catch (IOException | IllegalArgumentException exception) {
-            return Optional.of(BUILT_IN_DEFAULT);
+            return Optional.empty();
         }
     }
 
-    private static MovementProfile parseCompanionSafe(String json) {
+    private static MovementProfile parseProfile(String json, ResourceLocation fallbackId) {
         String movement = readObject(json, "movement");
         String blocks = readObject(json, "blocks");
         String entities = readObject(json, "entities");
+        ResourceLocation id = readResourceLocation(json, "id").orElse(fallbackId);
         return new MovementProfile(
-                DEFAULT_POLICY_ID,
+                id,
                 readBoolean(movement, "canBreakObstacles", true),
                 readBoolean(movement, "canPlaceScaffold", false),
                 readInt(movement, "maxFallDistance", 3),
@@ -93,6 +84,52 @@ public final class MovementPolicyLoader {
                         readStringArray(entities, "neverAttack")
                 )
         );
+    }
+
+    private static MovementProfile emergencyDefaultPolicy() {
+        return new MovementProfile(
+                DEFAULT_POLICY_ID,
+                false,
+                false,
+                0,
+                true,
+                true,
+                new BlockSafetyPolicy(Set.of(), Set.of(), Set.of()),
+                new EntitySafetyPolicy(Set.of(), Set.of(), Set.of())
+        );
+    }
+
+    private static MovementProfile emergencyServerCaps() {
+        return new MovementProfile(
+                SERVER_CAPS_ID,
+                false,
+                false,
+                0,
+                true,
+                true,
+                new BlockSafetyPolicy(Set.of(), Set.of(), Set.of()),
+                new EntitySafetyPolicy(Set.of(), Set.of(), Set.of())
+        );
+    }
+
+    private static Optional<ResourceLocation> readResourceLocation(String json, String field) {
+        int index = fieldIndex(json, field);
+        if (index < 0) {
+            return Optional.empty();
+        }
+        int colon = json.indexOf(':', index);
+        if (colon < 0) {
+            return Optional.empty();
+        }
+        int quote = json.indexOf('"', colon + 1);
+        if (quote < 0) {
+            return Optional.empty();
+        }
+        int endQuote = json.indexOf('"', quote + 1);
+        if (endQuote < 0) {
+            return Optional.empty();
+        }
+        return parsePolicyId(json.substring(quote + 1, endQuote));
     }
 
     private static String readObject(String json, String field) {

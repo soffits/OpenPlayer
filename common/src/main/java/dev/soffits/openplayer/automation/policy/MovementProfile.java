@@ -19,8 +19,8 @@ public record MovementProfile(
         if (maxFallDistance < 0) {
             maxFallDistance = 0;
         }
-        blocks = blocks == null ? BlockSafetyPolicy.boundedDefault() : blocks;
-        entities = entities == null ? EntitySafetyPolicy.boundedDefault() : entities;
+        blocks = blocks == null ? new BlockSafetyPolicy(java.util.Set.of(), java.util.Set.of(), java.util.Set.of()) : blocks;
+        entities = entities == null ? new EntitySafetyPolicy(java.util.Set.of(), java.util.Set.of(), java.util.Set.of()) : entities;
     }
 
     public MovementProfile boundBy(MovementProfile caps) {

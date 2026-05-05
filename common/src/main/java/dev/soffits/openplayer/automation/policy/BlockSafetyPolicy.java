@@ -13,14 +13,6 @@ public record BlockSafetyPolicy(
         lowRiskBreakable = Set.copyOf(lowRiskBreakable == null ? Set.of() : lowRiskBreakable);
     }
 
-    public static BlockSafetyPolicy boundedDefault() {
-        return new BlockSafetyPolicy(
-                Set.of("minecraft:chest", "minecraft:furnace", "minecraft:crafting_table", "minecraft:bed"),
-                Set.of("minecraft:lava", "minecraft:fire", "minecraft:cactus", "minecraft:magma_block"),
-                Set.of("minecraft:snow", "minecraft:short_grass", "minecraft:tall_grass", "#minecraft:leaves")
-        );
-    }
-
     BlockSafetyPolicy boundBy(BlockSafetyPolicy caps) {
         return new BlockSafetyPolicy(
                 union(neverBreak, caps.neverBreak),

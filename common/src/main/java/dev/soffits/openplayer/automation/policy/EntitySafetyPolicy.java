@@ -13,14 +13,6 @@ public record EntitySafetyPolicy(
         neverAttack = Set.copyOf(neverAttack == null ? Set.of() : neverAttack);
     }
 
-    public static EntitySafetyPolicy boundedDefault() {
-        return new EntitySafetyPolicy(
-                Set.of("minecraft:creeper", "minecraft:skeleton"),
-                Set.of("minecraft:zombie", "minecraft:spider", "minecraft:skeleton"),
-                Set.of("minecraft:villager", "minecraft:iron_golem", "minecraft:player")
-        );
-    }
-
     EntitySafetyPolicy boundBy(EntitySafetyPolicy caps) {
         java.util.LinkedHashSet<String> boundedNeverAttack = new java.util.LinkedHashSet<>(neverAttack);
         boundedNeverAttack.addAll(caps.neverAttack);

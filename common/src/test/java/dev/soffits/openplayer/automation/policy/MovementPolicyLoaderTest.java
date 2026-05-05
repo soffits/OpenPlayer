@@ -46,7 +46,9 @@ public final class MovementPolicyLoaderTest {
                 )
         );
 
-        MovementProfile bounded = requested.boundBy(MovementPolicyLoader.defaultPolicy());
+        MovementProfile bounded = requested.boundBy(MovementPolicyLoader.serverCaps());
+        require(MovementPolicyLoader.serverCaps().id().toString().equals("openplayer:server_caps"),
+                "server caps must load from bundled policy data");
         require(!bounded.canPlaceScaffold(), "server caps must prevent scaffold placement when disabled");
         require(bounded.maxFallDistance() == 3, "server caps must bound fall distance");
         require(bounded.avoidLiquids(), "server caps must preserve liquid avoidance");
