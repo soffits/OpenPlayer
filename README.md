@@ -1,28 +1,29 @@
 # OpenPlayer
 
-OpenPlayer is a local-first AI companion mod for Minecraft. It provides player-shaped NPC companions with local profiles, local skins, bounded automation, and optional OpenAI-compatible intent parsing.
+OpenPlayer adds AI companions to Minecraft as player-shaped NPCs. They can live on your world or server with local profiles, local skins, chat, status commands, and a growing set of ordinary Minecraft actions.
 
-## Features
+It is built for local ownership. Profiles, assignments, skins, logs, and provider settings live on your machine or server. You can use it without an online character service, account marketplace, or hosted bot platform.
 
-- Local companion profiles, assignments, and skins under the Minecraft config directory.
-- Player-shaped NPC rendering with equipment and skin support.
-- In-game controls and an `/openplayer` command tree for spawning, stopping, chatting, status, and queued tasks.
-- Optional provider-backed conversation and intent parsing that stays disabled until explicitly configured.
-- Reviewed Minecraft-side primitives for movement, following, inventory helpers, resource tasks, building primitives, defensive combat, and truthful diagnostics where adapters exist.
+## What it can do
 
-## Safety
+- Spawn and manage player-like companion NPCs.
+- Use local `.properties` profiles and local PNG skins.
+- Chat with companions through in-game controls or `/openplayer` commands.
+- Configure an OpenAI-compatible provider when you want model-backed chat or planning.
+- Let trusted companions attempt Minecraft actions such as following, moving, looking, collecting drops, using inventory helpers, breaking or placing blocks, simple resource planning, defensive combat, and status reporting.
+- Keep actions server-side and permission-gated instead of letting model text directly control the world.
 
-OpenPlayer treats provider output as untrusted. Requests must parse into constrained intents, pass runtime validation, obey character policy, and execute through reviewed primitives or capability adapters.
-
-OpenPlayer does not promise every Minecraft behavior is implemented. Missing behavior should be reported as a capability, adapter, policy, or world-state gap instead of fake success.
+OpenPlayer is still an alpha. Some Minecraft mechanics are not wired yet, especially complex UI workflows, long-distance pathing, and special cases such as fishing, trading, mounts, or modded machines. When something is missing, the mod should say what blocked it instead of pretending the action worked.
 
 ## Install
 
-Download the loader jar that matches your Minecraft setup from GitHub Releases. Install the matching Architectury API for your loader. Open the in-game controls with `O` by default.
+Download the Fabric or Forge jar that matches your Minecraft setup from GitHub Releases. Install the matching Architectury API for your loader, then open the in-game controls with `O` by default.
+
+OpenPlayer targets Minecraft `1.20.1` and Java `17`.
 
 ## Configuration
 
-Local characters are Java `.properties` files under `<Minecraft config>/openplayer/characters`. Optional assignment files live under `<Minecraft config>/openplayer/assignments`; local PNG skins live under `<Minecraft config>/openplayer/skins`.
+Local characters are Java `.properties` files under `<Minecraft config>/openplayer/characters`. Optional assignment files live under `<Minecraft config>/openplayer/assignments`, and local PNG skins live under `<Minecraft config>/openplayer/skins`.
 
 ```properties
 id=alex_helper
@@ -33,13 +34,13 @@ conversationPrompt=Helpful, concise Minecraft companion.
 allowWorldActions=false
 ```
 
-Provider settings can be supplied as JVM system properties, environment variables, or the in-game provider page:
+Provider settings can come from JVM system properties, environment variables, or the in-game provider page:
 
 - `OPENPLAYER_INTENT_PROVIDER_ENDPOINT`
 - `OPENPLAYER_INTENT_PROVIDER_API_KEY`
 - `OPENPLAYER_INTENT_PROVIDER_MODEL`
 
-Never store provider keys, passwords, access tokens, cookies, or credentials in character files, strategy packs, screenshots, logs, or release artifacts.
+Do not put provider keys, passwords, tokens, cookies, or other credentials in character files, screenshots, logs, strategy notes, or release artifacts.
 
 ## Build
 
@@ -49,13 +50,13 @@ Never store provider keys, passwords, access tokens, cookies, or credentials in 
 
 ## Docs
 
-See `docs/`.
+See `docs/` for commands, tool details, and roadmap notes.
 
 ## License
 
 OpenPlayer is licensed under `AGPL-3.0-only`. See `LICENSE`.
 
-## References/Credits
+## References and credits
 
 - <https://minecraft.net/>
 - <https://architectury.dev/>
