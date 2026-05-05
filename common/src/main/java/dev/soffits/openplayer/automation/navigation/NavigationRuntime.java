@@ -1,7 +1,11 @@
 package dev.soffits.openplayer.automation.navigation;
 
+import dev.soffits.openplayer.automation.policy.MovementProfile;
+
 public final class NavigationRuntime {
     private final int maxRecoveryCount;
+    private final ReplanThrottler throttler;
+    private NavigationSpeedContext lastSpeedContext = null;
 
     private NavigationState state = NavigationState.IDLE;
     private NavigationTarget target = NavigationTarget.none();
@@ -17,6 +21,18 @@ public final class NavigationRuntime {
             throw new IllegalArgumentException("maxRecoveryCount must be non-negative");
         }
         this.maxRecoveryCount = maxRecoveryCount;
+        this.throttler = new ReplanThrottler();
+    }
+
+    public NavigationRuntime(int maxRecoveryCount, ReplanThrottler throttler) {
+        if (maxRecoveryCount < 0) {
+            throw new IllegalArgumentException("maxRecoveryCount must be non-negative");
+        }
+        if (throttler == null) {
+            throw new IllegalArgumentException("throttler cannot be null");
+        }
+        this.maxRecoveryCount = maxRecoveryCount;
+        this.throttler = throttler;
     }
 
     public void start(NavigationTarget target, double distanceSquared, boolean loaded) {
@@ -31,19 +47,28 @@ public final class NavigationRuntime {
     }
 
     public void replan(NavigationTarget target, double distanceSquared, boolean loaded) {
+        replan(0, target, distanceSquared, loaded);
+    }
+
+    public void replan(int tick, NavigationTarget target, double distanceSquared, boolean loaded) {
         this.state = NavigationState.REPLANNING;
         this.target = target == null ? NavigationTarget.none() : target;
         this.distanceSquared = safeDistance(distanceSquared);
         this.replanCount++;
+        this.throttler.noteReplan(tick, distanceSquared);
         this.lastReason = "replanned";
         this.loadedStatus = loaded ? NavigationTargetStatus.YES : NavigationTargetStatus.NO;
     }
 
     public void plan(NavigationTarget target, double distanceSquared, boolean loaded) {
+        plan(0, target, distanceSquared, loaded);
+    }
+
+    public void plan(int tick, NavigationTarget target, double distanceSquared, boolean loaded) {
         if (state == NavigationState.IDLE || state == NavigationState.COMPLETED || state == NavigationState.FAILED) {
             start(target, distanceSquared, loaded);
         } else {
-            replan(target, distanceSquared, loaded);
+            replan(tick, target, distanceSquared, loaded);
         }
     }
 
@@ -108,12 +133,36 @@ public final class NavigationRuntime {
                 recoveryCount,
                 lastReason,
                 loadedStatus,
-                reachableStatus
+                reachableStatus,
+                throttler.replanCount()
         );
     }
 
     public int recoveryCount() {
         return recoveryCount;
+    }
+
+    public void updateSpeedContext(double distanceBlocks, boolean movingTarget, boolean requiresSafety, boolean requiresPrecision, MovementProfile policy) {
+        double speed = NavigationSpeedProfile.computeEffectiveSpeed(
+                (int) Math.round(distanceBlocks),
+                movingTarget,
+                requiresSafety,
+                requiresPrecision,
+                policy
+        );
+        this.lastSpeedContext = new NavigationSpeedContext(speed, distanceBlocks, movingTarget, requiresSafety, requiresPrecision);
+    }
+
+    public NavigationSpeedContext lastSpeedContext() {
+        return lastSpeedContext;
+    }
+
+    public boolean shouldReplan(int tick, double currentDistanceSquared) {
+        return throttler.shouldReplan(tick, currentDistanceSquared);
+    }
+
+    public void throttlerReset() {
+        throttler.reset();
     }
 
     private static double safeDistance(double value) {

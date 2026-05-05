@@ -5,7 +5,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 public final class AutomationRecoveryPathTest {
-    private static final String SOURCE_PATH = "src/main/java/dev/soffits/openplayer/automation/VanillaAutomationBackend.java";
+    private static final String[] SOURCE_PATHS = {
+            "src/main/java/dev/soffits/openplayer/automation/VanillaAutomationController.java",
+            "src/main/java/dev/soffits/openplayer/automation/VanillaAutomationNavigationController.java"
+    };
 
     private AutomationRecoveryPathTest() {
     }
@@ -17,16 +20,16 @@ public final class AutomationRecoveryPathTest {
     }
 
     private static void pauseSuspendsNavigationWithoutCompletingRuntime() throws IOException {
-        String source = Files.readString(sourcePath());
+        String source = sourceText();
         int pauseStart = source.indexOf("if (kind == IntentKind.PAUSE)");
         require(pauseStart >= 0, "PAUSE branch must exist");
         int pauseEnd = source.indexOf("if (kind == IntentKind.UNPAUSE)", pauseStart);
         require(pauseEnd > pauseStart, "PAUSE branch boundary must be detectable");
         String pauseSource = source.substring(pauseStart, pauseEnd);
 
-        int suspendStart = source.indexOf("private void suspendNavigation()");
+        int suspendStart = source.indexOf("protected void suspendNavigation()");
         require(suspendStart >= 0, "suspendNavigation must exist");
-        int suspendEnd = source.indexOf("private void cancelNavigation", suspendStart);
+        int suspendEnd = source.indexOf("protected void cancelNavigation", suspendStart);
         require(suspendEnd > suspendStart, "suspendNavigation boundary must be detectable");
         String suspendSource = source.substring(suspendStart, suspendEnd);
 
@@ -39,7 +42,7 @@ public final class AutomationRecoveryPathTest {
     }
 
     private static void resetMemoryDoesNotClearExplorationMemory() throws IOException {
-        String source = Files.readString(sourcePath());
+        String source = sourceText();
         int resetStart = source.indexOf("if (kind == IntentKind.RESET_MEMORY)");
         require(resetStart >= 0, "RESET_MEMORY branch must exist");
         int resetEnd = source.indexOf("if (kind == IntentKind.REPORT_STATUS)", resetStart);
@@ -53,10 +56,10 @@ public final class AutomationRecoveryPathTest {
     }
 
     private static void primitiveToolSubmitUsesLiveNpcExecutorWithoutRuntimeRecursion() throws IOException {
-        String source = Files.readString(sourcePath());
+        String source = sourceText();
         int submitStart = source.indexOf("public AutomationCommandResult submit(CommandIntent intent)");
         require(submitStart >= 0, "submit branch must exist");
-        int submitEnd = source.indexOf("private AutomationCommandResult submitPrimitiveIntent", submitStart);
+        int submitEnd = source.indexOf("protected AutomationCommandResult submitPrimitiveIntent", submitStart);
         require(submitEnd > submitStart, "submit branch boundary must be detectable");
         String submitSource = source.substring(submitStart, submitEnd);
 
@@ -68,13 +71,21 @@ public final class AutomationRecoveryPathTest {
                 "primitive tool submit must not use the facade-only primitive executor in the live backend");
     }
 
-    private static Path sourcePath() {
+    private static String sourceText() throws IOException {
+        StringBuilder builder = new StringBuilder();
+        for (String sourcePath : SOURCE_PATHS) {
+            builder.append(Files.readString(sourcePath(sourcePath))).append('\n');
+        }
+        return builder.toString();
+    }
+
+    private static Path sourcePath(String sourcePath) {
         Path projectDir = Path.of(System.getProperty("user.dir"));
-        Path commonProjectSource = projectDir.resolve(SOURCE_PATH);
+        Path commonProjectSource = projectDir.resolve(sourcePath);
         if (Files.exists(commonProjectSource)) {
             return commonProjectSource;
         }
-        return projectDir.resolve("common").resolve(SOURCE_PATH);
+        return projectDir.resolve("common").resolve(sourcePath);
     }
 
     private static void require(boolean condition, String message) {

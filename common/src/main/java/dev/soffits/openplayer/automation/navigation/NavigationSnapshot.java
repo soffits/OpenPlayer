@@ -11,7 +11,8 @@ public record NavigationSnapshot(
         int recoveryCount,
         String lastReason,
         NavigationTargetStatus loadedStatus,
-        NavigationTargetStatus reachableStatus
+        NavigationTargetStatus reachableStatus,
+        int throttledReplanCount
 ) {
     private static final int MAX_STATUS_LENGTH = 96;
     private static final int MAX_TARGET_LENGTH = 80;
@@ -38,6 +39,9 @@ public record NavigationSnapshot(
         if (reachableStatus == null) {
             throw new IllegalArgumentException("reachableStatus cannot be null");
         }
+        if (throttledReplanCount < 0) {
+            throttledReplanCount = 0;
+        }
         targetSummary = boundedTarget(targetSummary);
         lastReason = boundedStatus(lastReason);
     }
@@ -52,7 +56,8 @@ public record NavigationSnapshot(
                 0,
                 "idle",
                 NavigationTargetStatus.UNKNOWN,
-                NavigationTargetStatus.UNKNOWN
+                NavigationTargetStatus.UNKNOWN,
+                0
         );
     }
 
@@ -62,6 +67,7 @@ public record NavigationSnapshot(
                 + ", navDistSq=" + rounded(distanceSquared)
                 + ", navReplans=" + replanCount
                 + ", navRecoveries=" + recoveryCount
+                + ", navThrottledReplans=" + throttledReplanCount
                 + ", navLoaded=" + loadedStatus.name().toLowerCase(Locale.ROOT)
                 + ", navReachable=" + reachableStatus.name().toLowerCase(Locale.ROOT)
                 + ", navReason=" + lastReason;

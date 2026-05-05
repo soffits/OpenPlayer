@@ -22,7 +22,8 @@ public final class NavigationRuntimeTest {
                 0,
                 "reason-prefix" + "b".repeat(140) + "\tsecret-overflow",
                 NavigationTargetStatus.YES,
-                NavigationTargetStatus.UNKNOWN
+                NavigationTargetStatus.UNKNOWN,
+                0
         );
         String summary = snapshot.summary();
 

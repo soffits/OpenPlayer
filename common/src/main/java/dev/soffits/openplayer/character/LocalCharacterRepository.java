@@ -125,9 +125,9 @@ public final class LocalCharacterRepository {
             return validation;
         }
         try {
-            ensureWritableDirectory(directory);
-            Path target = safeChild(directory, fileName);
-            rejectSymbolicLinkTarget(target);
+            LocalCharacterPaths.ensureWritableDirectory(directory);
+            Path target = LocalCharacterPaths.safeChild(directory, fileName);
+            LocalCharacterPaths.rejectSymbolicLinkTarget(target);
             if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
                 LocalCharacterFileResult existing = loadFile(target);
                 if (existing.character() == null || !existing.errors().isEmpty()) {
@@ -163,9 +163,9 @@ public final class LocalCharacterRepository {
             return fileNameValidation;
         }
         try {
-            ensureReadableDirectory(importDirectory);
-            Path source = safeChild(importDirectory, fileName);
-            rejectSymbolicLinkTarget(source);
+            LocalCharacterPaths.ensureReadableDirectory(importDirectory);
+            Path source = LocalCharacterPaths.safeChild(importDirectory, fileName);
+            LocalCharacterPaths.rejectSymbolicLinkTarget(source);
             LocalCharacterFileResult imported = loadFile(source);
             if (imported.character() == null || !imported.errors().isEmpty()) {
                 return rejected(fileName, safeErrorMessage(imported.errors(), "Imported character file is invalid"));
@@ -175,7 +175,7 @@ public final class LocalCharacterRepository {
                 return new LocalCharacterFileOperationResult(saved.status(), fileName, saved.message());
             }
             if (removeSourceAfterSuccess) {
-                rejectSymbolicLinkTarget(source);
+                LocalCharacterPaths.rejectSymbolicLinkTarget(source);
                 Files.delete(source);
             }
             return new LocalCharacterFileOperationResult(LocalCharacterFileOperationStatus.IMPORTED, fileName,
@@ -190,7 +190,7 @@ public final class LocalCharacterRepository {
 
     public List<String> listImportFileNames(Path importDirectory) {
         try {
-            ensureReadableDirectory(importDirectory);
+            LocalCharacterPaths.ensureReadableDirectory(importDirectory);
         } catch (IOException exception) {
             return List.of();
         }
@@ -222,9 +222,9 @@ public final class LocalCharacterRepository {
             return rejected(safeFileName(fileName), "Character id is not safe for deletion");
         }
         try {
-            ensureReadableDirectory(directory);
-            Path target = safeChild(directory, fileName);
-            rejectSymbolicLinkTarget(target);
+            LocalCharacterPaths.ensureReadableDirectory(directory);
+            Path target = LocalCharacterPaths.safeChild(directory, fileName);
+            LocalCharacterPaths.rejectSymbolicLinkTarget(target);
             LocalCharacterFileResult loaded = loadFile(target);
             if (loaded.character() == null || !loaded.errors().isEmpty()) {
                 return rejected(fileName, safeErrorMessage(loaded.errors(), "Local character is not valid for deletion"));
@@ -259,9 +259,9 @@ public final class LocalCharacterRepository {
             if (exportDirectory == null) {
                 throw new IOException("Directory is unavailable");
             }
-            ensureReadableDirectory(directory);
-            Path source = safeChild(directory, fileName);
-            rejectSymbolicLinkTarget(source);
+            LocalCharacterPaths.ensureReadableDirectory(directory);
+            Path source = LocalCharacterPaths.safeChild(directory, fileName);
+            LocalCharacterPaths.rejectSymbolicLinkTarget(source);
             LocalCharacterFileResult loaded = loadFile(source);
             if (loaded.character() == null || !loaded.errors().isEmpty()) {
                 return rejected(fileName, safeErrorMessage(loaded.errors(), "Local character is not valid for export"));
@@ -269,9 +269,9 @@ public final class LocalCharacterRepository {
             if (!loaded.character().id().equals(normalizedId)) {
                 return rejected(fileName, "Local character id does not match its file name");
             }
-            ensureWritableDirectory(exportDirectory);
-            Path target = safeChild(exportDirectory, fileName);
-            rejectSymbolicLinkTarget(target);
+            LocalCharacterPaths.ensureWritableDirectory(exportDirectory);
+            Path target = LocalCharacterPaths.safeChild(exportDirectory, fileName);
+            LocalCharacterPaths.rejectSymbolicLinkTarget(target);
             writeCharacterFile(exportDirectory, target, loaded.character());
             return new LocalCharacterFileOperationResult(LocalCharacterFileOperationStatus.EXPORTED, fileName,
                     "Exported local character " + normalizedId);
@@ -314,8 +314,8 @@ public final class LocalCharacterRepository {
     }
 
     private static void writeCharacterFile(Path tempDirectory, Path target, LocalCharacterDefinition character) throws IOException {
-        ensureWritableDirectory(tempDirectory);
-        rejectSymbolicLinkTarget(target);
+        LocalCharacterPaths.ensureWritableDirectory(tempDirectory);
+        LocalCharacterPaths.rejectSymbolicLinkTarget(target);
         Path tempFile = Files.createTempFile(tempDirectory, character.id() + "-", ".tmp");
         try {
             try (Writer writer = Files.newBufferedWriter(tempFile, StandardCharsets.UTF_8, StandardOpenOption.TRUNCATE_EXISTING)) {
@@ -333,10 +333,10 @@ public final class LocalCharacterRepository {
                 }
             }
             try {
-                rejectSymbolicLinkTarget(target);
+                LocalCharacterPaths.rejectSymbolicLinkTarget(target);
                 Files.move(tempFile, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException exception) {
-                rejectSymbolicLinkTarget(target);
+                LocalCharacterPaths.rejectSymbolicLinkTarget(target);
                 Files.move(tempFile, target, StandardCopyOption.REPLACE_EXISTING);
             }
         } finally {
@@ -372,76 +372,6 @@ public final class LocalCharacterRepository {
             }
         }
         return builder.toString();
-    }
-
-    private static Path safeChild(Path parent, String fileName) throws IOException {
-        if (parent == null) {
-            throw new IOException("Directory is unavailable");
-        }
-        LocalCharacterFileOperationResult fileNameValidation = validateSafeCharacterFileName(fileName);
-        if (fileNameValidation != null) {
-            throw new UnsafeCharacterPathException("Unsafe file name");
-        }
-        Path normalizedParent = parent.toAbsolutePath().normalize();
-        Path child = normalizedParent.resolve(fileName).normalize();
-        if (!child.startsWith(normalizedParent)) {
-            throw new UnsafeCharacterPathException("File escapes directory");
-        }
-        return child;
-    }
-
-    private static void ensureReadableDirectory(Path path) throws IOException {
-        if (path == null) {
-            throw new IOException("Directory is unavailable");
-        }
-        rejectSymbolicLinkPath(path);
-        if (Files.isSymbolicLink(path)) {
-            throw new UnsafeCharacterPathException("Symbolic links are not allowed");
-        }
-        if (!Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException("Directory is unavailable");
-        }
-    }
-
-    private static void ensureWritableDirectory(Path path) throws IOException {
-        if (path == null) {
-            throw new IOException("Directory is unavailable");
-        }
-        rejectSymbolicLinkPath(path);
-        if (Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
-            if (Files.isSymbolicLink(path)) {
-                throw new UnsafeCharacterPathException("Symbolic links are not allowed");
-            }
-            if (!Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
-                throw new IOException("Directory is unavailable");
-            }
-            return;
-        }
-        Files.createDirectories(path);
-        rejectSymbolicLinkPath(path);
-        if (Files.isSymbolicLink(path)) {
-            throw new UnsafeCharacterPathException("Symbolic links are not allowed");
-        }
-        if (!Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException("Directory is unavailable");
-        }
-    }
-
-    private static void rejectSymbolicLinkPath(Path path) throws IOException {
-        Path absolutePath = path.toAbsolutePath().normalize();
-        Path current = absolutePath.getRoot();
-        for (Path name : absolutePath) {
-            current = current == null ? name : current.resolve(name);
-            if (Files.exists(current, LinkOption.NOFOLLOW_LINKS) && Files.isSymbolicLink(current)) {
-                throw new UnsafeCharacterPathException("Symbolic links are not allowed");
-            }
-        }
-    }
-
-    private static void rejectSymbolicLinkTarget(Path target) throws IOException {
-        if (Files.exists(target, LinkOption.NOFOLLOW_LINKS) && Files.isSymbolicLink(target)) {
-            throw new UnsafeCharacterPathException("Symbolic links are not allowed");
-        }
     }
 
     private static String safeErrorMessage(List<LocalCharacterValidationError> errors, String fallback) {
@@ -542,9 +472,4 @@ public final class LocalCharacterRepository {
                                             List<LocalCharacterValidationError> errors) {
     }
 
-    private static final class UnsafeCharacterPathException extends IOException {
-        private UnsafeCharacterPathException(String message) {
-            super(message);
-        }
-    }
 }

@@ -3,8 +3,6 @@ package dev.soffits.openplayer.aicore;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentKind;
 import dev.soffits.openplayer.intent.IntentPriority;
-import dev.soffits.openplayer.automation.CollectItemsInstructionParser;
-import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser;
 import dev.soffits.openplayer.runtime.perception.WorldPerceptionClassifier;
 import dev.soffits.openplayer.runtime.validation.RuntimeIntentValidationResult;
 import dev.soffits.openplayer.runtime.validation.RuntimeIntentValidator;
@@ -53,7 +51,7 @@ public final class MinecraftPrimitiveTools {
         if (kind == null) {
             return Optional.empty();
         }
-        return Optional.of(new CommandIntent(kind, priority, runtimeInstruction(call)));
+        return Optional.of(new CommandIntent(kind, priority, AICoreToolInstructionFormatter.runtimeInstruction(call)));
     }
 
     public static Optional<ToolCall> toToolCall(CommandIntent intent) {
@@ -227,159 +225,8 @@ public final class MinecraftPrimitiveTools {
         return Map.copyOf(map);
     }
 
-    private static String runtimeInstruction(ToolCall call) {
-        if (!call.arguments().instruction().isBlank()) {
-            return call.arguments().instruction();
-        }
-        Map<String, String> values = call.arguments().values();
-        if (hasCoordinates(values)) {
-            if (call.name().value().equals("activate_block")) {
-                return "block " + values.get("x") + " " + values.get("y") + " " + values.get("z");
-            }
-            return values.get("x") + " " + values.get("y") + " " + values.get("z");
-        }
-        if (values.containsKey("goal")) {
-            return goalInstruction(values.get("goal"));
-        }
-        if (call.name().equals(PICKUP_ITEMS_NEARBY)) {
-            return CollectItemsInstructionParser.canonicalInstruction(values.get("matching"), values.get("maxDistance"));
-        }
-        if (values.containsKey("matching")) {
-            return loadedSearchInstruction(values);
-        }
-        if (call.name().equals(DROP_ITEM)) {
-            return itemCountInstruction(values.get("itemType"), values.get("count"));
-        }
-        if (values.containsKey("item")) {
-            return values.get("item");
-        }
-        if (values.containsKey("itemType")) {
-            return itemCountInstruction(values.get("itemType"), values.get("count"));
-        }
-        if (values.containsKey("recipe")) {
-            return craftInstruction(values);
-        }
-        if (values.containsKey("entityId")) {
-            if (call.name().value().equals("activate_entity") || call.name().value().equals("activate_entity_at")
-                    || call.name().value().equals("use_on_entity")) {
-                return "entity " + values.get("entityId") + " " + values.getOrDefault("maxDistance", "4");
-            }
-            if (call.name().equals(ATTACK_TARGET)) {
-                String maxDistance = values.getOrDefault("maxDistance", "").trim();
-                return (values.get("entityId") + " " + maxDistance).trim();
-            }
-            return values.get("entityId");
-        }
-        if (values.containsKey("maxDistance")) {
-            return values.get("maxDistance");
-        }
-        return "";
-    }
-
-    private static String loadedSearchInstruction(Map<String, String> values) {
-        String maxDistance = values.getOrDefault("maxDistance", "").trim();
-        if (maxDistance.isEmpty()) {
-            maxDistance = String.valueOf((int) AdvancedTaskInstructionParser.DEFAULT_RADIUS);
-        }
-        return namespacedMinecraftId(values.get("matching")) + " " + maxDistance;
-    }
-
-    private static String itemCountInstruction(String itemType, String count) {
-        return ((itemType == null ? "" : itemType) + " " + (count == null ? "" : count)).trim();
-    }
-
-    private static String namespacedMinecraftId(String value) {
-        if (value == null) {
-            return "";
-        }
-        String trimmedValue = value.trim();
-        return trimmedValue.indexOf(':') >= 0 ? trimmedValue : "minecraft:" + trimmedValue;
-    }
-
     private static boolean hasCoordinates(Map<String, String> values) {
         return values.containsKey("x") && values.containsKey("y") && values.containsKey("z");
-    }
-
-    private static String goalInstruction(String goalJson) {
-        if (goalJson == null || goalJson.isBlank()) {
-            return "";
-        }
-        String type = jsonStringField(goalJson, "type");
-        String x = jsonNumberField(goalJson, "x");
-        String y = jsonNumberField(goalJson, "y");
-        String z = jsonNumberField(goalJson, "z");
-        if ((type.equals("goal_block") || type.equals("goal_near") || type.equals("goal_get_to_block")
-                || type.equals("goal_look_at_block") || type.equals("goal_place_block"))
-                && !x.isBlank() && !y.isBlank() && !z.isBlank()) {
-            return x + " " + y + " " + z;
-        }
-        if ((type.equals("goal_xz") || type.equals("goal_near_xz")) && !x.isBlank() && !z.isBlank()) {
-            return x + " 0 " + z;
-        }
-        return "";
-    }
-
-    private static String craftInstruction(Map<String, String> values) {
-        String instruction = (values.get("recipe") + " " + values.getOrDefault("count", "1")).trim();
-        String craftingTable = values.get("craftingTable");
-        if (craftingTable == null || craftingTable.isBlank()) {
-            return instruction;
-        }
-        String x = jsonIntegerField(craftingTable, "x");
-        String y = jsonIntegerField(craftingTable, "y");
-        String z = jsonIntegerField(craftingTable, "z");
-        return (instruction + " table " + x + " " + y + " " + z).trim();
-    }
-
-    private static String jsonStringField(String json, String fieldName) {
-        String quoted = "\"" + fieldName + "\"";
-        int fieldIndex = json.indexOf(quoted);
-        if (fieldIndex < 0) {
-            return "";
-        }
-        int colonIndex = json.indexOf(':', fieldIndex + quoted.length());
-        if (colonIndex < 0) {
-            return "";
-        }
-        int quoteStart = json.indexOf('"', colonIndex + 1);
-        if (quoteStart < 0) {
-            return "";
-        }
-        int quoteEnd = json.indexOf('"', quoteStart + 1);
-        if (quoteEnd < 0) {
-            return "";
-        }
-        return json.substring(quoteStart + 1, quoteEnd);
-    }
-
-    private static String jsonNumberField(String json, String fieldName) {
-        String quoted = "\"" + fieldName + "\"";
-        int fieldIndex = json.indexOf(quoted);
-        if (fieldIndex < 0) {
-            return "";
-        }
-        int colonIndex = json.indexOf(':', fieldIndex + quoted.length());
-        if (colonIndex < 0) {
-            return "";
-        }
-        int index = colonIndex + 1;
-        while (index < json.length() && Character.isWhitespace(json.charAt(index))) {
-            index++;
-        }
-        if (index < json.length() && json.charAt(index) == '"') {
-            int quoteEnd = json.indexOf('"', index + 1);
-            return quoteEnd > index ? json.substring(index + 1, quoteEnd) : "";
-        }
-        int start = index;
-        while (index < json.length()) {
-            char character = json.charAt(index);
-            if ((character >= '0' && character <= '9') || character == '-' || character == '+') {
-                index++;
-            } else {
-                break;
-            }
-        }
-        return index > start ? json.substring(start, index) : "";
     }
 
     private static Optional<ToolResult> validateSchema(ToolCall call, ToolSchema schema) {
@@ -514,9 +361,9 @@ public final class MinecraftPrimitiveTools {
             return Optional.empty();
         }
         String options = call.arguments().values().get("options");
-        String direction = jsonStringField(options, "direction");
-        String itemType = jsonStringField(options, "itemType");
-        String countValue = jsonIntegerField(options, "count");
+        String direction = AICoreJsonFields.stringField(options, "direction");
+        String itemType = AICoreJsonFields.stringField(options, "itemType");
+        String countValue = AICoreJsonFields.integerField(options, "count");
         if (direction.isBlank() || itemType.isBlank() || countValue.isBlank()) {
             return Optional.of(ToolResult.rejected("transfer_options_require_direction_itemType_count"));
         }
@@ -545,43 +392,6 @@ public final class MinecraftPrimitiveTools {
             return Optional.of(ToolResult.rejected("maxDistance must be finite and greater than 0 and at most 256"));
         }
         return Optional.empty();
-    }
-
-    private static String jsonIntegerField(String json, String fieldName) {
-        String quoted = "\"" + fieldName + "\"";
-        int fieldIndex = json == null ? -1 : json.indexOf(quoted);
-        if (fieldIndex < 0) {
-            return "";
-        }
-        int colonIndex = json.indexOf(':', fieldIndex + quoted.length());
-        if (colonIndex < 0) {
-            return "";
-        }
-        int index = colonIndex + 1;
-        while (index < json.length() && Character.isWhitespace(json.charAt(index))) {
-            index++;
-        }
-        if (index < json.length() && json.charAt(index) == '"') {
-            int quoteEnd = json.indexOf('"', index + 1);
-            return quoteEnd > index ? json.substring(index + 1, quoteEnd) : "";
-        }
-        int start = index;
-        if (index < json.length() && (json.charAt(index) == '-' || json.charAt(index) == '+')) {
-            index++;
-        }
-        while (index < json.length() && Character.isDigit(json.charAt(index))) {
-            index++;
-        }
-        if (index == start || (index == start + 1 && (json.charAt(start) == '-' || json.charAt(start) == '+'))) {
-            return "";
-        }
-        while (index < json.length() && Character.isWhitespace(json.charAt(index))) {
-            index++;
-        }
-        if (index < json.length() && json.charAt(index) != ',' && json.charAt(index) != '}') {
-            return "invalid";
-        }
-        return json.substring(start, index).trim();
     }
 
     private static Optional<Integer> integerArgument(ToolCall call, String name) {

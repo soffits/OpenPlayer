@@ -36,7 +36,7 @@ public final class AutomationControllerSnapshotTest {
         require(!snapshot.active(), "idle snapshot must not be active");
         require(snapshot.activeKind() == null, "idle snapshot must not expose active kind");
         require(("hp=20, slot=2, active=idle, queued=0, queuedKinds=[], paused=false, interactCd=3, ctrl=idle, reason=idle, "
-                + "ticks=0/0, nav=idle, navTarget=none:none, navDistSq=0.0, navReplans=0, navRecoveries=0, "
+                + "ticks=0/0, nav=idle, navTarget=none:none, navDistSq=0.0, navReplans=0, navRecoveries=0, navThrottledReplans=0, "
                 + "navLoaded=unknown, navReachable=unknown, navReason=idle")
                 .equals(snapshot.summary()), "idle summary must be deterministic");
     }
@@ -59,7 +59,7 @@ public final class AutomationControllerSnapshotTest {
         require(snapshot.activeKind() == IntentKind.MOVE, "active snapshot must expose active kind");
         require(("hp=17, slot=4, active=MOVE, queued=3, queuedKinds=[LOOK>COLLECT_ITEMS>PATROL], "
                 + "paused=false, interactCd=5, ctrl=active, reason=active, ticks=12/1200, nav=idle, navTarget=none:none, "
-                + "navDistSq=0.0, navReplans=0, navRecoveries=0, navLoaded=unknown, navReachable=unknown, "
+                + "navDistSq=0.0, navReplans=0, navRecoveries=0, navThrottledReplans=0, navLoaded=unknown, navReachable=unknown, "
                 + "navReason=idle")
                 .equals(snapshot.summary()), "active summary must include queue order and ticks");
     }
@@ -232,7 +232,8 @@ public final class AutomationControllerSnapshotTest {
                 1,
                 reason,
                 NavigationTargetStatus.YES,
-                NavigationTargetStatus.UNKNOWN
+                NavigationTargetStatus.UNKNOWN,
+                0
         );
         AutomationControllerSnapshot snapshot = AutomationControllerSnapshot.active(
                 19,

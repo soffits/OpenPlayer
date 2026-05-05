@@ -14,51 +14,12 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-public final class OpenPlayerControlScreen extends Screen {
-    private static final Component TITLE = Component.translatable("screen.openplayer.controls.title");
-    private static final Component PROVIDER_ENDPOINT_INPUT = Component.translatable("screen.openplayer.controls.provider_endpoint_input");
-    private static final Component PROVIDER_MODEL_INPUT = Component.translatable("screen.openplayer.controls.provider_model_input");
-    private static final Component PROVIDER_API_KEY_INPUT = Component.translatable("screen.openplayer.controls.provider_api_key_input");
-    private static final Component PROFILE_ID_INPUT = Component.translatable("screen.openplayer.controls.profile_id_input");
-    private static final Component PROFILE_DISPLAY_NAME_INPUT = Component.translatable("screen.openplayer.controls.profile_display_name_input");
-    private static final Component PROFILE_DESCRIPTION_INPUT = Component.translatable("screen.openplayer.controls.profile_description_input");
-    private static final Component PROFILE_SKIN_FILE_INPUT = Component.translatable("screen.openplayer.controls.profile_skin_file_input");
-    private static final Component PROFILE_ROLE_INPUT = Component.translatable("screen.openplayer.controls.profile_role_input");
-    private static final Component PROFILE_PROMPT_INPUT = Component.translatable("screen.openplayer.controls.profile_prompt_input");
-    private static final Component PROFILE_SETTINGS_INPUT = Component.translatable("screen.openplayer.controls.profile_settings_input");
-    private static final int BUTTON_WIDTH = 142;
-    private static final int CONTROL_INPUT_WIDTH = 220;
-    private static final int TAB_TOP = 42;
-    private EditBox providerEndpointInput;
-    private EditBox providerModelInput;
-    private EditBox providerApiKeyInput;
-    private EditBox profileIdInput;
-    private EditBox profileDisplayNameInput;
-    private EditBox profileDescriptionInput;
-    private EditBox profileSkinFileInput;
-    private EditBox profileRoleInput;
-    private EditBox profilePromptInput;
-    private EditBox profileSettingsInput;
-    private String providerEndpointDraft = "";
-    private String providerModelDraft = "";
-    private String providerApiKeyDraft = "";
-    private String lastHydratedProviderEndpoint = "";
-    private String lastHydratedProviderModel = "";
-    private long hydratedProviderStatusVersion = -1L;
-    private boolean clearApiKeyOnSave;
-    private boolean profileAllowWorldActions;
-    private boolean confirmDeleteSelected;
-    private String selectedAssignmentId;
-    private int selectedImportIndex;
-    private String renderedCharacterKey = "";
-    private int pageIndex;
-    private ControlPage controlPage = ControlPage.MAIN;
 
+public final class OpenPlayerControlScreen extends OpenPlayerControlScreenBase {
     public OpenPlayerControlScreen() {
-        super(TITLE);
+        super();
     }
 
-    @Override
     protected void init() {
         rebuildControlWidgets(true);
         requestStatusForSelection();
@@ -73,7 +34,7 @@ public final class OpenPlayerControlScreen extends Screen {
         }
     }
 
-    private void rebuildControlWidgetsPreservingDrafts(boolean keepSelectedVisible) {
+    protected void rebuildControlWidgetsPreservingDrafts(boolean keepSelectedVisible) {
         providerEndpointDraft = providerEndpointInput == null ? providerEndpointDraft : providerEndpointInput.getValue();
         providerModelDraft = providerModelInput == null ? providerModelDraft : providerModelInput.getValue();
         providerApiKeyDraft = providerApiKeyInput == null ? providerApiKeyDraft : providerApiKeyInput.getValue();
@@ -89,7 +50,7 @@ public final class OpenPlayerControlScreen extends Screen {
         }
     }
 
-    private void rebuildControlWidgets(boolean keepSelectedVisible) {
+    protected void rebuildControlWidgets(boolean keepSelectedVisible) {
         this.clearWidgets();
         providerEndpointInput = null;
         providerModelInput = null;
@@ -161,7 +122,7 @@ public final class OpenPlayerControlScreen extends Screen {
         }
     }
 
-    private void addPageTabs(int rightLeft, int rightWidth) {
+    protected void addPageTabs(int rightLeft, int rightWidth) {
         int tabSpacing = 4;
         int tabWidth = Math.max(48, Math.min(72, (rightWidth - tabSpacing * (ControlPage.values().length - 1)) / ControlPage.values().length));
         int tabsLeft = OpenPlayerControlLayout.centeredLeft(rightLeft, rightWidth, tabWidth * ControlPage.values().length + tabSpacing * (ControlPage.values().length - 1));
@@ -179,7 +140,7 @@ public final class OpenPlayerControlScreen extends Screen {
         }
     }
 
-    private void addMainWidgets(int rightLeft, int rightWidth) {
+    protected void addMainWidgets(int rightLeft, int rightWidth) {
         int buttonWidth = Math.min(BUTTON_WIDTH, Math.max(58, (rightWidth - OpenPlayerControlLayout.BUTTON_SPACING) / 2));
         int buttonsWidth = buttonWidth * 2 + OpenPlayerControlLayout.BUTTON_SPACING;
         int buttonsLeft = OpenPlayerControlLayout.centeredLeft(rightLeft, rightWidth, buttonsWidth);
@@ -225,7 +186,7 @@ public final class OpenPlayerControlScreen extends Screen {
                 .build());
     }
 
-    private void addProviderWidgets(int rightLeft, int rightWidth) {
+    protected void addProviderWidgets(int rightLeft, int rightWidth) {
         int inputWidth = OpenPlayerControlLayout.clampedControlWidth(rightWidth, CONTROL_INPUT_WIDTH);
         int inputLeft = OpenPlayerControlLayout.centeredLeft(rightLeft, rightWidth, inputWidth);
         int buttonWidth = Math.min(BUTTON_WIDTH, rightWidth);
@@ -260,7 +221,7 @@ public final class OpenPlayerControlScreen extends Screen {
                 .build());
     }
 
-    private void addProfileWidgets(int rightLeft, int rightWidth) {
+    protected void addProfileWidgets(int rightLeft, int rightWidth) {
         int inputWidth = OpenPlayerControlLayout.clampedControlWidth(rightWidth, CONTROL_INPUT_WIDTH);
         int inputLeft = OpenPlayerControlLayout.centeredLeft(rightLeft, rightWidth, inputWidth);
         int buttonWidth = Math.min(BUTTON_WIDTH, Math.max(58, (rightWidth - OpenPlayerControlLayout.BUTTON_SPACING) / 2));
@@ -310,7 +271,7 @@ public final class OpenPlayerControlScreen extends Screen {
                 .build());
     }
 
-    private EditBox profileInput(int left, int top, int width, int maxLength, Component hint, String value) {
+    protected EditBox profileInput(int left, int top, int width, int maxLength, Component hint, String value) {
         EditBox input = new EditBox(this.font, left, top, width, OpenPlayerControlLayout.BUTTON_HEIGHT, hint);
         input.setMaxLength(maxLength);
         input.setHint(hint);
@@ -319,7 +280,7 @@ public final class OpenPlayerControlScreen extends Screen {
         return input;
     }
 
-    private void addImportWidgets(int rightLeft, int rightWidth) {
+    protected void addImportWidgets(int rightLeft, int rightWidth) {
         int buttonWidth = Math.min(BUTTON_WIDTH, Math.max(58, (rightWidth - OpenPlayerControlLayout.BUTTON_SPACING) / 2));
         int buttonsLeft = OpenPlayerControlLayout.centeredLeft(rightLeft, rightWidth, buttonWidth * 2 + OpenPlayerControlLayout.BUTTON_SPACING);
         int rowTop = OpenPlayerControlLayout.PAGE_TOP + 18;
@@ -377,14 +338,14 @@ public final class OpenPlayerControlScreen extends Screen {
         super.render(graphics, mouseX, mouseY, partialTick);
     }
 
-    private void renderProviderPage(GuiGraphics graphics, int left, int top, int width) {
+    protected void renderProviderPage(GuiGraphics graphics, int left, int top, int width) {
         drawFitted(graphics, tr("screen.openplayer.controls.provider_config"), left, top, width, 0xFFFFFF);
         drawFitted(graphics, tr("screen.openplayer.controls.provider_test_status", OpenPlayerClientStatus.providerTestStatus()), left, OpenPlayerControlLayout.PROVIDER_STATUS_TOP, width, 0xC0C0C0);
         drawFitted(graphics, tr("screen.openplayer.controls.provider_key_preserve_note"), left, OpenPlayerControlLayout.PROVIDER_NOTE_TOP, width, 0xA0A0A0);
         drawFitted(graphics, tr("screen.openplayer.controls.provider_key_safe_note"), left, OpenPlayerControlLayout.PROVIDER_NOTE_TOP + 14, width, 0xA0A0A0);
     }
 
-    private void renderProfilePage(GuiGraphics graphics, int left, int top, int width) {
+    protected void renderProfilePage(GuiGraphics graphics, int left, int top, int width) {
         drawFitted(graphics, tr("screen.openplayer.controls.profile_manager"), left, top, width, 0xFFFFFF);
         if (protectedProfileSelected()) {
             drawFitted(graphics, tr("screen.openplayer.controls.default_profile_delete_note"), left, OpenPlayerControlLayout.PROFILE_DEFAULT_NOTE_TOP, width, 0xA0A0A0);
@@ -392,7 +353,7 @@ public final class OpenPlayerControlScreen extends Screen {
         drawFitted(graphics, tr("screen.openplayer.controls.profile_file_status", OpenPlayerClientStatus.characterFileOperationStatus()), left, OpenPlayerControlLayout.PROFILE_STATUS_TOP, width, 0xC0C0C0);
     }
 
-    private void renderImportPage(GuiGraphics graphics, int left, int top, int width) {
+    protected void renderImportPage(GuiGraphics graphics, int left, int top, int width) {
         drawFitted(graphics, tr("screen.openplayer.controls.imports_title"), left, top, width, 0xFFFFFF);
         drawFitted(graphics, tr("screen.openplayer.controls.imports_hint"), left, top + 182, width, 0xA0A0A0);
         if (OpenPlayerClientStatus.importFileNames().isEmpty()) {
@@ -401,7 +362,7 @@ public final class OpenPlayerControlScreen extends Screen {
         drawFitted(graphics, tr("screen.openplayer.controls.profile_file_status", OpenPlayerClientStatus.characterFileOperationStatus()), left, top + 196, width, 0xC0C0C0);
     }
 
-    private void renderStatusPage(GuiGraphics graphics, int left, int top, int width) {
+    protected void renderStatusPage(GuiGraphics graphics, int left, int top, int width) {
         drawFitted(graphics, tr("screen.openplayer.controls.status_automation", OpenPlayerClientStatus.automationStatus()), left, top, width, 0xC0C0C0);
         drawFitted(graphics, tr("screen.openplayer.controls.status_parser", OpenPlayerClientStatus.parserStatus()), left, top + 14, width, 0xC0C0C0);
         drawFitted(graphics, tr("screen.openplayer.controls.status_endpoint", OpenPlayerClientStatus.endpointStatus()), left, top + 28, width, 0xC0C0C0);
@@ -446,7 +407,7 @@ public final class OpenPlayerControlScreen extends Screen {
         drawFitted(graphics, tr("screen.openplayer.controls.spoken_status", selected.conversationEvents().get(selected.conversationEvents().size() - 1)), left, eventTop, width, 0xD0D0D0);
     }
 
-    private void renderCharacterMessages(GuiGraphics graphics, int left, int top, int width) {
+    protected void renderCharacterMessages(GuiGraphics graphics, int left, int top, int width) {
         if ("loading".equals(OpenPlayerClientStatus.characterListStatus())) {
             graphics.drawString(this.font, Component.translatable("screen.openplayer.controls.loading_assignments"), left, top, 0xA0A0A0);
             return;
@@ -461,7 +422,7 @@ public final class OpenPlayerControlScreen extends Screen {
         }
     }
 
-    private void renderSelectedDetails(GuiGraphics graphics, int left, int top, int width) {
+    protected void renderSelectedDetails(GuiGraphics graphics, int left, int top, int width) {
         LocalCharacterListEntry selected = selectedCharacter();
         if (selected == null) {
             drawFitted(graphics, tr("screen.openplayer.controls.no_selected_assignment"), left, top, width, 0xFFFFFF);
@@ -478,316 +439,11 @@ public final class OpenPlayerControlScreen extends Screen {
         drawFitted(graphics, tr("screen.openplayer.controls.status_page_note"), left, top + 70, width, 0xA0A0A0);
     }
 
-    private String tr(String key, Object... values) {
+    protected String tr(String key, Object... values) {
         return Component.translatable(key, values).getString();
     }
 
-    private void drawFitted(GuiGraphics graphics, String value, int left, int top, int width, int color) {
+    protected void drawFitted(GuiGraphics graphics, String value, int left, int top, int width, int color) {
         graphics.drawString(this.font, fit(value, width), left, top, color);
-    }
-
-    private void sendExportSelected() {
-        LocalCharacterListEntry selected = selectedCharacter();
-        if (selected != null) {
-            OpenPlayerRequestSender.sendCharacterExportRequest(selected.characterId());
-        }
-    }
-
-    private void sendSpawn() {
-        LocalCharacterListEntry selected = selectedCharacter();
-        if (selected != null) {
-            OpenPlayerRequestSender.sendSpawnRequest(selected.assignmentId());
-            requestStatusForSelection();
-        }
-    }
-
-    private void sendDespawn() {
-        LocalCharacterListEntry selected = selectedCharacter();
-        if (selected != null) {
-            OpenPlayerRequestSender.sendDespawnRequest(selected.assignmentId());
-            requestStatusForSelection();
-        }
-    }
-
-    private void sendFollowToggle() {
-        LocalCharacterListEntry selected = selectedCharacter();
-        if (selected == null) {
-            return;
-        }
-        if (followingSelected()) {
-            OpenPlayerRequestSender.sendStopRequest(selected.assignmentId());
-        } else {
-            OpenPlayerRequestSender.sendFollowOwnerRequest(selected.assignmentId());
-        }
-        requestStatusForSelection();
-    }
-
-    private void sendStop() {
-        LocalCharacterListEntry selected = selectedCharacter();
-        if (selected != null) {
-            OpenPlayerRequestSender.sendStopRequest(selected.assignmentId());
-            requestStatusForSelection();
-        }
-    }
-
-    private void sendProfileSave() {
-        try {
-            OpenPlayerRequestSender.sendCharacterSaveRequest(new LocalCharacterDefinition(
-                    profileIdInput.getValue(),
-                    profileDisplayNameInput.getValue(),
-                    profileDescriptionInput.getValue(),
-                    null,
-                    profileSkinFileInput.getValue(),
-                    profileRoleInput.getValue(),
-                    profilePromptInput.getValue(),
-                    profileSettingsInput.getValue(),
-                    profileAllowWorldActions
-            ));
-            confirmDeleteSelected = false;
-        } catch (IllegalArgumentException exception) {
-            OpenPlayerClientStatus.updateCharacterFileOperationStatus(exception.getMessage());
-        }
-    }
-
-    private void duplicateSelectedProfile() {
-        LocalCharacterListEntry selected = selectedCharacter();
-        if (selected == null) {
-            return;
-        }
-        selectedAssignmentId = null;
-        rebuildControlWidgetsPreservingDrafts(true);
-        profileIdInput.setValue(copyId(selected.characterId()));
-        profileDisplayNameInput.setValue(Component.translatable("screen.openplayer.controls.duplicate_profile_display_name", selected.displayName()).getString());
-        profileDescriptionInput.setValue(selected.description());
-        profileSkinFileInput.setValue(selected.localSkinFile());
-        profileRoleInput.setValue(selected.defaultRoleId());
-        profilePromptInput.setValue(selected.conversationPrompt());
-        profileSettingsInput.setValue(selected.conversationSettings());
-        profileAllowWorldActions = selected.allowWorldActions();
-    }
-
-    private void sendProfileDelete() {
-        LocalCharacterListEntry selected = selectedCharacter();
-        if (selected == null || protectedProfileSelected()) {
-            return;
-        }
-        if (!confirmDeleteSelected) {
-            confirmDeleteSelected = true;
-            rebuildControlWidgetsPreservingDrafts(true);
-            return;
-        }
-        OpenPlayerRequestSender.sendCharacterDeleteRequest(selected.characterId());
-        selectedAssignmentId = null;
-        confirmDeleteSelected = false;
-    }
-
-    private void sendSelectedImport() {
-        List<String> imports = OpenPlayerClientStatus.importFileNames();
-        if (imports.isEmpty()) {
-            return;
-        }
-        int safeIndex = Math.max(0, Math.min(selectedImportIndex, imports.size() - 1));
-        OpenPlayerRequestSender.sendCharacterImportRequest(imports.get(safeIndex));
-    }
-
-    private void openImportsFolder() {
-        try {
-            Files.createDirectories(OpenPlayerLocalCharacters.importsDirectory());
-            Util.getPlatform().openFile(OpenPlayerLocalCharacters.importsDirectory().toFile());
-        } catch (IOException exception) {
-            OpenPlayerClientStatus.updateCharacterFileOperationStatus(Component.translatable("screen.openplayer.controls.open_imports_folder_failed").getString());
-        }
-    }
-
-    private void sendProviderConfig() {
-        providerEndpointDraft = providerEndpointInput.getValue();
-        providerModelDraft = providerModelInput.getValue();
-        providerApiKeyDraft = providerApiKeyInput.getValue();
-        OpenPlayerRequestSender.sendProviderConfigSaveRequest(
-                providerEndpointDraft,
-                providerModelDraft,
-                providerApiKeyDraft,
-                clearApiKeyOnSave
-        );
-        providerApiKeyInput.setValue("");
-        providerApiKeyDraft = "";
-        clearApiKeyOnSave = false;
-    }
-
-    private void hydrateProviderDraftsFromStatus() {
-        long statusVersion = OpenPlayerClientStatus.providerStatusVersion();
-        if (hydratedProviderStatusVersion == statusVersion) {
-            return;
-        }
-        String endpointValue = OpenPlayerClientStatus.providerEndpointValue();
-        String modelValue = OpenPlayerClientStatus.providerModelValue();
-        if (providerEndpointDraft.isBlank() || providerEndpointDraft.equals(lastHydratedProviderEndpoint)) {
-            providerEndpointDraft = endpointValue;
-        }
-        if (providerModelDraft.isBlank() || providerModelDraft.equals(lastHydratedProviderModel)) {
-            providerModelDraft = modelValue;
-        }
-        lastHydratedProviderEndpoint = endpointValue;
-        lastHydratedProviderModel = modelValue;
-        hydratedProviderStatusVersion = statusVersion;
-    }
-
-    private void sendProviderTest() {
-        OpenPlayerClientStatus.updateProviderTestResult("running", "");
-        OpenPlayerRequestSender.sendProviderTestRequest();
-    }
-
-    private LocalCharacterListEntry selectedCharacter() {
-        if (selectedAssignmentId == null) {
-            return null;
-        }
-        for (LocalCharacterListEntry character : OpenPlayerClientStatus.characters()) {
-            if (character.assignmentId().equals(selectedAssignmentId)) {
-                return character;
-            }
-        }
-        selectedAssignmentId = null;
-        return null;
-    }
-
-    private void requestStatusForSelection() {
-        OpenPlayerRequestSender.sendStatusRequest(selectedAssignmentId);
-    }
-
-    private String characterKey() {
-        List<String> parts = new ArrayList<>();
-        parts.add(OpenPlayerClientStatus.characterListStatus());
-        parts.add(OpenPlayerClientStatus.parserStatus());
-        parts.add(OpenPlayerClientStatus.endpointStatus());
-        parts.add(OpenPlayerClientStatus.providerEndpointValue());
-        parts.add(OpenPlayerClientStatus.modelStatus());
-        parts.add(OpenPlayerClientStatus.providerModelValue());
-        parts.add(OpenPlayerClientStatus.apiKeyStatus());
-        parts.add(OpenPlayerClientStatus.providerTestStatus());
-        for (LocalCharacterListEntry character : OpenPlayerClientStatus.characters()) {
-            parts.add(character.assignmentId() + ":" + character.lifecycleStatus() + ":" + character.conversationStatus());
-            parts.addAll(character.conversationEvents());
-        }
-        parts.addAll(OpenPlayerClientStatus.characterErrors());
-        return String.join("|", parts);
-    }
-
-    private int pageIndexForRebuild(List<LocalCharacterListEntry> characters, int visibleAssignments, boolean keepSelectedVisible) {
-        if (selectedAssignmentId == null) {
-            return OpenPlayerGalleryPage.of(characters.size(), visibleAssignments, pageIndex).pageIndex();
-        }
-        for (int index = 0; index < characters.size(); index++) {
-            if (characters.get(index).assignmentId().equals(selectedAssignmentId)) {
-                if (keepSelectedVisible) {
-                    return OpenPlayerGalleryPage.pageForItemIndex(index, visibleAssignments);
-                }
-                return OpenPlayerGalleryPage.of(characters.size(), visibleAssignments, pageIndex).pageIndex();
-            }
-        }
-        selectedAssignmentId = null;
-        return OpenPlayerGalleryPage.of(characters.size(), visibleAssignments, pageIndex).pageIndex();
-    }
-
-    private int visibleAssignmentCount() {
-        return OpenPlayerControlLayout.visibleAssignmentCount(this.height);
-    }
-
-    private String galleryButtonLabel(LocalCharacterListEntry character) {
-        String selectedPrefix = character.assignmentId().equals(selectedAssignmentId) ? "> " : "";
-        return selectedPrefix + character.displayName() + " [" + lifecycleLabel(character.lifecycleStatus()) + "]";
-    }
-
-    private boolean followingSelected() {
-        LocalCharacterListEntry selected = selectedCharacter();
-        if (selected == null) {
-            return false;
-        }
-        String normalized = selected.lifecycleStatus().toLowerCase(java.util.Locale.ROOT);
-        return normalized.contains("follow");
-    }
-
-    private boolean protectedProfileSelected() {
-        LocalCharacterListEntry selected = selectedCharacter();
-        return selected != null && "openplayer_default".equals(selected.characterId());
-    }
-
-    private String newProfileId() {
-        int suffix = OpenPlayerClientStatus.characters().size() + 1;
-        return "companion_" + suffix;
-    }
-
-    private String copyId(String characterId) {
-        String base = characterId == null || characterId.isBlank() ? "companion" : characterId;
-        String candidate = base + "_copy";
-        int suffix = 2;
-        while (characterIdExists(candidate)) {
-            candidate = base + "_copy_" + suffix;
-            suffix++;
-        }
-        return candidate;
-    }
-
-    private boolean characterIdExists(String characterId) {
-        for (LocalCharacterListEntry character : OpenPlayerClientStatus.characters()) {
-            if (character.characterId().equals(characterId)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private String lifecycleLabel(String lifecycleStatus) {
-        String normalized = lifecycleStatus.toLowerCase(java.util.Locale.ROOT);
-        if (normalized.contains("spawn") || normalized.contains("active")) {
-            return Component.translatable("screen.openplayer.controls.lifecycle.active").getString();
-        }
-        if (normalized.contains("despawn")) {
-            return Component.translatable("screen.openplayer.controls.lifecycle.despawned").getString();
-        }
-        return lifecycleStatus;
-    }
-
-    private int lifecycleColor(String lifecycleStatus) {
-        String normalized = lifecycleStatus.toLowerCase(java.util.Locale.ROOT);
-        if (normalized.contains("spawn") || normalized.contains("active")) {
-            return 0x80FF80;
-        }
-        if (normalized.contains("despawn")) {
-            return 0xC0C0C0;
-        }
-        return 0xFFD080;
-    }
-
-    private String fit(String value, int width) {
-        if (width <= 0) {
-            return "";
-        }
-        if (this.font.width(value) <= width) {
-            return value;
-        }
-        String suffix = "...";
-        String shortened = value;
-        while (!shortened.isEmpty() && this.font.width(shortened + suffix) > width) {
-            shortened = shortened.substring(0, shortened.length() - 1);
-        }
-        return shortened + suffix;
-    }
-
-    private enum ControlPage {
-        MAIN("screen.openplayer.controls.tab.main"),
-        PROFILE("screen.openplayer.controls.tab.profile"),
-        IMPORTS("screen.openplayer.controls.tab.imports"),
-        PROVIDER("screen.openplayer.controls.tab.provider"),
-        STATUS("screen.openplayer.controls.tab.status");
-
-        private final String translationKey;
-
-        ControlPage(String translationKey) {
-            this.translationKey = translationKey;
-        }
-
-        private String translationKey() {
-            return translationKey;
-        }
     }
 }

@@ -41,6 +41,7 @@ OpenPlayer is an AGPL-3.0-only Minecraft mod developed as a legally clean, local
 - Normal player-like behavior should be attempted when reviewed adapters and policy allow it. A missing behavior is an adapter/interface gap or world-state/policy failure, not a permanent product-level prohibition.
 - While OpenPlayer runtime and intent surfaces are unreleased or unfinished, remove abandoned internal intent/API designs fully instead of keeping aliases. Do not preserve compatibility for provider/internal command names that were never a stable public contract; prefer clean generic primitives and capability adapters over old synonyms.
 - When replacing an internal runtime/provider/API design, delete the old-style code in the same change unless it is a real shipped external contract. Do not wait, leave dormant fallback paths, or keep legacy shims “just in case”; stale internal surfaces create misleading behavior and must be removed with their tests/docs/prompts.
+- Do not infer whether a runtime class is live or retired from its name. Before editing or dismissing automation, movement, AICore, provider, or primitive-execution code, trace the production path from player-facing entrypoints and entity ticks through constructors/factories to the actual executor. For example, `VanillaAutomationBackend` is still the live server-side NPC primitive executor through `OpenPlayerNpcEntity` -> `RuntimeCommandExecutor` -> `OpenPlayerAutomationConfig.createBackend()` unless that path is deliberately replaced in the same reviewed change.
 
 ## Code Style
 
@@ -51,6 +52,7 @@ OpenPlayer is an AGPL-3.0-only Minecraft mod developed as a legally clean, local
 - When a new AICore/provider contract supersedes an old internal contract, delete the old parser/provider/runtime branches, tests, prompt language, and docs instead of supporting both shapes by default.
 - Avoid inline logic comments. Short file headers, API contracts, and security contracts are acceptable.
 - Keep pure Java seams separate from Minecraft runtime code when possible.
+- Keep non-test source files under 500 lines. When a non-test file grows past that limit, split it by domain responsibility before adding more behavior; tests may exceed the limit when needed for readable coverage. Existing oversized files are refactoring debt, not a place to continue piling new logic. Do not satisfy the limit by minifying, compressing statements, merging imports, or otherwise reducing physical line count without reducing responsibility; normal readable formatting is part of the rule.
 
 ## UI Conventions
 
