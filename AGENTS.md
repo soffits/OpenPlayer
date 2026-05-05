@@ -76,6 +76,9 @@ Run the strongest available check before reporting completion:
 - Build context before editing, then give OpenCode a broad enough mandate to inspect, design, and edit within the requested capability or cleanup cluster.
 - Do not micromanage OpenCode with one-alias, one-method, or one-file follow-up prompts when the user asked for a broad phase/full-repo cleanup. Use narrow follow-up prompts only for concrete review blockers, safety regressions, build failures, or user-visible overclaims.
 - Prefer coherent capability clusters over artificial tiny phases. Durable boundaries are no OP/admin/cheat operations, no permission bypass, no arbitrary provider-origin execution, no opaque bot/runtime dependency, and no fake success.
+- For Lia's explicit fast-loop mode, run one broad OpenCode phase per planned milestone: OpenCode must inspect, implement, and run the required Java 17 build/check before stopping; if that build passes, treat it as the phase verification baseline.
+- In fast-loop mode, Sakina reviews the diff for blockers only. If review is clean, do not run redundant local builds/tests and do not wait for GitHub CI; commit/push and immediately continue the next broad phase. If a concrete blocker is found, fix that blocker narrowly, add or update regression coverage, then run the smallest necessary targeted check plus broader build/check only when warranted by the fix.
+- OpenCode prompts for this repository should usually include the Java 17 command shape `JAVA_HOME=/opt/data/tools/jdk-17.0.19+10 PATH=/opt/data/tools/jdk-17.0.19+10/bin:$PATH ./gradlew :common:check build` or the stronger task-specific build/check command.
 - Preserve unrelated user or agent work in the git worktree.
 - Do not commit unless the user explicitly requests it.
-- Report verification results and any environment limitation.
+- Report verification results, pushed commits, remaining truthful limitations, and any environment limitation.
