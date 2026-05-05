@@ -1,6 +1,6 @@
 # AICore Tool Schema
 
-Provider output is untrusted structured JSON. The production provider path accepts explicit conversation/refusal JSON or exactly one structured tool call. The JSON parser also understands bounded plans, but plans are parser-only until OpenPlayer has explicit task queue semantics; provider plans are rejected and are not executed as fake multi-step success.
+Provider output is untrusted structured JSON. The production provider path accepts explicit conversation/refusal JSON, exactly one structured tool call, or a bounded provider plan containing exactly one tool step. Multi-step plans are rejected until OpenPlayer has reviewed queue semantics; the runtime must not report fake multi-step success.
 
 ## Conversation Or Refusal
 
@@ -29,22 +29,18 @@ Provider output is untrusted structured JSON. The production provider path accep
   "args": {
     "x": 10,
     "y": 64,
-    "z": -3,
-    "forceLook": true,
-    "digFace": "auto"
+    "z": -3
   }
 }
 ```
 
 ## Bounded Plan
 
-Bounded plans are accepted by `AICoreProviderJsonToolParser` for schema-level parsing tests and future queue work, but the production provider-backed intent path rejects `plan` JSON because there is no reviewed multi-step task queue execution contract yet.
+Bounded provider plans are accepted only when they contain exactly one tool step. This keeps the provider JSON shape explicit without adding hidden Java-side multi-step queue semantics.
 
 ```json
 {
   "plan": [
-    {"tool": "find_blocks", "args": {"matching": "minecraft:oak_log", "maxDistance": 24, "count": 8}},
-    {"tool": "pathfinder_goto", "args": {"goal": {"type": "goal_block", "x": 10, "y": 64, "z": -3}}},
     {"tool": "dig", "args": {"x": 10, "y": 64, "z": -3}}
   ]
 }
@@ -53,11 +49,11 @@ Bounded plans are accepted by `AICoreProviderJsonToolParser` for schema-level pa
 ## Validation Rules
 
 - The JSON root must be an object containing exactly one structured provider action: `tool`, `chat`, `unavailable`, or `plan`.
-- The production provider path executes only a root `tool` object, after schema, capability, policy, and runtime validation.
+- The production provider path executes a root `tool` object or an exactly-one-step root `plan`, after schema, capability, policy, and runtime validation.
 - `priority` on structured tool JSON is optional and defaults to `NORMAL`; when present it must be `LOW`, `NORMAL`, or `HIGH`.
 - Tool names must be lower snake case and present in `AICoreToolCatalog`.
 - `args` must be an object. Nested objects are preserved as JSON text for later adapter-specific validation.
-- Plans are bounded by the parser's configured maximum step count and every step parses independently, but provider-backed production parsing rejects plans instead of executing them.
+- Plans are bounded by `ProviderPlanIntentCodec.MAX_STEPS`, currently one step. Over-max plans are rejected instead of being partially executed or reported as success.
 - Required arguments are enforced by `ToolSchema`.
 - Numeric bounds are enforced for common safety fields such as `maxDistance`, `count`, `ticks`, `timeoutTicks`, and `slot`.
 - Mutating tools require `allowWorldActions`.
@@ -73,4 +69,4 @@ Bounded plans are accepted by `AICoreProviderJsonToolParser` for schema-level pa
 
 ## Removed Macro Names
 
-The provider-facing registry intentionally does not expose legacy hidden macro names such as `GET_ITEM`, `SMELT_ITEM`, `COLLECT_FOOD`, `FARM_NEARBY`, `FISH` as a fake macro, `BUILD_STRUCTURE`, or `TRAVEL_NETHER`. It also does not expose mechanics-specific Java tool names such as `open_furnace`, `furnace_*`, `open_chest`, `is_bed`, `armor_manager_*`, workstation aliases, villager trading aliases, mount/vehicle/elytra aliases, auto-eat aliases, or collectblock aliases. Future provider plans may combine transparent primitive tools only after queue semantics exist; today, provider-backed production parsing rejects plans. The removed internal generic primitive shape is not a compatibility surface.
+The provider-facing registry intentionally does not expose legacy hidden macro names such as `GET_ITEM`, `SMELT_ITEM`, `COLLECT_FOOD`, `FARM_NEARBY`, `FISH` as a fake macro, `BUILD_STRUCTURE`, or `TRAVEL_NETHER`. It also does not expose mechanics-specific Java tool names such as `open_furnace`, `furnace_*`, `open_chest`, `is_bed`, `armor_manager_*`, workstation aliases, villager trading aliases, mount/vehicle/elytra aliases, auto-eat aliases, or collectblock aliases. Future provider plans may combine transparent primitive tools only after queue semantics exist; today, provider-backed production parsing accepts exactly one plan step. The removed internal generic primitive shape is not a compatibility surface.

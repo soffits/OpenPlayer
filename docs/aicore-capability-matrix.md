@@ -41,7 +41,7 @@ Statuses: `implemented`, `implemented_with_server_side_semantics`, `policy_rejec
 
 | Mineflayer surface | AICore tools | Status | Notes |
 | --- | --- | --- | --- |
-| `useOn`, `activateEntity`, `activateEntityAt`, `swingArm` | `use_on_entity`, `activate_entity`, `activate_entity_at`, `swing_arm` | implemented | Reviewed entity interaction bridges and main-hand swing. Generic held-item activation/consumption is intentionally not exposed until a reviewed adapter exists. |
+| `useOn`, `activateEntity`, `activateEntityAt`, `swingArm` | `use_on_entity`, `activate_entity`, `activate_entity_at`, `swing_arm` | `implemented_with_server_side_semantics` / `unsupported_missing_adapter` | `use_on_entity`, `activate_entity`, and `swing_arm` have reviewed entity interaction or hand-swing bridges. `activate_entity_at` is explicit but remains unsupported until position-aware entity interaction semantics are reviewed. Generic held-item activation/consumption is intentionally not exposed until a reviewed adapter exists. |
 | `attack` | `attack`, `attack_nearest`, `attack_target` | `implemented_with_server_side_semantics` | Existing combat bridge remains hostile-policy gated. |
 
 ## Inventory, Equipment, And Windows

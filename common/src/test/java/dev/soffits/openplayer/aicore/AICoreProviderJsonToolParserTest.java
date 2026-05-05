@@ -6,7 +6,7 @@ public final class AICoreProviderJsonToolParserTest {
 
     public static void main(String[] args) {
         AICoreProviderJsonToolParser parser = new AICoreProviderJsonToolParser(AICoreToolCatalog.registry(), 8);
-        JsonToolParseResult single = parser.parse("{\"tool\":\"dig\",\"args\":{\"x\":10,\"y\":64,\"z\":-3,\"forceLook\":true}}");
+        JsonToolParseResult single = parser.parse("{\"tool\":\"dig\",\"args\":{\"x\":10,\"y\":64,\"z\":-3}}");
         AICoreTestSupport.require(single.isAccepted(), "valid single tool call must parse");
         AICoreTestSupport.require("10".equals(single.calls().get(0).arguments().values().get("x")), "integer args must flatten");
         JsonToolParseResult plan = parser.parse("{\"plan\":[{\"tool\":\"find_loaded_blocks\",\"args\":{\"matching\":\"minecraft:oak_log\",\"maxDistance\":24}}]}");
