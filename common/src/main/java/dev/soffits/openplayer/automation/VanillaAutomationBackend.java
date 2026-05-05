@@ -566,6 +566,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                     return rejected("PROVIDER_PLAN step rejected: " + validation.message());
                 }
             }
+            if (steps.size() > 1) {
+                return rejected("PROVIDER_PLAN with multiple steps requires the interactive planner");
+            }
             for (CommandIntent step : steps) {
                 AutomationCommandResult result = submitPrimitiveIntent(step);
                 if (result.status() != AutomationCommandStatus.ACCEPTED) {

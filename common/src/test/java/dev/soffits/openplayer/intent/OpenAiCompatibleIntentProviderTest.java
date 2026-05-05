@@ -127,7 +127,7 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must document control command blank syntax");
         require(prompt.contains("Memory reset is not an AICore tool"),
                 "system prompt must document bounded reset memory scope");
-        require(prompt.contains("interact is player-like and capability-gated"),
+        require(prompt.contains("These interaction primitives are player-like and capability-gated"),
                 "system prompt must document interaction capability gates");
         require(prompt.contains("friendly mobs, neutral mobs, or arbitrary non-hostile entities"),
                 "system prompt must document narrow explicit attack target scope");

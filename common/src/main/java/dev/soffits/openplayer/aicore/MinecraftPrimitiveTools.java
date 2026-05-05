@@ -24,7 +24,6 @@ public final class MinecraftPrimitiveTools {
     public static final ToolName INVENTORY_QUERY = ToolName.of("inventory_query");
     public static final ToolName EQUIP_ITEM = ToolName.of("equip_item");
     public static final ToolName DROP_ITEM = ToolName.of("drop_item");
-    public static final ToolName INTERACT = ToolName.of("interact");
     public static final ToolName ATTACK_NEAREST = ToolName.of("attack_nearest");
     public static final ToolName ATTACK_TARGET = ToolName.of("attack_target");
     public static final ToolName REPORT_STATUS = ToolName.of("report_status");
@@ -91,6 +90,10 @@ public final class MinecraftPrimitiveTools {
         if (toolSchema.mutatesWorld() && !context.allowWorldActions()) {
             return ToolResult.rejected("World actions are disabled for this OpenPlayer character");
         }
+        Optional<AICoreToolDefinition> definition = AICoreToolCatalog.definition(call.name());
+        if (definition.isPresent() && definition.get().capabilityStatus() == CapabilityStatus.POLICY_REJECTED) {
+            return ToolResult.rejected(definition.get().resultReason());
+        }
         Optional<ToolResult> schemaValidation = validateSchema(call, toolSchema);
         if (schemaValidation.isPresent()) {
             return schemaValidation.get();
@@ -103,12 +106,8 @@ public final class MinecraftPrimitiveTools {
         if (nestedValidation.isPresent()) {
             return nestedValidation.get();
         }
-        Optional<AICoreToolDefinition> definition = AICoreToolCatalog.definition(call.name());
         if (definition.isPresent()) {
             CapabilityStatus status = definition.get().capabilityStatus();
-            if (status == CapabilityStatus.POLICY_REJECTED) {
-                return ToolResult.rejected(definition.get().resultReason());
-            }
             if (status == CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER || status == CapabilityStatus.NOT_APPLICABLE_SERVER_SIDE_NPC) {
                 return ToolResult.failed(definition.get().resultReason());
             }
@@ -174,7 +173,6 @@ public final class MinecraftPrimitiveTools {
     private static Map<ToolName, IntentKind> toolToIntent() {
         LinkedHashMap<ToolName, IntentKind> map = new LinkedHashMap<>();
         map.put(OBSERVE_SELF, IntentKind.REPORT_STATUS);
-        map.put(OBSERVE_WORLD, IntentKind.REPORT_STATUS);
         map.put(FIND_LOADED_BLOCKS, IntentKind.LOCATE_LOADED_BLOCK);
         map.put(FIND_LOADED_ENTITIES, IntentKind.LOCATE_LOADED_ENTITY);
         map.put(PICKUP_ITEMS_NEARBY, IntentKind.COLLECT_ITEMS);
@@ -192,10 +190,8 @@ public final class MinecraftPrimitiveTools {
         map.put(ToolName.of("equip"), IntentKind.EQUIP_ITEM);
         map.put(DROP_ITEM, IntentKind.DROP_ITEM);
         map.put(ToolName.of("toss"), IntentKind.DROP_ITEM);
-        map.put(INTERACT, IntentKind.INTERACT);
         map.put(ToolName.of("activate_block"), IntentKind.INTERACT);
         map.put(ToolName.of("activate_entity"), IntentKind.INTERACT);
-        map.put(ToolName.of("activate_entity_at"), IntentKind.INTERACT);
         map.put(ToolName.of("use_on_entity"), IntentKind.INTERACT);
         map.put(ATTACK_NEAREST, IntentKind.ATTACK_NEAREST);
         map.put(ATTACK_TARGET, IntentKind.ATTACK_TARGET);
@@ -212,7 +208,11 @@ public final class MinecraftPrimitiveTools {
 
     private static Map<IntentKind, ToolName> intentToTool() {
         LinkedHashMap<IntentKind, ToolName> map = new LinkedHashMap<>();
-        TOOL_TO_INTENT.forEach((toolName, intentKind) -> map.putIfAbsent(intentKind, toolName));
+        TOOL_TO_INTENT.forEach((toolName, intentKind) -> {
+            if (intentKind != IntentKind.INTERACT) {
+                map.putIfAbsent(intentKind, toolName);
+            }
+        });
         map.put(IntentKind.GOTO, MOVE_TO);
         map.put(IntentKind.LOOK, LOOK_AT);
         map.put(IntentKind.BREAK_BLOCK, BREAK_BLOCK_AT);
@@ -246,11 +246,14 @@ public final class MinecraftPrimitiveTools {
         if (values.containsKey("matching")) {
             return loadedSearchInstruction(values);
         }
+        if (call.name().equals(DROP_ITEM)) {
+            return itemCountInstruction(values.get("itemType"), values.get("count"));
+        }
         if (values.containsKey("item")) {
             return values.get("item");
         }
         if (values.containsKey("itemType")) {
-            return (values.get("itemType") + " " + values.getOrDefault("count", "")).trim();
+            return itemCountInstruction(values.get("itemType"), values.get("count"));
         }
         if (values.containsKey("recipe")) {
             return craftInstruction(values);
@@ -259,6 +262,10 @@ public final class MinecraftPrimitiveTools {
             if (call.name().value().equals("activate_entity") || call.name().value().equals("activate_entity_at")
                     || call.name().value().equals("use_on_entity")) {
                 return "entity " + values.get("entityId") + " " + values.getOrDefault("maxDistance", "4");
+            }
+            if (call.name().equals(ATTACK_TARGET)) {
+                String maxDistance = values.getOrDefault("maxDistance", "").trim();
+                return (values.get("entityId") + " " + maxDistance).trim();
             }
             return values.get("entityId");
         }
@@ -274,6 +281,10 @@ public final class MinecraftPrimitiveTools {
             maxDistance = String.valueOf((int) AdvancedTaskInstructionParser.DEFAULT_RADIUS);
         }
         return namespacedMinecraftId(values.get("matching")) + " " + maxDistance;
+    }
+
+    private static String itemCountInstruction(String itemType, String count) {
+        return ((itemType == null ? "" : itemType) + " " + (count == null ? "" : count)).trim();
     }
 
     private static String namespacedMinecraftId(String value) {
@@ -371,6 +382,10 @@ public final class MinecraftPrimitiveTools {
     }
 
     private static Optional<ToolResult> validateSchema(ToolCall call, ToolSchema schema) {
+        Optional<ToolResult> unknownArgumentValidation = validateKnownArguments(call, schema);
+        if (unknownArgumentValidation.isPresent()) {
+            return unknownArgumentValidation;
+        }
         for (ToolParameter parameter : schema.parameters()) {
             String value = call.arguments().values().get(parameter.name());
             if ((value == null || value.isBlank()) && parameter.required()) {
@@ -389,6 +404,22 @@ public final class MinecraftPrimitiveTools {
         Optional<ToolResult> boundedValidation = validateBounds(call, schema);
         if (boundedValidation.isPresent()) {
             return boundedValidation;
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<ToolResult> validateKnownArguments(ToolCall call, ToolSchema schema) {
+        for (String argumentName : call.arguments().values().keySet()) {
+            if (argumentName.equals("instruction")) {
+                continue;
+            }
+            boolean known = schema.parameters().stream()
+                    .anyMatch(parameter -> parameter.name().equals(argumentName));
+            if (!known) {
+                return Optional.of(ToolResult.rejected(
+                        "Unknown argument for " + call.name().value() + ": " + argumentName
+                ));
+            }
         }
         return Optional.empty();
     }

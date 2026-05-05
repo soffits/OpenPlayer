@@ -23,6 +23,12 @@ public final class ProviderBackedIntentParserTest {
         acceptsPickupItemsNearbyMatchingOnlyFromLogs();
         acceptsPickupItemsNearbyMatchingAndExplicitMaxDistance();
         rejectsPickupItemsNearbyMaxDistanceWithoutMatching();
+        rejectsUnknownStructuredToolArguments();
+        rejectsIgnoredStructuredToolArguments();
+        preservesDropItemCountStructuredToolJson();
+        preservesAttackTargetMaxDistanceStructuredToolJson();
+        rejectsWorldObservationUntilAdapterExists();
+        rejectsPositionSpecificEntityActivationUntilAdapterExists();
         rejectsFacadeOnlyStructuredToolJson();
         providerPromptExcludesFacadeOnlyTools();
         rejectsAdminStructuredToolJson();
@@ -147,6 +153,58 @@ public final class ProviderBackedIntentParserTest {
                 "provider parser must reject pickup_items_nearby maxDistance without matching");
     }
 
+    private static void rejectsUnknownStructuredToolArguments() {
+        ProviderBackedIntentParser parser = new ProviderBackedIntentParser(
+                input -> ProviderIntent.structuredTool("NORMAL", "{\"tool\":\"report_status\",\"args\":{\"matching\":\"minecraft:stone\"}}")
+        );
+        requireRejected(parser, "Unknown argument for report_status: matching",
+                "provider parser must reject undeclared arguments before they are ignored");
+    }
+
+    private static void rejectsIgnoredStructuredToolArguments() {
+        ProviderBackedIntentParser parser = new ProviderBackedIntentParser(
+                input -> ProviderIntent.structuredTool("NORMAL", "{\"tool\":\"dig\",\"args\":{\"x\":10,\"y\":64,\"z\":-3,\"forceLook\":true}}")
+        );
+        requireRejected(parser, "Unknown argument for dig: forceLook",
+                "provider parser must reject arguments the runtime bridge cannot preserve");
+    }
+
+    private static void preservesDropItemCountStructuredToolJson() throws Exception {
+        ProviderBackedIntentParser parser = new ProviderBackedIntentParser(
+                input -> ProviderIntent.structuredTool("NORMAL", "{\"tool\":\"drop_item\",\"args\":{\"itemType\":\"minecraft:bread\",\"count\":3}}")
+        );
+        CommandIntent intent = parser.parse("ignored");
+        require(intent.kind() == IntentKind.DROP_ITEM, "drop_item tool JSON must bridge to drop item intent");
+        require("minecraft:bread 3".equals(intent.instruction()),
+                "drop_item tool JSON must preserve itemType and count");
+    }
+
+    private static void preservesAttackTargetMaxDistanceStructuredToolJson() throws Exception {
+        ProviderBackedIntentParser parser = new ProviderBackedIntentParser(
+                input -> ProviderIntent.structuredTool("NORMAL", "{\"tool\":\"attack_target\",\"args\":{\"entityId\":\"minecraft:zombie\",\"maxDistance\":9}}")
+        );
+        CommandIntent intent = parser.parse("ignored");
+        require(intent.kind() == IntentKind.ATTACK_TARGET, "attack_target tool JSON must bridge to attack target intent");
+        require("minecraft:zombie 9".equals(intent.instruction()),
+                "attack_target tool JSON must preserve optional maxDistance");
+    }
+
+    private static void rejectsWorldObservationUntilAdapterExists() {
+        ProviderBackedIntentParser parser = new ProviderBackedIntentParser(
+                input -> ProviderIntent.structuredTool("NORMAL", "{\"tool\":\"observe_world\",\"args\":{}}")
+        );
+        requireRejected(parser, "unsupported_missing_world_observation_adapter",
+                "provider parser must not bridge world observation to generic status");
+    }
+
+    private static void rejectsPositionSpecificEntityActivationUntilAdapterExists() {
+        ProviderBackedIntentParser parser = new ProviderBackedIntentParser(
+                input -> ProviderIntent.structuredTool("NORMAL", "{\"tool\":\"activate_entity_at\",\"args\":{\"entityId\":\"target\",\"position\":{\"x\":0,\"y\":1,\"z\":0}}}")
+        );
+        requireRejected(parser, "unsupported_missing_entity_position_interaction_adapter",
+                "provider parser must reject position-specific entity activation until the adapter preserves position");
+    }
+
     private static void rejectsFacadeOnlyStructuredToolJson() {
         ProviderBackedIntentParser parser = new ProviderBackedIntentParser(
                 input -> ProviderIntent.structuredTool("NORMAL", "{\"tool\":\"set_quick_bar_slot\",\"args\":{\"slot\":1}}")
@@ -159,6 +217,14 @@ public final class ProviderBackedIntentParserTest {
         String prompt = OpenAiCompatibleIntentProvider.systemPrompt();
         require(!prompt.contains("set_quick_bar_slot: Select hotbar slot"),
                 "provider prompt schemas must not advertise facade-only hotbar selection as executable");
+        require(!prompt.contains("observe_world: Report bounded loaded-world status"),
+                "provider prompt schemas must not advertise missing world observation adapter as executable");
+        require(!prompt.contains("activate_entity_at: Activate an entity at a relative position"),
+                "provider prompt schemas must not advertise position-specific entity activation without an adapter");
+        require(!prompt.contains("For interact"),
+                "provider prompt must not advertise nonexistent interact tool syntax");
+        require(!prompt.contains("interact is player-like"),
+                "provider prompt must not describe interact as an executable provider tool");
         require(prompt.contains("report_status: Report active OpenPlayer automation status"),
                 "provider prompt schemas must retain executable command-bridged tools");
     }
@@ -172,17 +238,15 @@ public final class ProviderBackedIntentParserTest {
 
     private static void acceptsStructuredPlanJson() throws Exception {
         ProviderBackedIntentParser parser = new ProviderBackedIntentParser(
-                input -> ProviderIntent.structuredPlan("HIGH", "{\"plan\":[{\"tool\":\"move_to\",\"args\":{\"x\":1,\"y\":64,\"z\":2}},{\"tool\":\"look_at\",\"args\":{\"x\":3,\"y\":65,\"z\":4}}]}")
+                input -> ProviderIntent.structuredPlan("HIGH", "{\"plan\":[{\"tool\":\"move_to\",\"args\":{\"x\":1,\"y\":64,\"z\":2}}]}")
         );
         CommandIntent intent = parser.parse("ignored");
         require(intent.kind() == IntentKind.PROVIDER_PLAN, "provider plan must bridge to internal plan intent");
         require(intent.priority() == IntentPriority.HIGH, "provider plan priority must be preserved");
         List<CommandIntent> steps = ProviderPlanIntentCodec.decode(intent.instruction());
-        require(steps.size() == 2, "provider plan must preserve two executable primitive steps");
+        require(steps.size() == 1, "provider plan must preserve one executable primitive step");
         require(steps.get(0).kind() == IntentKind.GOTO, "move_to plan step must become GOTO");
         require("1 64 2".equals(steps.get(0).instruction()), "move_to plan args must become runtime instruction");
-        require(steps.get(1).kind() == IntentKind.LOOK, "look_at plan step must become LOOK");
-        require("3 65 4".equals(steps.get(1).instruction()), "look_at plan args must become runtime instruction");
     }
 
     private static void rejectsRemovedToolInsideStructuredPlanJson() {

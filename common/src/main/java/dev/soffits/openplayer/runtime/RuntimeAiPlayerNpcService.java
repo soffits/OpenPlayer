@@ -599,6 +599,7 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService, Inte
         reattachPersistedNpcs();
         for (RuntimeAiPlayerNpcSession session : sessions.values()) {
             if (session.spec().ownerId().value().equals(ownerId)) {
+                cancelPlannerSession(session.sessionId(), "owner runtime stopped");
                 OpenPlayerNpcEntity entity = entityFor(session);
                 if (entity != null) {
                     entity.stopRuntimeCommands();

@@ -17,7 +17,11 @@ public final class MinecraftPrimitiveToolsTest {
         Bootstrap.bootStrap();
         registryExposesPrimitiveToolsOnly();
         mapsProviderToolsToRuntimePrimitives();
+        reverseRuntimeMappingsOnlyUseExecutableCatalogTools();
+        directInteractIntentDoesNotReverseMapToNonexistentTool();
         mapsPickupItemsNearbyArgumentsToCollectInstruction();
+        mapsDropItemArgumentsWithoutDroppingCount();
+        rejectsUnknownAndIgnoredArguments();
         validatesMoveToCoordinateOnly();
         rejectsUnknownAndMalformedTools();
         worldPolicyGatesMutatingTools();
@@ -55,6 +59,34 @@ public final class MinecraftPrimitiveToolsTest {
         require("break_block_at".equals(toolCall.get().name().value()), "BREAK_BLOCK must map to break_block_at");
     }
 
+    private static void reverseRuntimeMappingsOnlyUseExecutableCatalogTools() {
+        for (IntentKind kind : IntentKind.values()) {
+            Optional<ToolCall> toolCall = MinecraftPrimitiveTools.toToolCall(
+                    new CommandIntent(kind, IntentPriority.NORMAL, runtimeInstructionFor(kind))
+            );
+            if (toolCall.isEmpty()) {
+                continue;
+            }
+            ToolName toolName = toolCall.get().name();
+            require(AICoreToolCatalog.definition(toolName).isPresent(),
+                    "reverse mapped tool must exist in catalog: " + toolName.value());
+            require(MinecraftPrimitiveTools.toCommandIntent(toolCall.get(), IntentPriority.NORMAL).isPresent(),
+                    "reverse mapped tool must be command-executable: " + toolName.value());
+        }
+    }
+
+    private static void directInteractIntentDoesNotReverseMapToNonexistentTool() {
+        Optional<ToolCall> blockToolCall = MinecraftPrimitiveTools.toToolCall(
+                new CommandIntent(IntentKind.INTERACT, IntentPriority.NORMAL, "block 1 64 1")
+        );
+        require(blockToolCall.isEmpty(), "direct block INTERACT must bypass ambiguous AICore reverse mapping");
+
+        Optional<ToolCall> entityToolCall = MinecraftPrimitiveTools.toToolCall(
+                new CommandIntent(IntentKind.INTERACT, IntentPriority.NORMAL, "entity minecraft:sheep 4")
+        );
+        require(entityToolCall.isEmpty(), "direct entity INTERACT must bypass ambiguous AICore reverse mapping");
+    }
+
     private static void mapsPickupItemsNearbyArgumentsToCollectInstruction() {
         Optional<CommandIntent> legacyCollect = MinecraftPrimitiveTools.toCommandIntent(
                 ToolCall.of("pickup_items_nearby", ToolArguments.empty()), IntentPriority.NORMAL
@@ -84,6 +116,28 @@ public final class MinecraftPrimitiveToolsTest {
         require(radiusOnlyIntent.isPresent(), "pickup_items_nearby maxDistance-only bridge must remain deterministic");
         require("8".equals(radiusOnlyIntent.get().instruction()),
                 "pickup_items_nearby maxDistance-only bridge must not widen to collect-any");
+    }
+
+    private static void mapsDropItemArgumentsWithoutDroppingCount() {
+        Optional<CommandIntent> drop = MinecraftPrimitiveTools.toCommandIntent(
+                ToolCall.of("drop_item", new ToolArguments(Map.of("itemType", "minecraft:bread", "count", "3"))),
+                IntentPriority.NORMAL
+        );
+        require(drop.isPresent(), "drop_item must map to runtime command");
+        require(drop.get().kind() == IntentKind.DROP_ITEM, "drop_item must bridge to DROP_ITEM");
+        require("minecraft:bread 3".equals(drop.get().instruction()),
+                "drop_item itemType/count must preserve the requested count");
+    }
+
+    private static void rejectsUnknownAndIgnoredArguments() {
+        requireRejected(MinecraftPrimitiveTools.validate(
+                ToolCall.of("report_status", new ToolArguments(Map.of("matching", "minecraft:stone"))),
+                new ToolValidationContext(true)
+        ), "Unknown argument for report_status: matching");
+        requireRejected(MinecraftPrimitiveTools.validate(
+                ToolCall.of("dig", new ToolArguments(Map.of("x", "1", "y", "64", "z", "2", "forceLook", "true"))),
+                new ToolValidationContext(true)
+        ), "Unknown argument for dig: forceLook");
     }
 
     private static void validatesMoveToCoordinateOnly() {
@@ -122,6 +176,22 @@ public final class MinecraftPrimitiveToolsTest {
     private static void requireRejected(ToolResult result, String reason) {
         require(result.status() == ToolResultStatus.REJECTED, "tool result must be rejected");
         require(reason.equals(result.reason()), "unexpected rejection: " + result.reason());
+    }
+
+    private static String runtimeInstructionFor(IntentKind kind) {
+        return switch (kind) {
+            case BREAK_BLOCK, GOTO, LOOK, MOVE, PLACE_BLOCK -> "1 64 1";
+            case COLLECT_ITEMS -> "minecraft:stone 8";
+            case CRAFT -> "minecraft:stick 1";
+            case DROP_ITEM -> "minecraft:stone 1";
+            case EQUIP_ITEM -> "minecraft:stone";
+            case INTERACT -> "block 1 64 1";
+            case LOCATE_LOADED_BLOCK -> "minecraft:stone 8";
+            case LOCATE_LOADED_ENTITY -> "minecraft:zombie 8";
+            case ATTACK_NEAREST -> "8";
+            case ATTACK_TARGET -> "minecraft:zombie";
+            default -> "";
+        };
     }
 
     private static void require(boolean condition, String message) {

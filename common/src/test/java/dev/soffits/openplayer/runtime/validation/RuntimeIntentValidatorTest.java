@@ -256,8 +256,7 @@ public final class RuntimeIntentValidatorTest {
 
     private static void validatesBoundedProviderPlans() {
         CommandIntent plan = providerPlan(
-                new CommandIntent(IntentKind.REPORT_STATUS, IntentPriority.NORMAL, ""),
-                new CommandIntent(IntentKind.GOTO, IntentPriority.NORMAL, "1 64 2")
+                new CommandIntent(IntentKind.REPORT_STATUS, IntentPriority.NORMAL, "")
         );
         require(RuntimeIntentValidator.validate(plan, true).isAccepted(),
                 "PROVIDER_PLAN should accept validated primitive steps");

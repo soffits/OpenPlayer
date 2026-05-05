@@ -46,7 +46,7 @@ public final class AICoreToolCatalog {
         ArrayList<AICoreToolDefinition> defs = new ArrayList<>();
 
         add(defs, "observe_self", "core_state", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Report the NPC facade state snapshot.");
-        add(defs, "observe_world", "core_state", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Report bounded loaded-world status.");
+        add(defs, "observe_world", "core_state", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, false, "unsupported_missing_world_observation_adapter", "Report bounded loaded-world status when a world observation adapter exists.");
         add(defs, "inventory_query", "inventory_window", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Legacy inventory query bridge.");
         add(defs, "report_status", "openplayer_bridge", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Report active OpenPlayer automation status.");
         add(defs, "stop", "openplayer_bridge", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Stop active and queued OpenPlayer automation.");
@@ -69,7 +69,7 @@ public final class AICoreToolCatalog {
         add(defs, "set_control_state", "movement_pathfinder", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Set one visible player-like control state without applying fake motion.", text("control"), bool("state"));
         add(defs, "get_control_state", "movement_pathfinder", CapabilityStatus.IMPLEMENTED, false, "", "Read one control state from the facade.", text("control"));
         add(defs, "clear_control_states", "movement_pathfinder", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Clear all visible control states.");
-        add(defs, "look_at", "movement_pathfinder", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Look at an explicit coordinate.", integer("x"), integer("y"), integer("z"), bool("force", false));
+        add(defs, "look_at", "movement_pathfinder", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Look at an explicit coordinate.", integer("x"), integer("y"), integer("z"));
         add(defs, "look", "movement_pathfinder", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Set yaw and pitch.", number("yaw"), number("pitch"), bool("force", false));
         add(defs, "wait_for_ticks", "movement_pathfinder", CapabilityStatus.IMPLEMENTED, false, "", "Return a bounded wait request for the runtime tick scheduler.", integer("ticks"));
         add(defs, "move_to", "movement_pathfinder", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Legacy explicit coordinate movement bridge.", integer("x"), integer("y"), integer("z"));
@@ -81,22 +81,22 @@ public final class AICoreToolCatalog {
         add(defs, "pathfinder_stop", "movement_pathfinder", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Stop active pathfinder or bridged automation movement.");
 
         add(defs, "can_dig_block", "block_mutation", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Validate loaded block dig preconditions.", integer("x"), integer("y"), integer("z"));
-        add(defs, "dig", "block_mutation", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Dig a loaded reachable block and verify state change where adapter exists.", integer("x"), integer("y"), integer("z"), bool("forceLook", false), text("digFace", false));
+        add(defs, "dig", "block_mutation", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Dig a loaded reachable block and verify state change where adapter exists.", integer("x"), integer("y"), integer("z"));
         add(defs, "break_block_at", "block_mutation", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Legacy explicit block breaking bridge.", integer("x"), integer("y"), integer("z"));
         add(defs, "stop_digging", "block_mutation", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Stop active digging when the NPC has a held-use dig session.");
         add(defs, "dig_time", "block_mutation", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Estimate dig time using loaded block and selected tool state.", integer("x"), integer("y"), integer("z"));
-        add(defs, "place_block", "block_mutation", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Place selected block item against a loaded reference block.", integer("x"), integer("y"), integer("z"), object("faceVector"));
+        add(defs, "place_block", "block_mutation", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Place selected block item at an explicit loaded coordinate.", integer("x"), integer("y"), integer("z"));
         add(defs, "place_block_at", "block_mutation", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Legacy explicit block placement bridge.", integer("x"), integer("y"), integer("z"));
         add(defs, "place_entity", "block_mutation", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, "unsupported_missing_place_entity_adapter", "Place an entity from the held item against a block.", integer("x"), integer("y"), integer("z"), object("faceVector"));
-        add(defs, "activate_block", "block_mutation", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Activate a loaded block with optional cursor position.", integer("x"), integer("y"), integer("z"), object("direction", false), object("cursorPos", false));
+        add(defs, "activate_block", "block_mutation", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Activate a loaded block at an explicit coordinate.", integer("x"), integer("y"), integer("z"));
         add(defs, "update_sign", "block_mutation", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, "unsupported_missing_sign_update_adapter", "Update sign text with bounded sanitized content.", integer("x"), integer("y"), integer("z"), text("text"), bool("back", false));
 
         add(defs, "use_on_entity", "item_entity_combat", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Use held item on a target entity through the reviewed interaction primitive.", text("entityId"));
         add(defs, "activate_entity", "item_entity_combat", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Activate an entity through the reviewed interaction primitive.", text("entityId"));
-        add(defs, "activate_entity_at", "item_entity_combat", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Activate an entity at a relative position through the reviewed interaction primitive.", text("entityId"), object("position"));
-        add(defs, "attack", "item_entity_combat", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Attack an explicit hostile allowlisted entity.", text("entityId"), bool("swing", false));
+        add(defs, "activate_entity_at", "item_entity_combat", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, "unsupported_missing_entity_position_interaction_adapter", "Activate an entity at a relative position only when a position-aware adapter exists.", text("entityId"), object("position"));
+        add(defs, "attack", "item_entity_combat", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Attack an explicit hostile allowlisted entity.", text("entityId"));
         add(defs, "attack_nearest", "item_entity_combat", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Legacy nearest hostile attack bridge.", integer("maxDistance", false));
-        add(defs, "attack_target", "item_entity_combat", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Legacy explicit hostile attack bridge.", text("entityId"));
+        add(defs, "attack_target", "item_entity_combat", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Legacy explicit hostile attack bridge.", text("entityId"), integer("maxDistance", false));
         add(defs, "swing_arm", "item_entity_combat", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Swing the NPC main hand for visible ordinary-player-like feedback.", text("hand", false), bool("showHand", false));
         addInventory(defs);
         addCraftingAndContainers(defs);
@@ -110,12 +110,12 @@ public final class AICoreToolCatalog {
         add(defs, "inventory", "inventory_window", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Return an inventory snapshot.");
         add(defs, "held_item", "inventory_window", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Return the currently held item snapshot.");
         add(defs, "set_quick_bar_slot", "inventory_window", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Select hotbar slot 0 through 8.", integer("slot"));
-        add(defs, "equip", "inventory_window", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Equip an exact inventory item id.", text("item"), text("destination"));
+        add(defs, "equip", "inventory_window", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Equip an exact inventory item id.", text("item"));
         add(defs, "equip_item", "inventory_window", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Legacy equip item bridge.", text("item"));
         add(defs, "unequip", "inventory_window", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Unequip a destination safely into normal inventory.", text("destination"));
         add(defs, "toss_stack", "inventory_window", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Toss the selected stack with no-loss spawn commit checks.", text("item", false));
-        add(defs, "toss", "inventory_window", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Toss an exact item stack count.", text("itemType"), text("metadata", false), integer("count", false));
-        add(defs, "drop_item", "inventory_window", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Legacy drop item bridge.", text("item", false), integer("count", false));
+        add(defs, "toss", "inventory_window", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Toss an exact item stack count.", text("itemType"), integer("count", false));
+        add(defs, "drop_item", "inventory_window", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Legacy drop item bridge.", text("itemType", false), integer("count", false));
         add(defs, "simple_click_left", "inventory_window", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, "unsupported_missing_window_adapter", "Left click a window slot after session validation.", integer("slot"));
         add(defs, "simple_click_right", "inventory_window", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, "unsupported_missing_window_adapter", "Right click a window slot after session validation.", integer("slot"));
         add(defs, "click_window", "inventory_window", CapabilityStatus.UNSUPPORTED_MISSING_ADAPTER, true, "unsupported_missing_window_adapter", "Click a validated window slot.", integer("slot"), integer("mouseButton"), integer("mode"));

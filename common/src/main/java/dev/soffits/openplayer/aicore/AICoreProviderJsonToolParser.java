@@ -77,6 +77,9 @@ public final class AICoreProviderJsonToolParser {
         if (!(args instanceof Map<?, ?> argsObject)) {
             return JsonToolParseResult.rejected("args must be an object");
         }
+        if (argsObject.containsKey("instruction")) {
+            return JsonToolParseResult.rejected("provider tool args must not contain instruction");
+        }
         return JsonToolParseResult.accepted(List.of(new ToolCall(toolName, new ToolArguments(flatten(argsObject)))));
     }
 

@@ -6,7 +6,7 @@ import java.util.Base64;
 import java.util.List;
 
 public final class ProviderPlanIntentCodec {
-    public static final int MAX_STEPS = 5;
+    public static final int MAX_STEPS = 1;
     public static final int MAX_ENCODED_LENGTH = 4096;
 
     private ProviderPlanIntentCodec() {
