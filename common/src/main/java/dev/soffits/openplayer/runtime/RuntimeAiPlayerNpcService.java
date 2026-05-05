@@ -27,6 +27,9 @@ import dev.soffits.openplayer.runtime.context.RuntimeNearbySnapshot.BlockTargetS
 import dev.soffits.openplayer.runtime.context.RuntimeNearbySnapshot.RuntimeEntitySnapshot;
 import dev.soffits.openplayer.runtime.context.RuntimeNearbySnapshot.RuntimeNamedEntitySnapshot;
 import dev.soffits.openplayer.runtime.context.RuntimeWorldSnapshot;
+import dev.soffits.openplayer.runtime.mode.AutomationMode;
+import dev.soffits.openplayer.runtime.profile.EffectiveRuntimeProfile;
+import dev.soffits.openplayer.runtime.profile.EffectiveRuntimeProfileFormatter;
 import dev.soffits.openplayer.runtime.planner.InteractivePlannerConfig;
 import dev.soffits.openplayer.runtime.planner.InteractivePlannerSession;
 import dev.soffits.openplayer.runtime.planner.PlannerObservation;
@@ -643,13 +646,53 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService, Inte
         }
         AutomationControllerSnapshot snapshot = entity.runtimeCommandSnapshot();
         String active = snapshot.active() ? snapshot.activeKind().name() : "idle";
-        return List.of(
+        List<String> lines = new ArrayList<>();
+        lines.add(
                 limitStatusLine("selected_assignment=" + safeAssignmentId + " source=selected_npc status=active active="
-                        + active + " queued=" + snapshot.queuedCommandCount() + " paused=" + snapshot.paused()),
+                        + active + " queued=" + snapshot.queuedCommandCount() + " paused=" + snapshot.paused()));
+        lines.add(
                 limitStatusLine("selected_controller=" + snapshot.monitorStatus().name().toLowerCase(java.util.Locale.ROOT)
                         + " reason=" + safeStatusValue(snapshot.monitorReason()) + " ticks="
-                        + snapshot.elapsedTicks() + "/" + snapshot.maxTicks()),
-                limitStatusLine("selected_queue source=selected_npc kinds=" + queuedKinds(snapshot))
+                        + snapshot.elapsedTicks() + "/" + snapshot.maxTicks()));
+        lines.add(limitStatusLine("selected_queue source=selected_npc kinds=" + queuedKinds(snapshot)));
+        lines.add(limitStatusLine("selected_planner state=" + plannerState(sessionId)
+                + " autonomousEnabled=true budgets=iterations:" + plannerConfig.maxIterations()
+                + ",providerCalls:" + plannerConfig.maxProviderCalls()
+                + ",toolSteps:" + plannerConfig.maxToolSteps()
+                + ",noProgress:" + plannerConfig.maxNoProgressCount()));
+        lines.addAll(EffectiveRuntimeProfileFormatter.statusLines(effectiveRuntimeProfile(session)));
+        return List.copyOf(lines);
+    }
+
+    private String plannerState(NpcSessionId sessionId) {
+        InteractivePlannerSession plannerSession = plannerSessions.get(sessionId);
+        if (plannerSession == null) {
+            return "idle";
+        }
+        return plannerSession.isCancelled() ? "cancelled" : "planning";
+    }
+
+    private EffectiveRuntimeProfile effectiveRuntimeProfile(RuntimeAiPlayerNpcSession session) {
+        String movementPolicy = session.spec().profile().movementPolicy();
+        String selectedPolicy = movementPolicy == null || movementPolicy.isBlank()
+                ? "openplayer:companion_safe" : movementPolicy;
+        List<AutomationMode> enabledModes = session.spec().allowWorldActions()
+                ? List.of(AutomationMode.UNSTUCK, AutomationMode.OPPORTUNISTIC_ITEM_COLLECTION, AutomationMode.DANGER_AVOIDANCE)
+                : List.of(AutomationMode.UNSTUCK, AutomationMode.DANGER_AVOIDANCE);
+        List<AutomationMode> disabledModes = session.spec().allowWorldActions()
+                ? List.of(AutomationMode.SELF_DEFENSE)
+                : List.of(AutomationMode.OPPORTUNISTIC_ITEM_COLLECTION, AutomationMode.SELF_DEFENSE);
+        return new EffectiveRuntimeProfile(
+                selectedPolicy,
+                enabledModes,
+                disabledModes,
+                "server_intent_parser",
+                Map.of(
+                        "allowWorldActions", session.spec().allowWorldActions(),
+                        "autonomousPlanner", true,
+                        "providerBypassesValidation", false
+                ),
+                Map.of("rawProviderTraceInStatus", "false")
         );
     }
 

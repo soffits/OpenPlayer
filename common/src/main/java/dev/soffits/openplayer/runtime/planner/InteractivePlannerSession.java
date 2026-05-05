@@ -89,9 +89,12 @@ public final class InteractivePlannerSession {
         builder.append("User request: ").append(userRequest).append("\n");
         builder.append("Act as a long-horizon autonomous planner over bounded Minecraft primitives. ");
         builder.append("Return one compact JSON action only: one primitive tool, chat, unavailable, or a compatibility bounded plan. ");
+        builder.append("Inspect runtime inventory, nearby dropped items, nearby blocks, hostiles, players, active automation, and prior objective observations before choosing. ");
         builder.append("Decompose the user goal into the next safe primitive, wait for real observations, then continue with the next primitive. ");
+        builder.append("Gather missing materials, craft missing tools or items only through available primitive capabilities, and keep pursuing explicit goals across turns. ");
         builder.append("After retryable failures, use observations and runtime context to choose an alternative primitive or diagnostic step. ");
-        builder.append("Ask the user or return unavailable only when the goal is ambiguous, unsafe, policy-denied, or missing a real adapter. ");
+        builder.append("Ask the user or return unavailable only when the goal is ambiguous, needs authorization, is unsafe, policy-denied, or missing a real adapter. ");
+        builder.append("Treat local unstuck, danger avoidance, pickup recovery, and self-defense summaries as runtime observations; do not micromanage tick-level combat or avoidance. ");
         builder.append("Do not claim completion unless an observation says completed. Do not use hidden Java macros or removed macro tools.\n");
         if (!providerPromptContext.isBlank()) {
             builder.append("Companion conversation context:\n")
