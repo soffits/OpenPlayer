@@ -30,7 +30,8 @@ public final class LocalCharacterRepository {
             "defaultRoleId",
             "conversationPrompt",
             "conversationSettings",
-            "allowWorldActions"
+            "allowWorldActions",
+            "movementPolicy"
     );
 
     private final Path directory;
@@ -305,7 +306,7 @@ public final class LocalCharacterRepository {
         }
         List<String> errors = LocalCharacterDefinition.validate(character.id(), character.displayName(), character.description(),
                 character.skinTexture(), character.localSkinFile(), character.defaultRoleId(), character.conversationPrompt(),
-                character.conversationSettings());
+                character.conversationSettings(), character.movementPolicy());
         if (!errors.isEmpty()) {
             return rejected(fileName, String.join("; ", errors));
         }
@@ -326,6 +327,7 @@ public final class LocalCharacterRepository {
                 writeOptionalProperty(writer, "defaultRoleId", character.defaultRoleId());
                 writeOptionalProperty(writer, "conversationPrompt", character.conversationPrompt());
                 writeOptionalProperty(writer, "conversationSettings", character.conversationSettings());
+                writeOptionalProperty(writer, "movementPolicy", character.movementPolicy());
                 if (character.allowWorldActions()) {
                     writeProperty(writer, "allowWorldActions", "true");
                 }
@@ -495,7 +497,8 @@ public final class LocalCharacterRepository {
                     properties.getProperty("defaultRoleId"),
                     properties.getProperty("conversationPrompt"),
                     properties.getProperty("conversationSettings"),
-                    Boolean.parseBoolean(properties.getProperty("allowWorldActions"))
+                    Boolean.parseBoolean(properties.getProperty("allowWorldActions")),
+                    properties.getProperty("movementPolicy")
             ), List.of());
         } catch (IllegalArgumentException exception) {
             return new LocalCharacterFileResult(null, List.of(
@@ -521,7 +524,8 @@ public final class LocalCharacterRepository {
                 properties.getProperty("localSkinFile"),
                 properties.getProperty("defaultRoleId"),
                 properties.getProperty("conversationPrompt"),
-                properties.getProperty("conversationSettings")
+                properties.getProperty("conversationSettings"),
+                properties.getProperty("movementPolicy")
         )) {
             errors.add(new LocalCharacterValidationError(file, message));
         }

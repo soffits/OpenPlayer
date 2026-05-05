@@ -21,6 +21,9 @@ import dev.soffits.openplayer.automation.capability.RuntimeCapabilityRegistry;
 import dev.soffits.openplayer.automation.navigation.LoadedAreaNavigator;
 import dev.soffits.openplayer.automation.navigation.NavigationRuntime;
 import dev.soffits.openplayer.automation.navigation.NavigationTarget;
+import dev.soffits.openplayer.automation.navigation.NavigationTargetKind;
+import dev.soffits.openplayer.automation.policy.MovementPolicyLoader;
+import dev.soffits.openplayer.automation.policy.MovementProfile;
 import dev.soffits.openplayer.automation.survival.SurvivalCooldownPolicy;
 import dev.soffits.openplayer.automation.survival.SurvivalDangerKind;
 import dev.soffits.openplayer.automation.survival.SurvivalDangerPolicy;
@@ -40,7 +43,9 @@ import dev.soffits.openplayer.runtime.validation.RuntimeIntentValidator;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 import java.util.UUID;
 import net.minecraft.core.Direction;
@@ -81,14 +86,38 @@ import net.minecraft.world.phys.AABB;
 public final class VanillaAutomationBackend implements AutomationBackend {
     public static final String NAME = "vanilla";
     public static final double PLAYER_LIKE_NAVIGATION_SPEED = 1.25D;
-    static final String DROPPED_ITEM_NAVIGATION_REJECTED_REASON = "navigation_item_position_rejected";
+    static final String DROPPED_ITEM_NAVIGATION_REJECTED_REASON = "item_navigation_rejected";
 
     static boolean isLocalWorldOrInventoryAction(IntentKind kind) {
         return RuntimeIntentPolicies.isLocalWorldOrInventoryAction(kind);
     }
 
-    static NavigationTarget droppedItemNavigationTarget(Vec3 position) {
-        return NavigationTarget.position(position.x, position.y, position.z);
+    static NavigationTarget droppedItemNavigationTarget(String itemTypeId) {
+        return NavigationTarget.entity(itemTypeId);
+    }
+
+    static String itemPickupCompletionReason(int inventoryDelta, boolean targetAlive, boolean closeEnough,
+                                             boolean inventoryCanAccept) {
+        if (inventoryDelta > 0) {
+            return "picked_up inventory_delta=" + inventoryDelta;
+        }
+        if (!targetAlive && closeEnough) {
+            return "picked_up item_disappeared_close";
+        }
+        if (!inventoryCanAccept) {
+            return "inventory_full";
+        }
+        if (!targetAlive) {
+            return "item_target_lost";
+        }
+        return "item_not_picked_up";
+    }
+
+    static String blockBreakSummary(String blockId, BlockPos target, String inventoryDelta, String nearbyDropDelta) {
+        return "block=" + blockId
+                + " target=" + target.toShortString()
+                + " inventory_delta=" + inventoryDelta
+                + " nearby_drop_delta=" + nearbyDropDelta;
     }
 
     @Override
@@ -149,6 +178,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         private final NavigationRuntime navigationRuntime = new NavigationRuntime(NAVIGATION_MAX_RECOVERIES);
         private final LoadedAreaNavigator loadedAreaNavigator = new LoadedAreaNavigator();
         private final AICoreEventBus aicoreEventBus = new AICoreEventBus(128);
+        private final MovementProfile movementProfile;
         private QueuedCommand activeCommand;
         private AutomationControllerMonitor activeMonitor;
         private NpcOwnerId ownerId;
@@ -160,6 +190,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 throw new IllegalArgumentException("entity cannot be null");
             }
             this.entity = entity;
+            this.movementProfile = MovementPolicyLoader.effectivePolicy(entity.persistedMovementPolicy().orElse(null));
         }
 
         @Override
@@ -666,6 +697,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             }
             return accepted("LOCATE_LOADED_BLOCK found: target=" + loadedSearchInstruction.resourceId()
                     + " pos=" + result.blockPos().toShortString()
+                    + " recommended_next_action=break_block_at recommended_next_pos=" + result.blockPos().toShortString()
                     + " diagnostics=" + result.diagnostics().summary());
         }
 
@@ -1011,9 +1043,20 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             ItemEntity itemEntity = nearestItem(serverLevel, command);
             if (itemEntity == null) {
                 stopNavigation();
-                completeActiveCommand();
+                if (command.trackedItemTarget()) {
+                    int inventoryDelta = inventoryCount(entity.inventorySnapshot()) - command.startInventoryCount();
+                    String reason = itemPickupCompletionReason(inventoryDelta, false, command.lastTargetClose(entity.position()), true);
+                    if (reason.startsWith("picked_up")) {
+                        completeActiveCommand(reason);
+                    } else {
+                        failActiveCommand(reason);
+                    }
+                    return;
+                }
+                completeActiveCommand("completed no_matching_items");
                 return;
             }
+            command.trackItemTarget(itemEntity, inventoryCount(entity.inventorySnapshot()));
             entity.getLookControl().setLookAt(itemEntity);
             if (entity.distanceToSqr(itemEntity) > COLLECT_REACH_DISTANCE * COLLECT_REACH_DISTANCE) {
                 if (!moveToDroppedItem(itemEntity)) {
@@ -1025,7 +1068,17 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             stopNavigation();
             command.incrementReachTicks();
             if (command.reachTicks() >= COLLECT_REACH_TICKS) {
-                completeActiveCommand();
+                int inventoryDelta = inventoryCount(entity.inventorySnapshot()) - command.startInventoryCount();
+                boolean targetAlive = itemEntity.isAlive() && !itemEntity.getItem().isEmpty();
+                boolean closeEnough = entity.distanceToSqr(itemEntity.position())
+                        <= (COLLECT_REACH_DISTANCE + 0.75D) * (COLLECT_REACH_DISTANCE + 0.75D);
+                boolean inventoryCanAccept = canAcceptItem(entity.inventorySnapshot(), itemEntity.getItem());
+                String reason = itemPickupCompletionReason(inventoryDelta, targetAlive, closeEnough, inventoryCanAccept);
+                if (reason.startsWith("picked_up")) {
+                    completeActiveCommand(reason);
+                } else {
+                    failActiveCommand(reason);
+                }
             }
         }
 
@@ -1057,20 +1110,36 @@ public final class VanillaAutomationBackend implements AutomationBackend {
                 return;
             }
             BlockState blockState = serverLevel.getBlockState(blockPos);
+            String brokenBlockId = blockId(blockState.getBlock());
+            if (movementProfile.blocks().neverBreak().contains(brokenBlockId)) {
+                failActiveCommand("block_policy_never_break=" + brokenBlockId);
+                return;
+            }
             if (blockState.isAir() || blockState.getDestroySpeed(serverLevel, blockPos) < 0.0F) {
                 failActiveCommand("block_not_breakable");
                 return;
             }
             entity.selectBestToolFor(blockState, serverLevel, blockPos);
+            if (blockState.requiresCorrectToolForDrops() && !entity.getMainHandItem().isCorrectToolForDrops(blockState)) {
+                failActiveCommand("missing_required_harvest_tool block=" + brokenBlockId);
+                return;
+            }
             lookAtBlock(blockPos);
             if (!isWithinInteractionDistance(blockPos)) {
                 moveNearBlock(blockPos);
                 return;
             }
             stopNavigation();
+            List<ItemStack> beforeInventory = entity.inventorySnapshot();
+            Map<String, Integer> beforeDrops = nearbyDropCounts(serverLevel, blockPos);
             entity.swingMainHandAction();
             serverLevel.destroyBlock(blockPos, true, entity);
-            completeActiveCommand();
+            completeActiveCommand(blockBreakSummary(
+                    brokenBlockId,
+                    blockPos,
+                    inventoryDeltaSummary(beforeInventory, entity.inventorySnapshot()),
+                    dropDeltaSummary(beforeDrops, nearbyDropCounts(serverLevel, blockPos))
+            ));
         }
 
         private void placeBlock(QueuedCommand command) {
@@ -1771,22 +1840,97 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         }
 
         private boolean moveToDroppedItem(ItemEntity itemEntity) {
-            Vec3 position = itemEntity.position();
             boolean loaded = isBlockLoaded(itemEntity.blockPosition());
-            navigationRuntime.plan(droppedItemNavigationTarget(position), entity.distanceToSqr(position), loaded);
+            navigationRuntime.plan(droppedItemNavigationTarget(itemId(itemEntity.getItem())),
+                    entity.distanceToSqr(itemEntity), loaded);
             if (!loaded) {
                 failActiveCommand("navigation_target_unloaded");
                 return false;
             }
-            boolean accepted = entity.getNavigation().moveTo(
-                    position.x, position.y, position.z, PLAYER_LIKE_NAVIGATION_SPEED
-            );
+            boolean accepted = entity.getNavigation().moveTo(itemEntity, PLAYER_LIKE_NAVIGATION_SPEED);
             if (!accepted) {
                 failActiveCommand(DROPPED_ITEM_NAVIGATION_REJECTED_REASON);
                 return false;
             }
             navigationRuntime.markReachable(true);
             return true;
+        }
+
+        private static int inventoryCount(List<ItemStack> stacks) {
+            int count = 0;
+            for (ItemStack stack : stacks) {
+                if (!stack.isEmpty()) {
+                    count += stack.getCount();
+                }
+            }
+            return count;
+        }
+
+        private static boolean canAcceptItem(List<ItemStack> inventory, ItemStack itemStack) {
+            if (itemStack == null || itemStack.isEmpty()) {
+                return true;
+            }
+            for (ItemStack inventoryStack : inventory) {
+                if (inventoryStack.isEmpty()) {
+                    return true;
+                }
+                if (ItemStack.isSameItemSameTags(inventoryStack, itemStack)
+                        && inventoryStack.getCount() < inventoryStack.getMaxStackSize()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static String inventoryDeltaSummary(List<ItemStack> before, List<ItemStack> after) {
+            return stackDeltaSummary(stackCounts(before), stackCounts(after));
+        }
+
+        private static Map<String, Integer> nearbyDropCounts(ServerLevel serverLevel, BlockPos blockPos) {
+            Map<String, Integer> counts = new LinkedHashMap<>();
+            AABB area = new AABB(blockPos).inflate(2.0D);
+            for (ItemEntity itemEntity : serverLevel.getEntitiesOfClass(ItemEntity.class, area, Entity::isAlive)) {
+                ItemStack stack = itemEntity.getItem();
+                if (!stack.isEmpty()) {
+                    counts.merge(itemId(stack), stack.getCount(), Integer::sum);
+                }
+            }
+            return counts;
+        }
+
+        private static String dropDeltaSummary(Map<String, Integer> before, Map<String, Integer> after) {
+            return stackDeltaSummary(before, after);
+        }
+
+        private static Map<String, Integer> stackCounts(List<ItemStack> stacks) {
+            Map<String, Integer> counts = new LinkedHashMap<>();
+            for (ItemStack stack : stacks) {
+                if (!stack.isEmpty()) {
+                    counts.merge(itemId(stack), stack.getCount(), Integer::sum);
+                }
+            }
+            return counts;
+        }
+
+        private static String stackDeltaSummary(Map<String, Integer> before, Map<String, Integer> after) {
+            StringBuilder builder = new StringBuilder();
+            java.util.LinkedHashSet<String> ids = new java.util.LinkedHashSet<>(before.keySet());
+            ids.addAll(after.keySet());
+            for (String id : ids) {
+                int delta = after.getOrDefault(id, 0) - before.getOrDefault(id, 0);
+                if (delta == 0) {
+                    continue;
+                }
+                if (builder.length() > 0) {
+                    builder.append(',');
+                }
+                builder.append(id).append(delta > 0 ? "+" : "").append(delta);
+            }
+            return builder.length() == 0 ? "none" : builder.toString();
+        }
+
+        private static String itemId(ItemStack stack) {
+            return BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
         }
 
         private boolean moveToEntity(Entity target, NavigationTarget navigationTarget) {
@@ -2125,6 +2269,9 @@ public final class VanillaAutomationBackend implements AutomationBackend {
             private BlockPos startPosition;
             private int reachTicks;
             private boolean patrolReturn;
+            private UUID itemTargetId;
+            private Vec3 lastItemTargetPosition;
+            private int startInventoryCount;
 
             private QueuedCommand(IntentKind kind, Coordinate coordinate, double radius) {
                 this(kind, coordinate, radius, null, null, null, 0, false, 1);
@@ -2257,6 +2404,28 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
             private void resetReachTicks() {
                 reachTicks = 0;
+            }
+
+            private void trackItemTarget(ItemEntity itemEntity, int inventoryCount) {
+                if (itemTargetId == null || !itemTargetId.equals(itemEntity.getUUID())) {
+                    itemTargetId = itemEntity.getUUID();
+                    startInventoryCount = inventoryCount;
+                }
+                lastItemTargetPosition = itemEntity.position();
+            }
+
+            private boolean trackedItemTarget() {
+                return itemTargetId != null;
+            }
+
+            private int startInventoryCount() {
+                return startInventoryCount;
+            }
+
+            private boolean lastTargetClose(Vec3 position) {
+                return lastItemTargetPosition != null
+                        && position.distanceToSqr(lastItemTargetPosition)
+                        <= (COLLECT_REACH_DISTANCE + 0.75D) * (COLLECT_REACH_DISTANCE + 0.75D);
             }
 
             private BlockPos startPosition() {

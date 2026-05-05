@@ -12,8 +12,8 @@ import java.util.Optional;
 import java.util.regex.Pattern;
 
 public record LocalCharacterDefinition(String id, String displayName, String description, String skinTexture,
-                                        String localSkinFile, String defaultRoleId, String conversationPrompt,
-                                        String conversationSettings, boolean allowWorldActions) {
+                                         String localSkinFile, String defaultRoleId, String conversationPrompt,
+                                         String conversationSettings, boolean allowWorldActions, String movementPolicy) {
     private static final int MAX_ID_LENGTH = 64;
     private static final int MAX_DISPLAY_NAME_LENGTH = 32;
     private static final int MAX_DESCRIPTION_LENGTH = 1024;
@@ -31,7 +31,14 @@ public record LocalCharacterDefinition(String id, String displayName, String des
                                     String localSkinFile, String defaultRoleId, String conversationPrompt,
                                     String conversationSettings) {
         this(id, displayName, description, skinTexture, localSkinFile, defaultRoleId, conversationPrompt,
-                conversationSettings, false);
+                conversationSettings, false, null);
+    }
+
+    public LocalCharacterDefinition(String id, String displayName, String description, String skinTexture,
+                                    String localSkinFile, String defaultRoleId, String conversationPrompt,
+                                    String conversationSettings, boolean allowWorldActions) {
+        this(id, displayName, description, skinTexture, localSkinFile, defaultRoleId, conversationPrompt,
+                conversationSettings, allowWorldActions, null);
     }
 
     public LocalCharacterDefinition {
@@ -43,8 +50,9 @@ public record LocalCharacterDefinition(String id, String displayName, String des
         defaultRoleId = normalizeOptional(defaultRoleId);
         conversationPrompt = normalizeOptional(conversationPrompt);
         conversationSettings = normalizeOptional(conversationSettings);
+        movementPolicy = normalizeOptional(movementPolicy);
         List<String> errors = validate(id, displayName, description, skinTexture, localSkinFile, defaultRoleId,
-                conversationPrompt, conversationSettings);
+                conversationPrompt, conversationSettings, movementPolicy);
         if (!errors.isEmpty()) {
             throw new IllegalArgumentException(String.join("; ", errors));
         }
@@ -74,8 +82,12 @@ public record LocalCharacterDefinition(String id, String displayName, String des
         return Optional.ofNullable(conversationSettings);
     }
 
+    public Optional<String> optionalMovementPolicy() {
+        return Optional.ofNullable(movementPolicy);
+    }
+
     public NpcProfileSpec toProfileSpec() {
-        return new NpcProfileSpec(displayName, skinTexture);
+        return new NpcProfileSpec(displayName, skinTexture, movementPolicy);
     }
 
     public AiPlayerNpcSpec toNpcSpec(NpcOwnerId ownerId, NpcSpawnLocation spawnLocation) {
@@ -93,8 +105,15 @@ public record LocalCharacterDefinition(String id, String displayName, String des
     }
 
     public static List<String> validate(String id, String displayName, String description, String skinTexture,
-                                        String localSkinFile, String defaultRoleId, String conversationPrompt,
-                                        String conversationSettings) {
+                                         String localSkinFile, String defaultRoleId, String conversationPrompt,
+                                         String conversationSettings) {
+        return validate(id, displayName, description, skinTexture, localSkinFile, defaultRoleId, conversationPrompt,
+                conversationSettings, null);
+    }
+
+    public static List<String> validate(String id, String displayName, String description, String skinTexture,
+                                         String localSkinFile, String defaultRoleId, String conversationPrompt,
+                                         String conversationSettings, String movementPolicy) {
         List<String> errors = new ArrayList<>();
         validateId(errors, "id", id);
         validateDisplayName(errors, displayName);
@@ -104,6 +123,7 @@ public record LocalCharacterDefinition(String id, String displayName, String des
         validateOptionalId(errors, "defaultRoleId", defaultRoleId);
         validateOptionalText(errors, "conversationPrompt", conversationPrompt, MAX_PROMPT_LENGTH);
         validateOptionalText(errors, "conversationSettings", conversationSettings, MAX_SETTINGS_LENGTH);
+        validateOptionalResourceLocation(errors, "movementPolicy", movementPolicy);
         return List.copyOf(errors);
     }
 

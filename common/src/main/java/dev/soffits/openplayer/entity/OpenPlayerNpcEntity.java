@@ -44,6 +44,7 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
     private static final String ROLE_ID_TAG = "OpenPlayerRoleId";
     private static final String PROFILE_NAME_TAG = "OpenPlayerProfileName";
     private static final String PROFILE_SKIN_TEXTURE_TAG = "OpenPlayerProfileSkinTexture";
+    private static final String MOVEMENT_POLICY_TAG = "OpenPlayerMovementPolicy";
     private static final String ALLOW_WORLD_ACTIONS_TAG = "OpenPlayerAllowWorldActions";
     private static final String STASH_MEMORY_TAG = "OpenPlayerStashMemory";
     private static final String STASH_DIMENSION_TAG = "Dimension";
@@ -88,6 +89,7 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
     private String persistedRoleId;
     private String persistedProfileName;
     private String persistedProfileSkinTexture;
+    private String persistedMovementPolicy;
     private boolean allowWorldActions;
     private int selectedMainHandSlot = DEFAULT_SELECTED_MAIN_HAND_SLOT;
     private StashMemory stashMemory;
@@ -127,7 +129,12 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
     }
 
     public void setPersistedIdentity(NpcOwnerId ownerId, String roleId, String profileName, String profileSkinTexture,
-                                     boolean allowWorldActions) {
+                                      boolean allowWorldActions) {
+        setPersistedIdentity(ownerId, roleId, profileName, profileSkinTexture, allowWorldActions, null);
+    }
+
+    public void setPersistedIdentity(NpcOwnerId ownerId, String roleId, String profileName, String profileSkinTexture,
+                                     boolean allowWorldActions, String movementPolicy) {
         if (ownerId == null) {
             throw new IllegalArgumentException("ownerId cannot be null");
         }
@@ -141,6 +148,7 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
         persistedRoleId = roleId;
         persistedProfileName = profileName;
         persistedProfileSkinTexture = profileSkinTexture == null || profileSkinTexture.isBlank() ? null : profileSkinTexture;
+        persistedMovementPolicy = movementPolicy == null || movementPolicy.isBlank() ? null : movementPolicy;
         this.allowWorldActions = allowWorldActions;
         syncPersistedIdentity();
         setRuntimeOwnerId(ownerId);
@@ -176,6 +184,10 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
             return Optional.of(syncedProfileSkinTexture);
         }
         return Optional.ofNullable(persistedProfileSkinTexture);
+    }
+
+    public Optional<String> persistedMovementPolicy() {
+        return Optional.ofNullable(persistedMovementPolicy);
     }
 
     public boolean hasValidPersistedIdentity() {
@@ -578,6 +590,9 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
             if (persistedProfileSkinTexture != null) {
                 compoundTag.putString(PROFILE_SKIN_TEXTURE_TAG, persistedProfileSkinTexture);
             }
+            if (persistedMovementPolicy != null) {
+                compoundTag.putString(MOVEMENT_POLICY_TAG, persistedMovementPolicy);
+            }
             compoundTag.putBoolean(ALLOW_WORLD_ACTIONS_TAG, allowWorldActions);
         }
         if (stashMemory != null) {
@@ -622,6 +637,12 @@ public final class OpenPlayerNpcEntity extends PathfinderMob {
                 : null;
         if (persistedProfileSkinTexture != null && persistedProfileSkinTexture.isBlank()) {
             persistedProfileSkinTexture = null;
+        }
+        persistedMovementPolicy = compoundTag.contains(MOVEMENT_POLICY_TAG, Tag.TAG_STRING)
+                ? compoundTag.getString(MOVEMENT_POLICY_TAG)
+                : null;
+        if (persistedMovementPolicy != null && persistedMovementPolicy.isBlank()) {
+            persistedMovementPolicy = null;
         }
         allowWorldActions = compoundTag.contains(ALLOW_WORLD_ACTIONS_TAG, Tag.TAG_BYTE)
                 && compoundTag.getBoolean(ALLOW_WORLD_ACTIONS_TAG);

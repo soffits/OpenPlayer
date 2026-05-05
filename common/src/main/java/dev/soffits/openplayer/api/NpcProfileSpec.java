@@ -2,9 +2,13 @@ package dev.soffits.openplayer.api;
 
 import java.util.Optional;
 
-public record NpcProfileSpec(String name, String skinTexture) {
+public record NpcProfileSpec(String name, String skinTexture, String movementPolicy) {
     public NpcProfileSpec(String name) {
-        this(name, null);
+        this(name, null, null);
+    }
+
+    public NpcProfileSpec(String name, String skinTexture) {
+        this(name, skinTexture, null);
     }
 
     public NpcProfileSpec {
@@ -17,9 +21,16 @@ public record NpcProfileSpec(String name, String skinTexture) {
         if (skinTexture != null && skinTexture.isBlank()) {
             skinTexture = null;
         }
+        if (movementPolicy != null && movementPolicy.isBlank()) {
+            movementPolicy = null;
+        }
     }
 
     public Optional<String> optionalSkinTexture() {
         return Optional.ofNullable(skinTexture);
+    }
+
+    public Optional<String> optionalMovementPolicy() {
+        return Optional.ofNullable(movementPolicy);
     }
 }

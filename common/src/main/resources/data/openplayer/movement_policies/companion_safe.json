@@ -1,0 +1,46 @@
+{
+  "id": "openplayer:companion_safe",
+  "movement": {
+    "canBreakObstacles": true,
+    "canPlaceScaffold": false,
+    "maxFallDistance": 3,
+    "avoidLiquids": true,
+    "avoidHostiles": true
+  },
+  "blocks": {
+    "neverBreak": [
+      "minecraft:chest",
+      "minecraft:furnace",
+      "minecraft:crafting_table",
+      "minecraft:bed"
+    ],
+    "avoid": [
+      "minecraft:lava",
+      "minecraft:fire",
+      "minecraft:cactus",
+      "minecraft:magma_block"
+    ],
+    "lowRiskBreakable": [
+      "minecraft:snow",
+      "minecraft:short_grass",
+      "minecraft:tall_grass",
+      "#minecraft:leaves"
+    ]
+  },
+  "entities": {
+    "avoid": [
+      "minecraft:creeper",
+      "minecraft:skeleton"
+    ],
+    "defendAgainst": [
+      "minecraft:zombie",
+      "minecraft:spider",
+      "minecraft:skeleton"
+    ],
+    "neverAttack": [
+      "minecraft:villager",
+      "minecraft:iron_golem",
+      "minecraft:player"
+    ]
+  }
+}

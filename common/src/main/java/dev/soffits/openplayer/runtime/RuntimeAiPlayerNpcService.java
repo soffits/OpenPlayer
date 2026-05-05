@@ -741,7 +741,8 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService, Inte
                 new NpcOwnerId(entity.persistedOwnerId().orElseThrow()),
                 new dev.soffits.openplayer.api.NpcProfileSpec(
                         entity.persistedProfileName().orElseThrow(),
-                        entity.persistedProfileSkinTexture().orElse(null)
+                        entity.persistedProfileSkinTexture().orElse(null),
+                        entity.persistedMovementPolicy().orElse(null)
                 ),
                 new NpcSpawnLocation(
                         level.dimension().location().toString(),
@@ -799,7 +800,8 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService, Inte
                 spec.roleId().value(),
                 spec.profile().name(),
                 spec.profile().skinTexture(),
-                spec.allowWorldActions()
+                spec.allowWorldActions(),
+                spec.profile().movementPolicy()
         );
         entity.setCustomName(net.minecraft.network.chat.Component.literal(spec.profile().name()));
         entity.setCustomNameVisible(true);
