@@ -14,6 +14,7 @@ public final class NpcChunkTicketModelTest {
         replacesMovedChunkTicket();
         replacesDimensionTicket();
         releasesActiveTicket();
+        releaseClearsStaleTicketState();
     }
 
     private static void addsInitialTicket() {
@@ -72,6 +73,19 @@ public final class NpcChunkTicketModelTest {
         require(change.addTicket() == null, "release must not add a ticket");
         require(key.equals(change.removeTicket()), "release must remove the active ticket");
         require(!model.release().hasChange(), "second release must be idempotent");
+    }
+
+    private static void releaseClearsStaleTicketState() {
+        NpcChunkTicketModel model = new NpcChunkTicketModel();
+        TicketKey first = new TicketKey("minecraft:overworld", 1, 2);
+        TicketKey second = new TicketKey("minecraft:overworld", 3, 4);
+        model.update(first, 10L, 20);
+        model.release();
+
+        require(model.activeTicket() == null, "release must clear active ticket state");
+        TicketChange change = model.update(second, 11L, 20);
+        require(second.equals(change.addTicket()), "new work after release must add only the new center ticket");
+        require(change.removeTicket() == null, "new work after release must not remove stale tickets twice");
     }
 
     private static void require(boolean condition, String message) {

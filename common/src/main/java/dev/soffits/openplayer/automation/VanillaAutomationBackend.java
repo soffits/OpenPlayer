@@ -92,8 +92,12 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         return RuntimeIntentPolicies.isLocalWorldOrInventoryAction(kind);
     }
 
-    static NavigationTarget droppedItemNavigationTarget(String itemTypeId) {
-        return NavigationTarget.entity(itemTypeId);
+    static NavigationTarget droppedItemNavigationTarget(String itemTypeId, BlockPos standPosition) {
+        return NavigationTarget.position(
+                standPosition.getX() + 0.5D,
+                standPosition.getY(),
+                standPosition.getZ() + 0.5D
+        );
     }
 
     static String itemPickupCompletionReason(int inventoryDelta, boolean targetAlive, boolean closeEnough,
@@ -1841,19 +1845,68 @@ public final class VanillaAutomationBackend implements AutomationBackend {
 
         private boolean moveToDroppedItem(ItemEntity itemEntity) {
             boolean loaded = isBlockLoaded(itemEntity.blockPosition());
-            navigationRuntime.plan(droppedItemNavigationTarget(itemId(itemEntity.getItem())),
-                    entity.distanceToSqr(itemEntity), loaded);
             if (!loaded) {
+                navigationRuntime.plan(NavigationTarget.position(
+                        itemEntity.getX(), itemEntity.getY(), itemEntity.getZ()
+                ), entity.distanceToSqr(itemEntity), false);
                 failActiveCommand("navigation_target_unloaded");
                 return false;
             }
-            boolean accepted = entity.getNavigation().moveTo(itemEntity, PLAYER_LIKE_NAVIGATION_SPEED);
+            BlockPos standPosition = reachableDroppedItemStandPosition(itemEntity);
+            if (standPosition == null) {
+                navigationRuntime.plan(NavigationTarget.position(
+                        itemEntity.getX(), itemEntity.getY(), itemEntity.getZ()
+                ), entity.distanceToSqr(itemEntity), true);
+                failActiveCommand("item_no_reachable_pickup_position");
+                return false;
+            }
+            navigationRuntime.plan(droppedItemNavigationTarget(itemId(itemEntity.getItem()), standPosition),
+                    distanceTo(standPosition), true);
+            boolean accepted = entity.getNavigation().moveTo(
+                    standPosition.getX() + 0.5D,
+                    standPosition.getY(),
+                    standPosition.getZ() + 0.5D,
+                    PLAYER_LIKE_NAVIGATION_SPEED
+            );
             if (!accepted) {
                 failActiveCommand(DROPPED_ITEM_NAVIGATION_REJECTED_REASON);
                 return false;
             }
             navigationRuntime.markReachable(true);
             return true;
+        }
+
+        private BlockPos reachableDroppedItemStandPosition(ItemEntity itemEntity) {
+            BlockPos origin = itemEntity.blockPosition();
+            BlockPos current = entity.blockPosition();
+            BlockPos best = null;
+            double bestDistance = Double.MAX_VALUE;
+            for (BlockPos candidate : droppedItemStandCandidates(origin)) {
+                if (!isSafeAdjacentTarget(serverLevel(), candidate)) {
+                    continue;
+                }
+                double pickupDistance = Vec3.atCenterOf(candidate).distanceToSqr(itemEntity.position());
+                if (pickupDistance > (COLLECT_REACH_DISTANCE + 0.75D) * (COLLECT_REACH_DISTANCE + 0.75D)) {
+                    continue;
+                }
+                double candidateDistance = candidate.distSqr(current);
+                if (candidateDistance < bestDistance) {
+                    bestDistance = candidateDistance;
+                    best = candidate.immutable();
+                }
+            }
+            return best;
+        }
+
+        private static List<BlockPos> droppedItemStandCandidates(BlockPos origin) {
+            List<BlockPos> candidates = new ArrayList<>();
+            candidates.add(origin);
+            for (Direction direction : Direction.Plane.HORIZONTAL) {
+                candidates.add(origin.relative(direction));
+            }
+            candidates.add(origin.below());
+            candidates.add(origin.above());
+            return candidates;
         }
 
         private static int inventoryCount(List<ItemStack> stacks) {

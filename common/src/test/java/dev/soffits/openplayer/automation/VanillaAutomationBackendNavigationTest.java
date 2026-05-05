@@ -8,18 +8,20 @@ public final class VanillaAutomationBackendNavigationTest {
     }
 
     public static void main(String[] args) {
-        droppedItemCollectionUsesEntityNavigationTarget();
+        droppedItemCollectionUsesStandPositionNavigationTarget();
         droppedItemCollectionUsesPrimitiveRejectionReason();
         itemPickupCompletionRequiresInventoryDeltaOrCloseDisappearance();
         blockBreakSummaryIncludesPostActionFacts();
     }
 
-    private static void droppedItemCollectionUsesEntityNavigationTarget() {
-        NavigationTarget target = VanillaAutomationBackend.droppedItemNavigationTarget("minecraft:cobblestone");
+    private static void droppedItemCollectionUsesStandPositionNavigationTarget() {
+        NavigationTarget target = VanillaAutomationBackend.droppedItemNavigationTarget(
+                "minecraft:cobblestone", new net.minecraft.core.BlockPos(1, 64, -2)
+        );
 
-        require(target.kind() == NavigationTargetKind.ENTITY, "dropped item collection must navigate to item entity");
-        require(target.summary().equals("entity(minecraft:cobblestone)"), "dropped item navigation summary must expose item entity target");
-        require(!target.summary().startsWith("pos("), "dropped item collection must not use precise item position target");
+        require(target.kind() == NavigationTargetKind.POSITION, "dropped item collection must navigate to a pickup stand position");
+        require(target.summary().equals("pos(1.5,64.0,-1.5)"), "dropped item navigation summary must expose stand position target");
+        require(!target.summary().startsWith("entity("), "dropped item collection must not navigate to the item entity");
     }
 
     private static void droppedItemCollectionUsesPrimitiveRejectionReason() {

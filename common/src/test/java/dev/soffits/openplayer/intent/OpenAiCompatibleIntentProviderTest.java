@@ -14,6 +14,7 @@ public final class OpenAiCompatibleIntentProviderTest {
         systemPromptConstrainConversationReplies();
         systemPromptContainsPrimitiveToolNamesOnly();
         systemPromptIncludesPrimitiveSyntax();
+        systemPromptCoordinatesLoadedReconnaissanceToNextAction();
         systemPromptIncludesPlannedUnsupportedInstruction();
         systemPromptRejectsMacroSurface();
         parsesStructuredToolProviderResponse();
@@ -108,6 +109,16 @@ public final class OpenAiCompatibleIntentProviderTest {
                 "system prompt must include deterministic unavailable feature instruction");
         require(prompt.contains("use UNAVAILABLE when a required reviewed primitive or capability adapter is absent"),
                 "system prompt must tell providers not to overclaim missing adapters");
+    }
+
+    private static void systemPromptCoordinatesLoadedReconnaissanceToNextAction() {
+        String prompt = OpenAiCompatibleIntentProvider.systemPrompt();
+        require(prompt.contains("recommended_next_pos"),
+                "system prompt must mention recommended loaded reconnaissance positions");
+        require(prompt.contains("use that exact returned coordinate for the matching next primitive"),
+                "system prompt must direct located coordinates into matching next actions");
+        require(prompt.contains("do not substitute unrelated actionableTargets coordinates or invented positions"),
+                "system prompt must reject unrelated actionableTargets substitutions");
     }
 
     private static void systemPromptIncludesPrimitiveSyntax() {
