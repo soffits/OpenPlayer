@@ -1,7 +1,15 @@
 package dev.soffits.openplayer.automation.capability;
 
+import dev.soffits.openplayer.aicore.ToolName;
+import dev.soffits.openplayer.aicore.ToolParameter;
+import dev.soffits.openplayer.aicore.ToolSchema;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 public final class RuntimeCapabilityRegistry {
     public static final int MAX_REPORT_LINES = 8;
@@ -32,12 +40,21 @@ public final class RuntimeCapabilityRegistry {
             missing("boss_fight_specialized_tactics", "needs reviewed arena tactics, hazard handling, and recovery semantics"),
             missing("modded_machine_adapters", "needs first-party or documented mod-specific adapters before mutation")
     );
+    private static final ValidatedRegistry BUILTIN_REGISTRY = builtinRegistry();
 
     private RuntimeCapabilityRegistry() {
     }
 
     public static List<RuntimeCapability> capabilities() {
         return CAPABILITIES;
+    }
+
+    public static ValidatedRegistry builtinValidatedRegistry() {
+        return BUILTIN_REGISTRY;
+    }
+
+    public static List<String> providerToolDocs() {
+        return BUILTIN_REGISTRY.providerToolDocs();
     }
 
     public static List<String> reportLines() {
@@ -103,6 +120,59 @@ public final class RuntimeCapabilityRegistry {
         return new RuntimeCapability(id, RuntimeCapabilityStatus.MISSING_ADAPTER, reason);
     }
 
+    private static ValidatedRegistry builtinRegistry() {
+        ValidatedRegistry registry = new ValidatedRegistry();
+        registry.register(new CapabilityAction(
+                "find_loaded_blocks",
+                RuntimeCapabilityStatus.IMPLEMENTED,
+                new ToolSchema(new ToolName("find_loaded_blocks"),
+                        "Search already-loaded nearby blocks and return validated coordinates for later primitives.",
+                        List.of(new ToolParameter("block_id", "resource_location", true, "Target block id."),
+                                new ToolParameter("max_distance", "integer", false, "Bounded loaded search distance.")),
+                        false),
+                "loaded world query only"));
+        registry.register(new CapabilityAction(
+                "break_block",
+                RuntimeCapabilityStatus.IMPLEMENTED,
+                new ToolSchema(new ToolName("break_block"),
+                        "Break one validated loaded block through reviewed survival primitive semantics.",
+                        List.of(new ToolParameter("x", "integer", true, "Target block x coordinate."),
+                                new ToolParameter("y", "integer", true, "Target block y coordinate."),
+                                new ToolParameter("z", "integer", true, "Target block z coordinate."),
+                                new ToolParameter("expected_block", "resource_location", true, "Block id that must match before mutation.")),
+                        true),
+                "validated loaded block primitive"));
+        registry.register(new CapabilityAction(
+                "place_block",
+                RuntimeCapabilityStatus.IMPLEMENTED,
+                new ToolSchema(new ToolName("place_block"),
+                        "Place one inventory-backed block at a validated loaded coordinate; no direct setBlock success.",
+                        List.of(new ToolParameter("x", "integer", true, "Target block x coordinate."),
+                                new ToolParameter("y", "integer", true, "Target block y coordinate."),
+                                new ToolParameter("z", "integer", true, "Target block z coordinate."),
+                                new ToolParameter("block_id", "resource_location", true, "Inventory block id to place.")),
+                        true),
+                "validated loaded placement primitive"));
+        registry.register(new CapabilityAction(
+                "team_claim_work",
+                RuntimeCapabilityStatus.IMPLEMENTED,
+                new ToolSchema(new ToolName("team_claim_work"),
+                        "Claim one structured team work key atomically before acting on it.",
+                        List.of(new ToolParameter("work_key", "string", true, "Validated local work key."),
+                                new ToolParameter("owner_id", "string", true, "NPC runtime owner id.")),
+                        false),
+                "local blackboard claim only"));
+        registry.register(new CapabilityAction(
+                "build_diff_status",
+                RuntimeCapabilityStatus.DIAGNOSTIC_ONLY,
+                new ToolSchema(new ToolName("build_diff_status"),
+                        "Report blueprint mismatch entries, progress, score, and claim history without faking block edits.",
+                        List.of(new ToolParameter("project_id", "string", true, "Validated build project id.")),
+                        false),
+                "foundation status until real build adapter is wired"));
+        return registry.freeze();
+    }
+
     private static String compact(String value) {
         return value.trim().replace(' ', '_').replace(';', ',').replace('/', '_');
     }
@@ -132,5 +202,118 @@ public final class RuntimeCapabilityRegistry {
         IMPLEMENTED,
         DIAGNOSTIC_ONLY,
         MISSING_ADAPTER
+    }
+
+    public record CapabilityAction(String id, RuntimeCapabilityStatus status, ToolSchema schema, String executionContract) {
+        public CapabilityAction {
+            if (id == null || id.isBlank()) {
+                throw new IllegalArgumentException("capability action id cannot be blank");
+            }
+            if (status == null) {
+                throw new IllegalArgumentException("capability action status cannot be null");
+            }
+            if (schema == null) {
+                throw new IllegalArgumentException("capability action schema cannot be null");
+            }
+            if (!id.equals(schema.name().value())) {
+                throw new IllegalArgumentException("capability action id must match schema name");
+            }
+            if (executionContract == null || executionContract.isBlank()) {
+                throw new IllegalArgumentException("capability action execution contract cannot be blank");
+            }
+        }
+    }
+
+    public record CapabilityValidationResult(boolean accepted, String reason, Optional<CapabilityAction> action) {
+        public CapabilityValidationResult {
+            if (reason == null || reason.isBlank()) {
+                throw new IllegalArgumentException("capability validation reason cannot be blank");
+            }
+            if (action == null) {
+                throw new IllegalArgumentException("capability validation action cannot be null");
+            }
+        }
+    }
+
+    public static final class ValidatedRegistry {
+        private final LinkedHashMap<String, CapabilityAction> actions;
+        private boolean frozen;
+
+        public ValidatedRegistry() {
+            this.actions = new LinkedHashMap<>();
+        }
+
+        private ValidatedRegistry(LinkedHashMap<String, CapabilityAction> actions, boolean frozen) {
+            this.actions = actions;
+            this.frozen = frozen;
+        }
+
+        public void register(CapabilityAction action) {
+            if (frozen) {
+                throw new IllegalStateException("capability registry is frozen");
+            }
+            if (actions.putIfAbsent(action.id(), action) != null) {
+                throw new IllegalArgumentException("duplicate capability action: " + action.id());
+            }
+        }
+
+        public ValidatedRegistry freeze() {
+            return new ValidatedRegistry(new LinkedHashMap<>(actions), true);
+        }
+
+        public Collection<CapabilityAction> actions() {
+            return Collections.unmodifiableCollection(actions.values());
+        }
+
+        public Optional<CapabilityAction> action(String id) {
+            return Optional.ofNullable(actions.get(id));
+        }
+
+        public CapabilityValidationResult validateProviderCall(String actionId, Map<String, String> arguments) {
+            if (actionId == null || actionId.isBlank()) {
+                return rejected("action id missing");
+            }
+            CapabilityAction action = actions.get(actionId);
+            if (action == null) {
+                return rejected("unregistered action id rejected");
+            }
+            if (action.status() != RuntimeCapabilityStatus.IMPLEMENTED) {
+                return new CapabilityValidationResult(false, "capability is not executable: " + action.status(), Optional.of(action));
+            }
+            Map<String, String> safeArguments = arguments == null ? Map.of() : arguments;
+            for (ToolParameter parameter : action.schema().parameters()) {
+                if (parameter.required() && !safeArguments.containsKey(parameter.name())) {
+                    return new CapabilityValidationResult(false, "missing required argument: " + parameter.name(), Optional.of(action));
+                }
+            }
+            return new CapabilityValidationResult(true, "validated by capability registry schema", Optional.of(action));
+        }
+
+        public List<String> providerToolDocs() {
+            ArrayList<String> lines = new ArrayList<>();
+            for (CapabilityAction action : actions.values()) {
+                if (action.status() == RuntimeCapabilityStatus.MISSING_ADAPTER) {
+                    continue;
+                }
+                lines.add(action.id() + " status=" + action.status() + " mutates_world="
+                        + action.schema().mutatesWorld() + " contract=" + action.executionContract()
+                        + " params=" + requiredParameters(action.schema()));
+            }
+            return List.copyOf(lines);
+        }
+
+        private CapabilityValidationResult rejected(String reason) {
+            return new CapabilityValidationResult(false, reason, Optional.empty());
+        }
+
+        private String requiredParameters(ToolSchema schema) {
+            ArrayList<String> names = new ArrayList<>();
+            for (ToolParameter parameter : schema.parameters()) {
+                if (parameter.required()) {
+                    names.add(parameter.name());
+                }
+            }
+            return String.join(",", names);
+        }
     }
 }
