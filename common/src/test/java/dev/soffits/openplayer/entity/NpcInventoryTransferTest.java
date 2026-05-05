@@ -146,7 +146,7 @@ public final class NpcInventoryTransferTest {
     private static void exactDepositPreservesStackData() {
         NonNullList<ItemStack> npc = emptyInventory();
         NonNullList<ItemStack> container = NonNullList.withSize(9, ItemStack.EMPTY);
-        ItemStack taggedBread = taggedStack(Items.BREAD, 3, "phase7a-source");
+        ItemStack taggedBread = taggedStack(Items.BREAD, 3, "deposit-source");
         npc.set(0, taggedBread.copy());
 
         require(NpcInventoryTransfer.depositExactItem(npc, container, Items.BREAD, 2),
@@ -162,7 +162,7 @@ public final class NpcInventoryTransferTest {
     private static void exactDepositRejectsIncompatibleTaggedMergeAtomically() {
         NonNullList<ItemStack> npc = emptyInventory();
         NonNullList<ItemStack> container = NonNullList.withSize(1, new ItemStack(Items.BREAD, 63));
-        npc.set(0, taggedStack(Items.BREAD, 2, "phase7a-incompatible"));
+        npc.set(0, taggedStack(Items.BREAD, 2, "deposit-incompatible"));
         List<ItemStack> npcSnapshot = NpcInventoryTransfer.copyStacks(npc);
         List<ItemStack> containerSnapshot = NpcInventoryTransfer.copyStacks(container);
 
@@ -203,7 +203,7 @@ public final class NpcInventoryTransferTest {
     private static void exactWithdrawPreservesStackData() {
         NonNullList<ItemStack> npc = emptyInventory();
         NonNullList<ItemStack> container = NonNullList.withSize(9, ItemStack.EMPTY);
-        ItemStack taggedBread = taggedStack(Items.BREAD, 4, "phase7a-container");
+        ItemStack taggedBread = taggedStack(Items.BREAD, 4, "withdraw-container");
         container.set(0, taggedBread.copy());
 
         require(NpcInventoryTransfer.withdrawExactItem(npc, container, Items.BREAD, 3),

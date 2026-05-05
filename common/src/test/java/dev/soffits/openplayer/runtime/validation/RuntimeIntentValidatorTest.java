@@ -20,8 +20,8 @@ public final class RuntimeIntentValidatorTest {
         rejectsNullIntent();
         validatesWorldActionGate();
         validatesBlankOnlyInstructions();
-        validatesPhaseThirteenControlAndExpressionInstructions();
-        validatesPhaseFiveInventoryInstructions();
+        validatesControlAndExpressionInstructions();
+        validatesInventoryInstructions();
         validatesContainerTransferInstructions();
         validatesCollectItemsInstructions();
         validatesCraftInstructions();
@@ -30,8 +30,8 @@ public final class RuntimeIntentValidatorTest {
         validatesRadiusInstructions();
         rejectsNonAutomationConversationKinds();
         validatesBoundedProviderPlans();
-        validatesPhaseFourteenInteractionInstructions();
-        validatesPhaseFourteenTargetAttackInstructions();
+        validatesInteractionInstructions();
+        validatesTargetAttackInstructions();
         validatesAdvancedLoadedReconnaissanceInstructions();
         removedMacroKindsAreNotRuntimeIntents();
         policyClassifiesEveryIntentKind();
@@ -77,7 +77,7 @@ public final class RuntimeIntentValidatorTest {
         }
     }
 
-    private static void validatesPhaseThirteenControlAndExpressionInstructions() {
+    private static void validatesControlAndExpressionInstructions() {
         require(RuntimeIntentValidator.validate(intent(IntentKind.BODY_LANGUAGE, ""), true).isAccepted(),
                 "BODY_LANGUAGE should accept blank idle instruction");
         require(RuntimeIntentValidator.validate(intent(IntentKind.BODY_LANGUAGE, "wave"), true).isAccepted(),
@@ -94,7 +94,7 @@ public final class RuntimeIntentValidatorTest {
                 "BODY_LANGUAGE must not be gated as a world or inventory action");
     }
 
-    private static void validatesPhaseFiveInventoryInstructions() {
+    private static void validatesInventoryInstructions() {
         require(RuntimeIntentValidator.validate(intent(IntentKind.INVENTORY_QUERY, ""), true).isAccepted(),
                 "INVENTORY_QUERY should accept blank instruction");
         requireRejected(RuntimeIntentValidator.validate(intent(IntentKind.INVENTORY_QUERY, "minecraft:bread"), true),
@@ -311,7 +311,7 @@ public final class RuntimeIntentValidatorTest {
         }
     }
 
-    private static void validatesPhaseFourteenInteractionInstructions() {
+    private static void validatesInteractionInstructions() {
         require(RuntimeIntentValidator.validate(intent(IntentKind.INTERACT, "block 1 64 -2"), true).isAccepted(),
                 "INTERACT should accept safe block coordinate syntax");
         require(RuntimeIntentValidator.validate(intent(IntentKind.INTERACT, "entity minecraft:sheep 4"), true).isAccepted(),
@@ -327,7 +327,7 @@ public final class RuntimeIntentValidatorTest {
                 "World actions are disabled for this OpenPlayer character");
     }
 
-    private static void validatesPhaseFourteenTargetAttackInstructions() {
+    private static void validatesTargetAttackInstructions() {
         require(RuntimeIntentValidator.validate(intent(IntentKind.ATTACK_TARGET, "minecraft:zombie"), true).isAccepted(),
                 "ATTACK_TARGET should accept exact entity type syntax");
         require(RuntimeIntentValidator.validate(intent(IntentKind.ATTACK_TARGET, "entity minecraft:zombie 12"), true).isAccepted(),

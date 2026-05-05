@@ -7,8 +7,8 @@ public final class BuildObjectiveValidator {
     private BuildObjectiveValidator() {
     }
 
-    public static ObjectiveProgress placeholder() {
-        return new ObjectiveProgress(false, false, Map.of(), List.of("build objective diff adapter is not implemented"),
+    public static ObjectiveProgress unsupported() {
+        return new ObjectiveProgress(false, false, Map.of(), List.of("build objective diff adapter is unavailable"),
                 "report missing build adapter");
     }
 }

@@ -1,4 +1,4 @@
-package dev.soffits.openplayer.runtime.phase4;
+package dev.soffits.openplayer.runtime.coordination;
 
 import dev.soffits.openplayer.OpenPlayerConstants;
 import java.util.ArrayDeque;
@@ -13,8 +13,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-public final class PhaseFourRuntimeFoundations {
-    private PhaseFourRuntimeFoundations() {
+public final class CoordinationRuntimeFoundations {
+    private CoordinationRuntimeFoundations() {
     }
 
     public static final class WorkClaimRegistry {
@@ -133,7 +133,7 @@ public final class PhaseFourRuntimeFoundations {
             BuildDiffResult diff = BuildDiffResult.diff(expected, actual, claimRegistry.claims());
             List<BuildSection> sections = splitSections(projectId, diff.entries());
             return new BuildProjectStatus(projectId, sections, diff, false,
-                    "foundation_only: real placement adapter is not wired; use validated vanilla primitives for each work item");
+                    "unsupported_build_adapter: real placement adapter is not wired; use validated vanilla primitives for each work item");
         }
 
         public Optional<BuildSection> claimNextSection(String ownerId, BuildProjectStatus status, long tick) {

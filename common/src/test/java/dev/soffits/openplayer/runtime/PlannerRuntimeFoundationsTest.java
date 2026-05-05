@@ -27,8 +27,8 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.resources.ResourceLocation;
 
-public final class PhaseTwoRuntimeFoundationTest {
-    private PhaseTwoRuntimeFoundationTest() {
+public final class PlannerRuntimeFoundationsTest {
+    private PlannerRuntimeFoundationsTest() {
     }
 
     public static void main(String[] args) {
@@ -125,7 +125,8 @@ public final class PhaseTwoRuntimeFoundationTest {
         require(!block.completed(), "block objective must not complete on mismatch");
         require(block.blockerReasons().get(0).contains("actual=minecraft:crafting_table"),
                 "block objective must report actual observed block");
-        require(!BuildObjectiveValidator.placeholder().supported(), "future build validator must be truthful placeholder");
+        require(!BuildObjectiveValidator.unsupported().supported(),
+                "missing build validator adapter must be reported truthfully");
     }
 
     private static void effectiveProfileStatusDoesNotExposeSecretsOrRawProviderTrace() {

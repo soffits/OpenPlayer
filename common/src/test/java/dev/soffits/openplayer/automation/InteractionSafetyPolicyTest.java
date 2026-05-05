@@ -1,7 +1,7 @@
 package dev.soffits.openplayer.automation;
 
-public final class PhaseFourteenSafetyPolicyTest {
-    private PhaseFourteenSafetyPolicyTest() {
+public final class InteractionSafetyPolicyTest {
+    private InteractionSafetyPolicyTest() {
     }
 
     public static void main(String[] args) {
@@ -10,32 +10,32 @@ public final class PhaseFourteenSafetyPolicyTest {
     }
 
     private static void acceptsOnlyExplicitSafeVanillaInteractionIds() {
-        require(PhaseFourteenSafetyPolicy.isSafeEmptyHandInteractBlockId("minecraft:lever"),
+        require(InteractionSafetyPolicy.isSafeEmptyHandInteractBlockId("minecraft:lever"),
                 "vanilla lever should be safe for empty-hand interaction");
-        require(PhaseFourteenSafetyPolicy.isSafeEmptyHandInteractBlockId("minecraft:oak_trapdoor"),
+        require(InteractionSafetyPolicy.isSafeEmptyHandInteractBlockId("minecraft:oak_trapdoor"),
                 "wooden trapdoor should be safe for empty-hand interaction");
-        require(PhaseFourteenSafetyPolicy.isSafeEmptyHandInteractBlockId("minecraft:spruce_fence_gate"),
+        require(InteractionSafetyPolicy.isSafeEmptyHandInteractBlockId("minecraft:spruce_fence_gate"),
                 "wooden fence gate should be safe for empty-hand interaction");
-        require(!PhaseFourteenSafetyPolicy.isSafeEmptyHandInteractBlockId("minecraft:iron_trapdoor"),
+        require(!InteractionSafetyPolicy.isSafeEmptyHandInteractBlockId("minecraft:iron_trapdoor"),
                 "iron trapdoor must not bypass vanilla powered-only semantics");
-        require(!PhaseFourteenSafetyPolicy.isSafeEmptyHandInteractBlockId("minecraft:oak_door"),
-                "doors are out of scope for Phase 14 interaction");
-        require(!PhaseFourteenSafetyPolicy.isSafeEmptyHandInteractBlockId("example:oak_trapdoor"),
+        require(!InteractionSafetyPolicy.isSafeEmptyHandInteractBlockId("minecraft:oak_door"),
+                "doors remain unsupported until reviewed interaction semantics exist");
+        require(!InteractionSafetyPolicy.isSafeEmptyHandInteractBlockId("example:oak_trapdoor"),
                 "modded/custom block ids must not be accepted by family name");
     }
 
     private static void acceptsOnlyExplicitHostileAttackEntityIds() {
-        require(PhaseFourteenSafetyPolicy.isSafeExplicitAttackEntityTypeId("minecraft:zombie"),
+        require(InteractionSafetyPolicy.isSafeExplicitAttackEntityTypeId("minecraft:zombie"),
                 "zombie should be safe for explicit hostile attack selection");
-        require(PhaseFourteenSafetyPolicy.isSafeExplicitAttackEntityTypeId("minecraft:skeleton"),
+        require(InteractionSafetyPolicy.isSafeExplicitAttackEntityTypeId("minecraft:skeleton"),
                 "skeleton should be safe for explicit hostile attack selection");
-        require(!PhaseFourteenSafetyPolicy.isSafeExplicitAttackEntityTypeId("minecraft:enderman"),
+        require(!InteractionSafetyPolicy.isSafeExplicitAttackEntityTypeId("minecraft:enderman"),
                 "enderman is neutral and must not be an explicit attack target");
-        require(!PhaseFourteenSafetyPolicy.isSafeExplicitAttackEntityTypeId("minecraft:zombified_piglin"),
+        require(!InteractionSafetyPolicy.isSafeExplicitAttackEntityTypeId("minecraft:zombified_piglin"),
                 "zombified piglin is neutral and must not be an explicit attack target");
-        require(!PhaseFourteenSafetyPolicy.isSafeExplicitAttackEntityTypeId("minecraft:villager"),
+        require(!InteractionSafetyPolicy.isSafeExplicitAttackEntityTypeId("minecraft:villager"),
                 "friendly entities must not be explicit attack targets");
-        require(!PhaseFourteenSafetyPolicy.isSafeExplicitAttackEntityTypeId("example:zombie"),
+        require(!InteractionSafetyPolicy.isSafeExplicitAttackEntityTypeId("example:zombie"),
                 "modded/custom hostile-looking ids must not be accepted by suffix");
     }
 

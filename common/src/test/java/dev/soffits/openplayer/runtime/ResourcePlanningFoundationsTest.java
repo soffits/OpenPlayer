@@ -15,8 +15,8 @@ import dev.soffits.openplayer.runtime.resource.ResourceRecipe;
 import java.util.Map;
 import java.util.Set;
 
-public final class PhaseThreeResourcePlanningTest {
-    private PhaseThreeResourcePlanningTest() {
+public final class ResourcePlanningFoundationsTest {
+    private ResourcePlanningFoundationsTest() {
     }
 
     public static void main(String[] args) {

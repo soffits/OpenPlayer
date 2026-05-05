@@ -2,28 +2,28 @@ package dev.soffits.openplayer.runtime;
 
 import dev.soffits.openplayer.OpenPlayerConstants;
 import dev.soffits.openplayer.automation.capability.RuntimeCapabilityRegistry;
-import dev.soffits.openplayer.runtime.phase4.PhaseFourRuntimeFoundations.BlockCoordinate;
-import dev.soffits.openplayer.runtime.phase4.PhaseFourRuntimeFoundations.BlueprintBlock;
-import dev.soffits.openplayer.runtime.phase4.PhaseFourRuntimeFoundations.BuildActionNeeded;
-import dev.soffits.openplayer.runtime.phase4.PhaseFourRuntimeFoundations.BuildProjectStatus;
-import dev.soffits.openplayer.runtime.phase4.PhaseFourRuntimeFoundations.CollaborativeBuildProjectManager;
-import dev.soffits.openplayer.runtime.phase4.PhaseFourRuntimeFoundations.ExperimentBoundary;
-import dev.soffits.openplayer.runtime.phase4.PhaseFourRuntimeFoundations.IdleDecision;
-import dev.soffits.openplayer.runtime.phase4.PhaseFourRuntimeFoundations.IdleMode;
-import dev.soffits.openplayer.runtime.phase4.PhaseFourRuntimeFoundations.IdleModeController;
-import dev.soffits.openplayer.runtime.phase4.PhaseFourRuntimeFoundations.MemoryUpdateResult;
-import dev.soffits.openplayer.runtime.phase4.PhaseFourRuntimeFoundations.TeamActionLifecycle;
-import dev.soffits.openplayer.runtime.phase4.PhaseFourRuntimeFoundations.TeamActionProgress;
-import dev.soffits.openplayer.runtime.phase4.PhaseFourRuntimeFoundations.TeamActionState;
-import dev.soffits.openplayer.runtime.phase4.PhaseFourRuntimeFoundations.TeamTaskBlackboard;
-import dev.soffits.openplayer.runtime.phase4.PhaseFourRuntimeFoundations.WorkClaimKind;
-import dev.soffits.openplayer.runtime.phase4.PhaseFourRuntimeFoundations.WorkClaimRegistry;
+import dev.soffits.openplayer.runtime.coordination.CoordinationRuntimeFoundations.BlockCoordinate;
+import dev.soffits.openplayer.runtime.coordination.CoordinationRuntimeFoundations.BlueprintBlock;
+import dev.soffits.openplayer.runtime.coordination.CoordinationRuntimeFoundations.BuildActionNeeded;
+import dev.soffits.openplayer.runtime.coordination.CoordinationRuntimeFoundations.BuildProjectStatus;
+import dev.soffits.openplayer.runtime.coordination.CoordinationRuntimeFoundations.CollaborativeBuildProjectManager;
+import dev.soffits.openplayer.runtime.coordination.CoordinationRuntimeFoundations.ExperimentBoundary;
+import dev.soffits.openplayer.runtime.coordination.CoordinationRuntimeFoundations.IdleDecision;
+import dev.soffits.openplayer.runtime.coordination.CoordinationRuntimeFoundations.IdleMode;
+import dev.soffits.openplayer.runtime.coordination.CoordinationRuntimeFoundations.IdleModeController;
+import dev.soffits.openplayer.runtime.coordination.CoordinationRuntimeFoundations.MemoryUpdateResult;
+import dev.soffits.openplayer.runtime.coordination.CoordinationRuntimeFoundations.TeamActionLifecycle;
+import dev.soffits.openplayer.runtime.coordination.CoordinationRuntimeFoundations.TeamActionProgress;
+import dev.soffits.openplayer.runtime.coordination.CoordinationRuntimeFoundations.TeamActionState;
+import dev.soffits.openplayer.runtime.coordination.CoordinationRuntimeFoundations.TeamTaskBlackboard;
+import dev.soffits.openplayer.runtime.coordination.CoordinationRuntimeFoundations.WorkClaimKind;
+import dev.soffits.openplayer.runtime.coordination.CoordinationRuntimeFoundations.WorkClaimRegistry;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public final class PhaseFourCoordinationTest {
-    private PhaseFourCoordinationTest() {
+public final class CoordinationRuntimeFoundationsTest {
+    private CoordinationRuntimeFoundationsTest() {
     }
 
     public static void main(String[] args) {
@@ -97,7 +97,8 @@ public final class PhaseFourCoordinationTest {
         require(!status.diff().entries().get(0).claimHistory().isEmpty(),
                 "build diff must include claim history for debugging");
         require(!status.realBuildAdapterAvailable(), "foundation must not claim a real build adapter exists");
-        require(status.status().contains("foundation_only"), "status must truthfully report unsupported build adapter path");
+        require(status.status().contains("unsupported_build_adapter"),
+                "status must truthfully report unsupported build adapter path");
         require(manager.claimNextSection("npc-b", status, 2L).isPresent(),
                 "free agent must be able to claim unfinished build sections atomically");
     }
@@ -120,8 +121,8 @@ public final class PhaseFourCoordinationTest {
     }
 
     private static void worldFactMemoryRedactsAndRefreshesWithoutProviderText() {
-        dev.soffits.openplayer.runtime.phase4.PhaseFourRuntimeFoundations.WorldFactMemory memory =
-                new dev.soffits.openplayer.runtime.phase4.PhaseFourRuntimeFoundations.WorldFactMemory(2,
+        dev.soffits.openplayer.runtime.coordination.CoordinationRuntimeFoundations.WorldFactMemory memory =
+                new dev.soffits.openplayer.runtime.coordination.CoordinationRuntimeFoundations.WorldFactMemory(2,
                         OpenPlayerConstants.WORLD_FACT_MEMORY_REFRESH_TICKS);
         require(!memory.remember("raw", "provider said build it", "provider", 1L, true).accepted(),
                 "world fact memory must reject raw provider text");

@@ -1425,7 +1425,7 @@ public final class VanillaAutomationBackend implements AutomationBackend {
         }
 
         private boolean isSafeAttackTarget(LivingEntity target) {
-            return PhaseFourteenSafetyPolicy.isSafeExplicitAttackTarget(target, owner(), entity);
+            return InteractionSafetyPolicy.isSafeExplicitAttackTarget(target, owner(), entity);
         }
 
         private LivingEntity nearestGuardTarget(ServerLevel serverLevel, ServerPlayer owner, double radius) {

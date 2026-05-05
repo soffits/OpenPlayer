@@ -91,7 +91,7 @@ OpenPlayer currently includes:
 
 ## Verification Gates
 
-Every runtime phase should run the strongest available project check before completion:
+Every runtime change should run the strongest available project check before completion:
 
 ```bash
 git diff --check

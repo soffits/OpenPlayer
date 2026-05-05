@@ -162,10 +162,10 @@ tasks.register('runTargetAttackInstructionParserTest', JavaExec) {
     mainClass = 'dev.soffits.openplayer.automation.TargetAttackInstructionParserTest'
 }
 
-tasks.register('runPhaseFourteenSafetyPolicyTest', JavaExec) {
+tasks.register('runInteractionSafetyPolicyTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'dev.soffits.openplayer.automation.PhaseFourteenSafetyPolicyTest'
+    mainClass = 'dev.soffits.openplayer.automation.InteractionSafetyPolicyTest'
 }
 
 tasks.register('runAutomationWorldActionPolicyTest', JavaExec) {
@@ -342,22 +342,22 @@ tasks.register('runRuntimeCapabilityRegistryTest', JavaExec) {
     mainClass = 'dev.soffits.openplayer.automation.capability.RuntimeCapabilityRegistryTest'
 }
 
-tasks.register('runPhaseTwoRuntimeFoundationTest', JavaExec) {
+tasks.register('runPlannerRuntimeFoundationsTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'dev.soffits.openplayer.runtime.PhaseTwoRuntimeFoundationTest'
+    mainClass = 'dev.soffits.openplayer.runtime.PlannerRuntimeFoundationsTest'
 }
 
-tasks.register('runPhaseThreeResourcePlanningTest', JavaExec) {
+tasks.register('runResourcePlanningFoundationsTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'dev.soffits.openplayer.runtime.PhaseThreeResourcePlanningTest'
+    mainClass = 'dev.soffits.openplayer.runtime.ResourcePlanningFoundationsTest'
 }
 
-tasks.register('runPhaseFourCoordinationTest', JavaExec) {
+tasks.register('runCoordinationRuntimeFoundationsTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'dev.soffits.openplayer.runtime.PhaseFourCoordinationTest'
+    mainClass = 'dev.soffits.openplayer.runtime.CoordinationRuntimeFoundationsTest'
 }
 
 tasks.named('check') {
@@ -387,7 +387,7 @@ tasks.named('check') {
     dependsOn tasks.named('runInventoryActionInstructionParserTest')
     dependsOn tasks.named('runInteractionInstructionParserTest')
     dependsOn tasks.named('runTargetAttackInstructionParserTest')
-    dependsOn tasks.named('runPhaseFourteenSafetyPolicyTest')
+    dependsOn tasks.named('runInteractionSafetyPolicyTest')
     dependsOn tasks.named('runAutomationWorldActionPolicyTest')
     dependsOn tasks.named('runAutomationControllerMonitorTest')
     dependsOn tasks.named('runAutomationControllerSnapshotTest')
@@ -417,7 +417,7 @@ tasks.named('check') {
     dependsOn tasks.named('runNpcInventoryTransferTest')
     dependsOn tasks.named('runResourceAffordanceSummaryTest')
     dependsOn tasks.named('runRuntimeCapabilityRegistryTest')
-    dependsOn tasks.named('runPhaseTwoRuntimeFoundationTest')
-    dependsOn tasks.named('runPhaseThreeResourcePlanningTest')
-    dependsOn tasks.named('runPhaseFourCoordinationTest')
+    dependsOn tasks.named('runPlannerRuntimeFoundationsTest')
+    dependsOn tasks.named('runResourcePlanningFoundationsTest')
+    dependsOn tasks.named('runCoordinationRuntimeFoundationsTest')
 }

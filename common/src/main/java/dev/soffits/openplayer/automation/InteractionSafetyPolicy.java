@@ -8,7 +8,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Block;
 
-final class PhaseFourteenSafetyPolicy {
+final class InteractionSafetyPolicy {
     private static final Set<String> SAFE_EMPTY_HAND_INTERACT_BLOCK_IDS = Set.of(
             "minecraft:lever",
             "minecraft:oak_trapdoor",
@@ -70,7 +70,7 @@ final class PhaseFourteenSafetyPolicy {
             "minecraft:zombie_villager"
     );
 
-    private PhaseFourteenSafetyPolicy() {
+    private InteractionSafetyPolicy() {
     }
 
     static boolean isSafeEmptyHandInteractBlock(Block block) {

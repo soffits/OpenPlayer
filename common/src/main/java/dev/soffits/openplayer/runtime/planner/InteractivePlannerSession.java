@@ -190,10 +190,10 @@ public final class InteractivePlannerSession {
         try {
             steps = ProviderPlanIntentCodec.decode(intent.instruction());
         } catch (IllegalArgumentException exception) {
-            addObservation(PlannerObservationStatus.REJECTED, "legacy_plan rejected: " + exception.getMessage(), false);
-            return stopAfterNoProgress("legacy plan rejected");
+            addObservation(PlannerObservationStatus.REJECTED, "provider_plan rejected: " + exception.getMessage(), false);
+            return stopAfterNoProgress("provider plan rejected");
         }
-        PlannerTurnResult result = new PlannerTurnResult(PlannerTurnStatus.CONTINUE, "legacy plan expanded");
+        PlannerTurnResult result = new PlannerTurnResult(PlannerTurnStatus.CONTINUE, "provider plan expanded");
         for (CommandIntent step : steps) {
             result = handlePrimitive(step, runtime);
             if (result.status() != PlannerTurnStatus.CONTINUE) {

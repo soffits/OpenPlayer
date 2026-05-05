@@ -1,12 +1,12 @@
 # OpenPlayer Policy Runtime Plan
 
-> This document records the completed runtime-foundation direction for externalized NPC movement/safety policies and provider-runtime reliability. It is not a shipped capability overclaim: future user-facing claims must still match the live adapters and verified runtime behavior.
+> This document records the runtime-foundation direction for externalized NPC movement/safety policies and provider-runtime reliability. It is not a shipped capability matrix; user-facing claims must match the live adapters and verified runtime behavior.
 
 ## Goal
 
-Make OpenPlayer NPC automation reliable enough for multi-step survival tasks by separating slow LLM planning from fast local runtime decisions. The LLM decides goals and high-level next primitives; the server-side runtime resolves chunk presence, movement goals, safety constraints, item pickup, block harvesting truth, stuck recovery, immediate danger handling, objective progress, resource/build planning, and team coordination.
+Make OpenPlayer NPC automation reliable enough for multi-step survival tasks by separating slow LLM planning from fast local runtime decisions. The LLM decides goals and high-level next primitives; the server-side runtime resolves chunk presence, movement goals, safety constraints, item pickup, block harvesting truth, stuck recovery, immediate danger handling, objective progress, resource/build planning, and team coordination where reviewed adapters exist.
 
-The target is a strong OpenPlayer-native agent runtime: long-horizon planning, multi-step decomposition, bounded retries, tool-chain execution, truthful observations, and per-NPC policy control. It should become more proactive and capable than a player at planning, while still acting through audited vanilla server-side NPC primitives rather than hidden cheats or opaque bot dependencies.
+The runtime direction is an OpenPlayer-native agent layer with long-horizon planning support, bounded retries, tool-chain validation, truthful observations, and per-NPC policy control. It should improve planning without claiming unsupported Minecraft mechanics or acting through hidden cheats or opaque bot dependencies.
 
 ## Provenance And Reference Posture
 
@@ -86,18 +86,9 @@ Required safety rules:
 - Safe event logs record deterministic summaries of policy changes; raw provider text must not be written to safe logs.
 - Per-NPC overrides are allowed, but cannot exceed global server caps.
 
-## Implemented Runtime Foundations
+## Current Foundation Areas
 
-The four planned development phases from this document have been implemented on `mc/1.20.1`. Do not treat the removed phase checklist as remaining work. Future roadmap items should be written as new concrete gaps based on live testing, logs, or product goals.
-
-Implemented commits:
-
-- `cb6c08b fix: harden primitive runtime truthfulness`
-- `32c0c34 feat: add strong planner runtime foundations`
-- `e8dc98e feat: add resource planning foundations`
-- `2e26dce feat: add multi-agent coordination foundations`
-
-Completed foundation areas:
+Current foundation areas on `mc/1.20.1` include:
 
 - Player-like bounded active chunk tickets for active or queued NPC automation.
 - Externalized movement and safety policy data with fail-closed fallbacks.
@@ -106,9 +97,9 @@ Completed foundation areas:
 - Resource/crafting/delivery planning foundations for goals such as making and delivering a furnace, including dependency steps, capability-scoped tool docs, model-role config, and objective validators.
 - Multi-agent/build foundations: capability registry, team task blackboard, work claims, build diff/project sections, tick-bounded action lifecycle, world fact memory, idle policy gates, and experiment boundaries.
 
-## Remaining Documentation Rule
+## Documentation Rule
 
-Do not keep completed implementation checklists in this file as if they are still planned work. When a new gap is discovered, add a new dated roadmap section or issue-linked plan that states:
+Do not keep completed implementation checklists in this file as if they are still planned work. When a new gap is discovered, prefer a new dated roadmap section or issue-linked plan that states:
 
 - observed failure or user goal;
 - current live behavior;

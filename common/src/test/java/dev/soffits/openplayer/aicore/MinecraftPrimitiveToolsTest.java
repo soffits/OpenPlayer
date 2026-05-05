@@ -88,13 +88,13 @@ public final class MinecraftPrimitiveToolsTest {
     }
 
     private static void mapsPickupItemsNearbyArgumentsToCollectInstruction() {
-        Optional<CommandIntent> legacyCollect = MinecraftPrimitiveTools.toCommandIntent(
+        Optional<CommandIntent> collectAny = MinecraftPrimitiveTools.toCommandIntent(
                 ToolCall.of("pickup_items_nearby", ToolArguments.empty()), IntentPriority.NORMAL
         );
-        require(legacyCollect.isPresent(), "pickup_items_nearby must map to runtime command");
-        require(legacyCollect.get().kind() == IntentKind.COLLECT_ITEMS,
+        require(collectAny.isPresent(), "pickup_items_nearby must map to runtime command");
+        require(collectAny.get().kind() == IntentKind.COLLECT_ITEMS,
                 "pickup_items_nearby must bridge to COLLECT_ITEMS");
-        require("".equals(legacyCollect.get().instruction()),
+        require("".equals(collectAny.get().instruction()),
                 "empty pickup_items_nearby args must preserve collect-any behavior");
 
         Optional<CommandIntent> filteredCollect = MinecraftPrimitiveTools.toCommandIntent(

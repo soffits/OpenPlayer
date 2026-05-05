@@ -7,7 +7,7 @@ Statuses: `implemented`, `implemented_with_server_side_semantics`, `policy_rejec
 | Mineflayer surface | AICore surface | Status | Notes |
 | --- | --- | --- | --- |
 | `bot.registry`, `bot.world`, `bot.entity`, `bot.entities`, `bot.username`, `bot.spawnPoint`, `bot.heldItem`, `bot.usingHeldItem`, `bot.player`, `bot.players`, `bot.tablist`, `bot.settings`, `bot.experience`, `bot.health`, `bot.food`, `bot.foodSaturation`, `bot.oxygenLevel`, `bot.physics`, `bot.time`, `bot.quickBarSlot`, `bot.inventory`, `bot.targetDigBlock`, `bot.isSleeping`, `bot.scoreboards`, `bot.scoreboard`, `bot.teams`, `bot.teamMap`, `bot.controlState`, `bot.currentWindow` | `AICoreBotFacade`, `AICoreBotState`, `observe_self`, `observe_world`, `inventory`, `held_item` | `implemented_with_server_side_semantics` | Server-side NPC state is exposed as immutable snapshots and stable resource IDs. Client-only pieces are absent or marked separately. |
-| `Vec3`, `Location`, `Entity`, `Block`, `Biome`, `Item`, `Window`, `Recipe`, `Container`, `ScoreBoard`, `Team`, `BossBar`, `Particle` | `AICoreVec3`, `AICoreBlockSnapshot`, `AICoreEntitySnapshot`, `AICoreItemSnapshot`, planned adapter snapshots | `implemented_with_server_side_semantics` | Core immutable Java shapes are present; mechanics-specific strategy is not exposed as provider tool names. |
+| `Vec3`, `Location`, `Entity`, `Block`, `Biome`, `Item`, `Window`, `Recipe`, `Container`, `ScoreBoard`, `Team`, `BossBar`, `Particle` | `AICoreVec3`, `AICoreBlockSnapshot`, `AICoreEntitySnapshot`, `AICoreItemSnapshot`, adapter-specific snapshots where implemented | `implemented_with_server_side_semantics` | Core immutable Java shapes are present; mechanics-specific strategy is not exposed as provider tool names. |
 | `bot.game.*`, `bot.isRaining`, `bot.rainState`, `bot.thunderState` | `AICoreBotState` fields and observation tools | `implemented_with_server_side_semantics` | Snapshot contract exists; Minecraft runtime adapters fill live values later. |
 
 ## World Query API
@@ -18,7 +18,7 @@ Statuses: `implemented`, `implemented_with_server_side_semantics`, `policy_rejec
 | `waitForChunksToLoad` | `wait_for_chunks_to_load` | `implemented_with_server_side_semantics` | Server-side check only; no chunk generation. |
 | `blockInSight`, `blockAtCursor`, `entityAtCursor` | `block_in_sight`, `block_at_cursor`, `entity_at_cursor` | `implemented_with_server_side_semantics` | Bounded loaded-world raycasts from NPC/view vector or pure snapshot seams; no chunk generation. These are facade/live executor tools, not provider-executable `CommandIntent` tools yet. |
 | `blockAtEntityCursor` | `block_at_entity_cursor` | `implemented_with_server_side_semantics` | Uses the requested loaded entity's own eye position and view vector in live NPC execution, and requires explicit entity view state in pure snapshots. It is not aliased to the NPC cursor. |
-| `findBlocks`, `findBlock`, `nearestEntity` | `find_blocks`, `find_block`, `nearest_entity`, legacy `find_loaded_blocks`, `find_loaded_entities` | `implemented_with_server_side_semantics` | Bounded loaded-world searches; radius/count required for mineflayer-facing tools. |
+| `findBlocks`, `findBlock`, `nearestEntity` | `find_blocks`, `find_block`, `nearest_entity`, OpenPlayer-native `find_loaded_blocks`, `find_loaded_entities` | `implemented_with_server_side_semantics` | Bounded loaded-world searches; radius/count required for mineflayer-facing tools. |
 
 ## Control, Movement, And Pathfinder
 
