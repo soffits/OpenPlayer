@@ -30,6 +30,7 @@ public final class InteractivePlannerSessionTest {
         stopsWhenToolStepBudgetIsExhausted();
         rejectsRemovedToolBeforePlannerExecution();
         cancelsActiveSession();
+        formatsPrimitiveProgressWithoutRawProviderArguments();
     }
 
     private static void activePrimitiveBlocksNextProviderIteration() {
@@ -429,6 +430,20 @@ public final class InteractivePlannerSessionTest {
         PlannerTurnResult result = session.beforeProviderCall();
         require(result.status() == PlannerTurnStatus.STOPPED, "cancelled session must not call provider");
         require(result.message().contains("stop requested"), "cancel reason must be preserved");
+    }
+
+    private static void formatsPrimitiveProgressWithoutRawProviderArguments() {
+        require("I'll pick up nearby spruce logs first.".equals(PlannerPrimitiveProgress.format(
+                        new CommandIntent(IntentKind.COLLECT_ITEMS, IntentPriority.NORMAL, "minecraft:spruce_log 16"))),
+                "collect progress must use friendly item wording");
+        String rawCollect = PlannerPrimitiveProgress.format(
+                new CommandIntent(IntentKind.COLLECT_ITEMS, IntentPriority.NORMAL,
+                        "matching=minecraft:spruce_log maxDistance=16"));
+        require(!rawCollect.contains("matching=") && !rawCollect.contains("maxDistance="),
+                "collect progress must not expose raw provider argument syntax");
+        require(!PlannerPrimitiveProgress.format(new CommandIntent(IntentKind.CRAFT, IntentPriority.NORMAL,
+                        "minecraft:furnace 1")).contains("finished"),
+                "primitive progress must not claim completion");
     }
 
     private static InteractivePlannerConfig testConfig(int maxIterations, int maxProviderCalls, int maxToolSteps) {

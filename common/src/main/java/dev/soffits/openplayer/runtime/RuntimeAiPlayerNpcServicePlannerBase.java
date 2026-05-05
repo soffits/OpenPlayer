@@ -28,6 +28,7 @@ import dev.soffits.openplayer.runtime.planner.InteractivePlannerConfig;
 import dev.soffits.openplayer.runtime.planner.InteractivePlannerSession;
 import dev.soffits.openplayer.runtime.planner.PlannerObservation;
 import dev.soffits.openplayer.runtime.planner.PlannerObservationStatus;
+import dev.soffits.openplayer.runtime.planner.PlannerPrimitiveProgress;
 import dev.soffits.openplayer.runtime.planner.PlannerTurnResult;
 import dev.soffits.openplayer.runtime.planner.PlannerTurnStatus;
 import java.util.ArrayList;
@@ -150,6 +151,10 @@ abstract class RuntimeAiPlayerNpcServicePlannerBase implements AiPlayerNpcServic
                     automationDetail = automationObservationDetail(snapshot);
                 }
                 PlannerObservationStatus status = plannerStatus(result.status(), activeOrQueued);
+                if (result.status() == CommandSubmissionStatus.ACCEPTED && activeOrQueued && callbacks != null) {
+                    callbacks.progress().accept(new CommandSubmissionResult(
+                            CommandSubmissionStatus.ACCEPTED, PlannerPrimitiveProgress.format(intent)));
+                }
                 return PlannerObservation.of(status,
                         "kind=" + intent.kind().name() + " submission=" + result.status().name().toLowerCase(java.util.Locale.ROOT)
                                 + " message=" + result.message() + " " + automationDetail,

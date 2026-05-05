@@ -64,6 +64,7 @@ public final class CompanionLifecycleManagerTest {
         unavailableConversationRecordsSafeNpcReplyWithoutAutomation();
         asyncConversationUsesPlannerSeamAndSurfacesFinalChat();
         asyncConversationPlannerRecordsPrimitiveAndFinalChat();
+        asyncConversationPlannerSurfacesPrimitiveProgressBeforeFinalChat();
         acceptedConversationHistoryDoesNotRetainProviderInstruction();
         resetMemoryClearsOnlySelectedConversationHistory();
         resetMemoryTextPathDoesNotReappendClearedTurns();
@@ -459,6 +460,40 @@ public final class CompanionLifecycleManagerTest {
         }
     }
 
+    private static void asyncConversationPlannerSurfacesPrimitiveProgressBeforeFinalChat() {
+        String previousEndpoint = System.getProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT");
+        String previousModel = System.getProperty("OPENPLAYER_INTENT_PROVIDER_MODEL");
+        String previousApiKey = System.getProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY");
+        System.setProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT", "https://example.invalid/v1/chat/completions");
+        System.setProperty("OPENPLAYER_INTENT_PROVIDER_MODEL", "test-model");
+        System.setProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY", "test-key");
+        try {
+            PlannerTestNpcService service = new PlannerTestNpcService(PlannerTestMode.PRIMITIVE_PROGRESS_THEN_CHAT);
+            LocalCharacterDefinition character = conversationCharacter();
+            CompanionLifecycleManager manager = CompanionLifecycleManager.withAssignments(
+                    () -> service,
+                    () -> new LocalAssignmentRepositoryResult(List.of(LocalAssignmentDefinition.defaultFor(character)), List.of(character), List.of()),
+                    CountingIntentParser::new
+            );
+            manager.spawnSelectedAssignment(new NpcOwnerId(OWNER_ID),
+                    new NpcSpawnLocation("minecraft:overworld", 1.0D, 64.0D, 1.0D), character.id());
+            List<CommandSubmissionResult> completions = new ArrayList<>();
+
+            CommandSubmissionResult queued = manager.submitSelectedCommandTextAsync(null, OWNER_ID, character.id(),
+                    "pick up the spruce logs", completions::add);
+
+            require(queued.status() == CommandSubmissionStatus.ACCEPTED, "planner progress conversation must queue");
+            require(completions.size() == 2, "primitive progress and final chat must both reach selected callback");
+            require("I'll pick up nearby spruce logs first.".equals(completions.get(0).message()),
+                    "primitive progress must be surfaced before final chat");
+            require("Ready".equals(completions.get(1).message()), "final chat must still be surfaced");
+        } finally {
+            restoreProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT", previousEndpoint);
+            restoreProperty("OPENPLAYER_INTENT_PROVIDER_MODEL", previousModel);
+            restoreProperty("OPENPLAYER_INTENT_PROVIDER_API_KEY", previousApiKey);
+        }
+    }
+
     private static void acceptedConversationHistoryDoesNotRetainProviderInstruction() {
         String previousEndpoint = System.getProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT");
         String previousModel = System.getProperty("OPENPLAYER_INTENT_PROVIDER_MODEL");
@@ -826,7 +861,8 @@ public final class CompanionLifecycleManagerTest {
 
     private enum PlannerTestMode {
         FINAL_CHAT_ONLY,
-        PRIMITIVE_THEN_CHAT
+        PRIMITIVE_THEN_CHAT,
+        PRIMITIVE_PROGRESS_THEN_CHAT
     }
 
     private static final class PlannerTestNpcService extends TestNpcService implements InteractivePlannerCommandTextService {
@@ -849,6 +885,21 @@ public final class CompanionLifecycleManagerTest {
                 AiPlayerNpcCommand command = new AiPlayerNpcCommand(UUID.randomUUID(), primitive);
                 submitCommand(sessionId, command);
                 callbacks.submittedCommandRecorder().accept(command);
+                CommandIntent chat = new CommandIntent(IntentKind.CHAT, IntentPriority.NORMAL, "Ready");
+                callbacks.acceptedIntentRecorder().accept(chat);
+                callbacks.completion().accept(new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED, "Ready"));
+                return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED,
+                        "Command text queued for interactive provider planning");
+            }
+            if (mode == PlannerTestMode.PRIMITIVE_PROGRESS_THEN_CHAT) {
+                CommandIntent primitive = new CommandIntent(IntentKind.COLLECT_ITEMS, IntentPriority.NORMAL,
+                        "minecraft:spruce_log 16");
+                callbacks.acceptedIntentRecorder().accept(primitive);
+                AiPlayerNpcCommand command = new AiPlayerNpcCommand(UUID.randomUUID(), primitive);
+                submitCommand(sessionId, command);
+                callbacks.submittedCommandRecorder().accept(command);
+                callbacks.progress().accept(new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED,
+                        dev.soffits.openplayer.runtime.planner.PlannerPrimitiveProgress.format(primitive)));
                 CommandIntent chat = new CommandIntent(IntentKind.CHAT, IntentPriority.NORMAL, "Ready");
                 callbacks.acceptedIntentRecorder().accept(chat);
                 callbacks.completion().accept(new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED, "Ready"));

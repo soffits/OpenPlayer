@@ -74,6 +74,7 @@ abstract class CompanionLifecycleManagerBase {
                             submittedCommands.add(command);
                             conversationStatusRepository.recordAction(context.ownerId(), context.assignment().id(), command.intent());
                         },
+                        completion,
                         result -> completion.accept(finishPlannedConversationSubmission(context, result, lastIntent[0], submittedCommands))
                 )
         );

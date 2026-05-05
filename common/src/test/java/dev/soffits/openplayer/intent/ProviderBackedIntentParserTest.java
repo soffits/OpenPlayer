@@ -22,6 +22,7 @@ public final class ProviderBackedIntentParserTest {
         preservesExplicitLoadedSearchMaxDistance();
         acceptsPickupItemsNearbyMatchingOnlyFromLogs();
         acceptsPickupItemsNearbyMatchingAndExplicitMaxDistance();
+        acceptsPickupItemsNearbyExactAdvertisedArgumentShape();
         rejectsPickupItemsNearbyMaxDistanceWithoutMatching();
         rejectsUnknownStructuredToolArguments();
         rejectsIgnoredStructuredToolArguments();
@@ -143,6 +144,17 @@ public final class ProviderBackedIntentParserTest {
                 "pickup_items_nearby with radius must bridge to collect items intent");
         require("minecraft:spruce_log 8".equals(intent.instruction()),
                 "pickup_items_nearby must canonicalize bare provider item ids and preserve bounded radius");
+    }
+
+    private static void acceptsPickupItemsNearbyExactAdvertisedArgumentShape() throws Exception {
+        ProviderBackedIntentParser parser = new ProviderBackedIntentParser(
+                input -> ProviderIntent.structuredTool("NORMAL", "{\"tool\":\"pickup_items_nearby\",\"args\":{\"matching\":\"minecraft:spruce_log\",\"maxDistance\":16}}")
+        );
+        CommandIntent intent = parser.parse("ignored");
+        require(intent.kind() == IntentKind.COLLECT_ITEMS,
+                "advertised pickup_items_nearby JSON must bridge to COLLECT_ITEMS");
+        require("minecraft:spruce_log 16".equals(intent.instruction()),
+                "advertised pickup_items_nearby args must become bounded collect instruction");
     }
 
     private static void rejectsPickupItemsNearbyMaxDistanceWithoutMatching() {

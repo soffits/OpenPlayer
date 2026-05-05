@@ -26,14 +26,18 @@ public interface InteractivePlannerCommandTextService {
     }
 
     record PlannerCommandTextCallbacks(Consumer<CommandIntent> acceptedIntentRecorder,
-                                       Consumer<AiPlayerNpcCommand> submittedCommandRecorder,
-                                       Consumer<CommandSubmissionResult> completion) {
+                                        Consumer<AiPlayerNpcCommand> submittedCommandRecorder,
+                                        Consumer<CommandSubmissionResult> progress,
+                                        Consumer<CommandSubmissionResult> completion) {
         public PlannerCommandTextCallbacks {
             if (acceptedIntentRecorder == null) {
                 throw new IllegalArgumentException("acceptedIntentRecorder cannot be null");
             }
             if (submittedCommandRecorder == null) {
                 throw new IllegalArgumentException("submittedCommandRecorder cannot be null");
+            }
+            if (progress == null) {
+                throw new IllegalArgumentException("progress cannot be null");
             }
             if (completion == null) {
                 throw new IllegalArgumentException("completion cannot be null");
