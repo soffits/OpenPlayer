@@ -20,6 +20,8 @@ public final class InteractivePlannerSessionTest {
         activePrimitiveStopsTruthfullyWhenToolWaitBudgetExhausts();
         completedWaitingObservationAllowsNextProviderIteration();
         retryableSubmissionFailureAllowsAlternativeProviderIteration();
+        staleBreakRepeatAfterDroppedItemIsRejectedWithPickupGuidance();
+        terminalBreakFailureTargetIsNotImmediatelyRepeated();
         terminalPolicyFailureStopsWithoutRetry();
         promptRequiresLongHorizonPrimitiveDecomposition();
         classifierSeparatesRetryableAndTerminalFailures();
@@ -201,6 +203,80 @@ public final class InteractivePlannerSessionTest {
         String prompt = session.nextPrompt("nearby loaded block target available");
         require(prompt.contains("target chunk is not loaded"),
                 "retry prompt must include the rejected primitive observation");
+    }
+
+    private static void staleBreakRepeatAfterDroppedItemIsRejectedWithPickupGuidance() {
+        InteractivePlannerSession session = new InteractivePlannerSession(
+                UUID.randomUUID(),
+                "help me make a furnace; gather and craft tools yourself",
+                testConfig(8, 8, 8, 4)
+        );
+        CommandIntent digSpruceLog = new CommandIntent(IntentKind.BREAK_BLOCK, IntentPriority.NORMAL, "23 69 -5");
+        require(session.beforeProviderCall().status() == PlannerTurnStatus.CONTINUE,
+                "first provider call must be allowed");
+        PlannerTurnResult started = session.handleIntent(
+                digSpruceLog,
+                new FakeRuntime(true, PlannerObservation.of(
+                        PlannerObservationStatus.QUEUED,
+                        "kind=BREAK_BLOCK submission=accepted automation active=BREAK_BLOCK queued=0 monitor=active",
+                        true
+                ))
+        );
+        require(started.status() == PlannerTurnStatus.WAITING,
+                "break primitive must wait while queued or active");
+        PlannerTurnResult completed = session.observeWaiting(PlannerObservation.of(
+                PlannerObservationStatus.COMPLETED,
+                "automation active=idle queued=0 monitor=completed reason=block=minecraft:spruce_log target=23,69,-5 inventory_delta=none nearby_drop_delta=minecraft:spruce_log x1 ticks=12/2400",
+                false
+        ));
+        require(completed.status() == PlannerTurnStatus.CONTINUE,
+                "break completion must allow provider replanning");
+        require(session.beforeProviderCall().status() == PlannerTurnStatus.CONTINUE,
+                "provider must be allowed to choose pickup after break completion");
+        PlannerTurnResult staleRepeat = session.handleIntent(
+                digSpruceLog,
+                new FakeRuntime(true, PlannerObservation.of(PlannerObservationStatus.COMPLETED, "unexpected", false))
+        );
+        require(staleRepeat.status() == PlannerTurnStatus.CONTINUE,
+                "stale repeated dig should be retryable instead of terminal or executed");
+        String prompt = session.nextPrompt("nearbyDroppedItems: minecraft:spruce_log x1");
+        require(prompt.contains("stale_break_target rejected: target=23,69,-5"),
+                "retry prompt must show stale target rejection");
+        require(prompt.contains("pickup_items_nearby matching=minecraft:spruce_log"),
+                "retry prompt must guide the provider toward dropped-item pickup");
+        require(prompt.contains("nearbyDroppedItems: minecraft:spruce_log x1"),
+                "retry prompt must preserve truthful nearby dropped item context");
+    }
+
+    private static void terminalBreakFailureTargetIsNotImmediatelyRepeated() {
+        InteractivePlannerSession session = new InteractivePlannerSession(
+                UUID.randomUUID(),
+                "collect useful resources",
+                testConfig(8, 8, 8, 4)
+        );
+        CommandIntent missingBlock = new CommandIntent(IntentKind.BREAK_BLOCK, IntentPriority.NORMAL, "23 69 -5");
+        require(session.beforeProviderCall().status() == PlannerTurnStatus.CONTINUE,
+                "first provider call must be allowed");
+        PlannerTurnResult failed = session.handleIntent(
+                missingBlock,
+                new FakeRuntime(true, PlannerObservation.of(
+                        PlannerObservationStatus.REJECTED,
+                        "kind=BREAK_BLOCK submission=rejected message=block_not_breakable",
+                        false
+                ))
+        );
+        require(failed.status() == PlannerTurnStatus.CONTINUE,
+                "block_not_breakable should allow a different provider strategy");
+        require(session.beforeProviderCall().status() == PlannerTurnStatus.CONTINUE,
+                "provider must be allowed to choose an alternative after block_not_breakable");
+        PlannerTurnResult repeated = session.handleIntent(
+                missingBlock,
+                new FakeRuntime(true, PlannerObservation.of(PlannerObservationStatus.COMPLETED, "unexpected", false))
+        );
+        require(repeated.status() == PlannerTurnStatus.CONTINUE,
+                "immediate repeat of terminal break target should be retryable and not executed");
+        require(session.nextPrompt("context").contains("was already processed or terminal in this objective"),
+                "prompt must explain the terminal target guard");
     }
 
     private static void terminalPolicyFailureStopsWithoutRetry() {

@@ -24,6 +24,7 @@ public final class InteractivePlannerSession {
     private final InteractivePlannerConfig config;
     private final long startedAtMillis;
     private final List<String> observations = new ArrayList<>();
+    private final ResourceAcquisitionObservations resourceObservations = new ResourceAcquisitionObservations();
     private int iterations;
     private int providerCalls;
     private int toolSteps;
@@ -113,6 +114,10 @@ public final class InteractivePlannerSession {
             for (String observation : observations) {
                 builder.append("- ").append(observation).append("\n");
             }
+        }
+        String resourceHint = resourceObservations.promptHint();
+        if (!resourceHint.isBlank()) {
+            builder.append(resourceHint).append("\n");
         }
         return bound(builder.toString(), config.maxPromptCharacters());
     }
@@ -219,6 +224,11 @@ public final class InteractivePlannerSession {
             return new PlannerTurnResult(PlannerTurnStatus.STOPPED,
                     "Planner stopped after terminal tool validation: " + bound(toolValidation.reason(), 96));
         }
+        Optional<String> resourceGuard = resourceObservations.guard(intent);
+        if (resourceGuard.isPresent()) {
+            addObservation(PlannerObservationStatus.REJECTED, resourceGuard.get(), false);
+            return stopAfterNoProgress(resourceGuard.get());
+        }
         RuntimeIntentValidationResult validation = RuntimeIntentValidator.validate(intent, runtime.allowWorldActions());
         if (!validation.isAccepted()) {
             addObservation(PlannerObservationStatus.REJECTED, "runtime policy rejected: " + validation.message(), false);
@@ -227,6 +237,7 @@ public final class InteractivePlannerSession {
         }
         toolSteps++;
         PlannerObservation submission = runtime.submit(intent);
+        resourceObservations.recordIntentObservation(intent, submission);
         addObservation(submission.status(), submission.detail(), submission.activeOrQueued());
         if (submission.status() == PlannerObservationStatus.REJECTED
                 || submission.status() == PlannerObservationStatus.FAILED
@@ -306,6 +317,7 @@ public final class InteractivePlannerSession {
         String observation = status.name().toLowerCase(java.util.Locale.ROOT) + " "
                 + bound(detail, config.maxObservationCharacters() / 2)
                 + " activeOrQueued=" + activeOrQueued;
+        resourceObservations.record(status, detail);
         observations.add(bound(observation, config.maxObservationCharacters()));
         while (joinedObservationLength() > config.maxObservationCharacters() && observations.size() > 1) {
             observations.remove(0);
