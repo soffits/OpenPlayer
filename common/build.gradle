@@ -348,6 +348,12 @@ tasks.register('runPhaseTwoRuntimeFoundationTest', JavaExec) {
     mainClass = 'dev.soffits.openplayer.runtime.PhaseTwoRuntimeFoundationTest'
 }
 
+tasks.register('runPhaseThreeResourcePlanningTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.runtime.PhaseThreeResourcePlanningTest'
+}
+
 tasks.named('check') {
     dependsOn tasks.named('runLocalCharacterDefinitionTest')
     dependsOn tasks.named('runLocalAssignmentRepositoryTest')
@@ -406,4 +412,5 @@ tasks.named('check') {
     dependsOn tasks.named('runResourceAffordanceSummaryTest')
     dependsOn tasks.named('runRuntimeCapabilityRegistryTest')
     dependsOn tasks.named('runPhaseTwoRuntimeFoundationTest')
+    dependsOn tasks.named('runPhaseThreeResourcePlanningTest')
 }

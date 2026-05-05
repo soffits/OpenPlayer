@@ -1,6 +1,7 @@
 package dev.soffits.openplayer.runtime.planner;
 
 import dev.soffits.openplayer.aicore.MinecraftPrimitiveTools;
+import dev.soffits.openplayer.aicore.CapabilityScopedToolDocs;
 import dev.soffits.openplayer.aicore.ToolCall;
 import dev.soffits.openplayer.aicore.ToolResult;
 import dev.soffits.openplayer.aicore.ToolResultStatus;
@@ -96,6 +97,10 @@ public final class InteractivePlannerSession {
         builder.append("Ask the user or return unavailable only when the goal is ambiguous, needs authorization, is unsafe, policy-denied, or missing a real adapter. ");
         builder.append("Treat local unstuck, danger avoidance, pickup recovery, and self-defense summaries as runtime observations; do not micromanage tick-level combat or avoidance. ");
         builder.append("Do not claim completion unless an observation says completed. Do not use hidden Java macros or removed macro tools.\n");
+        String scopedToolDocs = CapabilityScopedToolDocs.forObjective(userRequest);
+        if (!scopedToolDocs.isBlank()) {
+            builder.append("Objective-scoped available tool docs: ").append(bound(scopedToolDocs, 240)).append("\n");
+        }
         if (!providerPromptContext.isBlank()) {
             builder.append("Companion conversation context:\n")
                     .append(bound(providerPromptContext, config.maxPromptCharacters() / 2)).append("\n");

@@ -5,6 +5,15 @@ import net.minecraft.resources.ResourceLocation;
 public final class OpenPlayerConstants {
     public static final String MOD_ID = "openplayer";
     public static final String MOD_NAME = "OpenPlayer";
+    public static final String MINECRAFT_FURNACE_ID = "minecraft:furnace";
+    public static final String MINECRAFT_COBBLESTONE_ID = "minecraft:cobblestone";
+    public static final String MINECRAFT_STONE_ID = "minecraft:stone";
+    public static final String MINECRAFT_CRAFTING_TABLE_ID = "minecraft:crafting_table";
+    public static final String MINECRAFT_WOODEN_PICKAXE_ID = "minecraft:wooden_pickaxe";
+    public static final String MINECRAFT_STONE_PICKAXE_ID = "minecraft:stone_pickaxe";
+    public static final String MINECRAFT_IRON_PICKAXE_ID = "minecraft:iron_pickaxe";
+    public static final String MINECRAFT_DIAMOND_PICKAXE_ID = "minecraft:diamond_pickaxe";
+    public static final String MINECRAFT_NETHERITE_PICKAXE_ID = "minecraft:netherite_pickaxe";
     public static final int NPC_ACTIVE_CHUNK_TICKET_RADIUS = 2;
     public static final int NPC_ACTIVE_CHUNK_TICKET_REFRESH_TICKS = 20;
     public static final int NPC_ACTIVE_CHUNK_TICKET_TIMEOUT_TICKS = 100;
