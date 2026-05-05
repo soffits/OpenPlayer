@@ -7,6 +7,12 @@ import dev.soffits.openplayer.api.CommandSubmissionStatus;
 import dev.soffits.openplayer.entity.OpenPlayerNpcEntity;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentPriority;
+import dev.soffits.openplayer.runtime.perception.ServerWorldPerceptionScanner;
+import dev.soffits.openplayer.runtime.perception.WorldPerceptionClassifier;
+import dev.soffits.openplayer.runtime.perception.WorldPerceptionFormatter;
+import dev.soffits.openplayer.runtime.perception.WorldPerceptionSnapshot;
+import dev.soffits.openplayer.runtime.perception.WorldPerceptionSnapshot.ObjectCluster;
+import dev.soffits.openplayer.runtime.perception.WorldPerceptionSnapshot.SafeStandSpot;
 import java.util.LinkedHashMap;
 import java.util.ArrayList;
 import java.util.List;
@@ -165,6 +171,12 @@ public final class AICoreNpcToolExecutor implements ToolExecutor {
             entity.swingMainHandAction();
             return ToolResult.success("swing_arm accepted");
         }
+        if (tool.equals("observe_area") || tool.equals("detect_nearby_structures") || tool.equals("find_workstations")) {
+            return observeArea(call);
+        }
+        if (tool.equals("find_safe_stand_near")) {
+            return findSafeStandNear(call);
+        }
         Optional<CommandIntent> commandIntent = MinecraftPrimitiveTools.toCommandIntent(call, IntentPriority.NORMAL);
         if (commandIntent.isPresent()) {
             CommandSubmissionResult submission = commandSubmitter.apply(commandIntent.get());
@@ -173,6 +185,77 @@ public final class AICoreNpcToolExecutor implements ToolExecutor {
                     : ToolResult.rejected(submission.message());
         }
         return ToolResult.rejected("Tool is not mapped to an NPC runtime adapter: " + tool);
+    }
+
+    private ToolResult observeArea(ToolCall call) {
+        ServerLevel level = serverLevel();
+        if (level == null) {
+            return ToolResult.failed("server_level_unavailable");
+        }
+        BlockPos origin = call.arguments().values().containsKey("x") ? blockPos(call.arguments().values()) : entity.blockPosition();
+        if (!level.hasChunkAt(origin)) {
+            return ToolResult.failed("origin_chunk_unloaded");
+        }
+        WorldPerceptionSnapshot snapshot = ServerWorldPerceptionScanner.scan(level, origin, perceptionRadius(call),
+                WorldPerceptionClassifier.DEFAULT_VERTICAL_DOWN, WorldPerceptionClassifier.DEFAULT_VERTICAL_UP, "npc_query");
+        if (call.name().value().equals("detect_nearby_structures")) {
+            return ToolResult.success("loaded object clusters", Map.of("clusters", clusters(snapshot, ""), "loaded", "true"));
+        }
+        if (call.name().value().equals("find_workstations")) {
+            return ToolResult.success("loaded workstation and storage evidence", Map.of("clusters", clusters(snapshot, "work"), "loaded", "true"));
+        }
+        return ToolResult.success("loaded area perception", Map.of("perception", WorldPerceptionFormatter.compact(snapshot)));
+    }
+
+    private ToolResult findSafeStandNear(ToolCall call) {
+        ServerLevel level = serverLevel();
+        if (level == null) {
+            return ToolResult.failed("server_level_unavailable");
+        }
+        BlockPos origin = blockPos(call.arguments().values());
+        if (!level.hasChunkAt(origin)) {
+            return ToolResult.failed("origin_chunk_unloaded");
+        }
+        WorldPerceptionSnapshot snapshot = ServerWorldPerceptionScanner.scan(level, origin, perceptionRadius(call),
+                WorldPerceptionClassifier.DEFAULT_VERTICAL_DOWN, WorldPerceptionClassifier.DEFAULT_VERTICAL_UP, "npc_query");
+        StringBuilder builder = new StringBuilder();
+        for (SafeStandSpot spot : snapshot.safeStandSpots()) {
+            if (builder.length() > 0) {
+                builder.append(';');
+            }
+            builder.append("pos=").append(spot.position().compact()).append(",reason=").append(spot.reason())
+                    .append(",distance=").append(String.format(java.util.Locale.ROOT, "%.1f", spot.distance()))
+                    .append(",score=").append(spot.score());
+        }
+        return ToolResult.success("loaded safe stand candidates", Map.of(
+                "target", origin.getX() + "," + origin.getY() + "," + origin.getZ(),
+                "candidates", builder.length() == 0 ? "none" : builder.toString(),
+                "loaded", "true"));
+    }
+
+    private static String clusters(WorldPerceptionSnapshot snapshot, String filter) {
+        StringBuilder builder = new StringBuilder();
+        for (ObjectCluster cluster : snapshot.objectClusters()) {
+            if (!filter.isBlank() && !cluster.kind().contains("work") && !cluster.kind().contains("storage")) {
+                continue;
+            }
+            if (builder.length() > 0) {
+                builder.append(';');
+            }
+            builder.append("kind=").append(cluster.kind()).append(",center=").append(cluster.center().compact())
+                    .append(",count=").append(cluster.count()).append(",reachable=").append(cluster.reachable())
+                    .append(",standable=").append(cluster.standable()).append(",confidence=").append(cluster.confidence());
+        }
+        return builder.length() == 0 ? "none" : builder.toString();
+    }
+
+    private static int perceptionRadius(ToolCall call) {
+        String value = call.arguments().values().getOrDefault("radius", Integer.toString(WorldPerceptionClassifier.DEFAULT_SCAN_RADIUS));
+        try {
+            return Math.max(1, Math.min(WorldPerceptionClassifier.MAX_SCAN_RADIUS, Integer.parseInt(value)));
+        } catch (NumberFormatException exception) {
+            return WorldPerceptionClassifier.DEFAULT_SCAN_RADIUS;
+        }
     }
 
     private ToolResult blockAt(ToolCall call) {

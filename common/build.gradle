@@ -234,6 +234,12 @@ tasks.register('runRuntimeContextFormatterTest', JavaExec) {
     mainClass = 'dev.soffits.openplayer.runtime.context.RuntimeContextFormatterTest'
 }
 
+tasks.register('runWorldPerceptionClassifierTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.soffits.openplayer.runtime.perception.WorldPerceptionClassifierTest'
+}
+
 tasks.register('runRuntimeIntentValidatorTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
@@ -399,6 +405,7 @@ tasks.named('check') {
     dependsOn tasks.named('runLoadedAreaNavigatorTest')
     dependsOn tasks.named('runSurvivalPolicyTest')
     dependsOn tasks.named('runRuntimeContextFormatterTest')
+    dependsOn tasks.named('runWorldPerceptionClassifierTest')
     dependsOn tasks.named('runRuntimeIntentValidatorTest')
     dependsOn tasks.named('runInteractivePlannerSessionTest')
     dependsOn tasks.named('runMinecraftPrimitiveToolsTest')

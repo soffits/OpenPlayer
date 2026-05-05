@@ -3,6 +3,14 @@ package dev.soffits.openplayer.runtime.context;
 import dev.soffits.openplayer.runtime.context.RuntimeNearbySnapshot.BlockTargetSnapshot;
 import dev.soffits.openplayer.runtime.context.RuntimeNearbySnapshot.RuntimeEntitySnapshot;
 import dev.soffits.openplayer.runtime.context.RuntimeNearbySnapshot.RuntimeNamedEntitySnapshot;
+import dev.soffits.openplayer.runtime.perception.WorldPerceptionSnapshot;
+import dev.soffits.openplayer.runtime.perception.WorldPerceptionSnapshot.BlockCoordinate;
+import dev.soffits.openplayer.runtime.perception.WorldPerceptionSnapshot.BlockEvidence;
+import dev.soffits.openplayer.runtime.perception.WorldPerceptionSnapshot.HazardEvidence;
+import dev.soffits.openplayer.runtime.perception.WorldPerceptionSnapshot.ObjectCluster;
+import dev.soffits.openplayer.runtime.perception.WorldPerceptionSnapshot.PassabilityEvidence;
+import dev.soffits.openplayer.runtime.perception.WorldPerceptionSnapshot.SafeStandSpot;
+import dev.soffits.openplayer.runtime.perception.WorldPerceptionSnapshot.TerrainPatch;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -21,6 +29,7 @@ public final class RuntimeContextFormatterTest {
         snapshotsDefensivelyCopyCollections();
         formattedContextDoesNotContainSensitiveMarkersWithoutSensitiveFields();
         freeTextNamesAreSingleLineAndBounded();
+        perceptionProjectionPreservesStructuredEvidence();
     }
 
     private static void representativeSnapshotFormatsGoldenOutput() {
@@ -69,7 +78,8 @@ public final class RuntimeContextFormatterTest {
                 + "nearbyDroppedItems: minecraft:arrow x3, minecraft:bone x1\n"
                 + "nearbyHostiles: minecraft:skeleton distance=12m direction=south-east+above, minecraft:zombie distance=9m direction=north\n"
                 + "nearbyPlayers: Alex distance=3m direction=near, Steve distance=5m direction=east\n"
-                + "nearbyOpenPlayerNpcs: Helper NPC distance=7m direction=west+below";
+                + "nearbyOpenPlayerNpcs: Helper NPC distance=7m direction=west+below\n"
+                + "worldPerception: {source=npc,dimension=unknown,origin=0,0,0,scan={radius=0,verticalDown=0,verticalUp=0,scannedBlocks=0,sampledColumns=0,capped=false,truncated=false},passability=[none],hazards=[none],safeStand=[none],clusters=[none]}";
 
         require(expected.equals(RuntimeContextFormatter.format(snapshot)), "representative context must match golden output");
     }
@@ -223,6 +233,44 @@ public final class RuntimeContextFormatterTest {
                 "player names must be bounded before distance text");
         require(formatted.contains("nearbyOpenPlayerNpcs: Npc Tab Name distance=4m direction=south"),
                 "NPC names must normalize whitespace");
+    }
+
+    private static void perceptionProjectionPreservesStructuredEvidence() {
+        RuntimeContextSnapshot snapshot = new RuntimeContextSnapshot(
+                new RuntimeWorldSnapshot("minecraft:overworld", 10, 64, -3, 0L, true, false, false, "normal"),
+                new RuntimeAgentSnapshot("active", 20, 20, 300, "empty", "empty", List.of(), Map.of()),
+                new RuntimeNearbySnapshot(Map.of(), List.of(), Map.of(), List.of(), List.of(), List.of()),
+                new WorldPerceptionSnapshot(
+                        "npc",
+                        "minecraft:overworld",
+                        new BlockCoordinate(10, 64, -3),
+                        8,
+                        5,
+                        5,
+                        500,
+                        81,
+                        true,
+                        true,
+                        new TerrainPatch(List.of(new PassabilityEvidence("north", "mixed", "open=2,blocked=1,hazard=1",
+                                new BlockCoordinate(10, 64, -6), 3.0D, 0, "minecraft:grass_block"))),
+                        List.of(new HazardEvidence("lava", new BlockCoordinate(12, 63, -3), 2.2D, "east", "high", "minecraft:lava", true)),
+                        List.of(new SafeStandSpot(new BlockCoordinate(9, 64, -3), "flat_2x1", 1.0D, 96)),
+                        List.of(new ObjectCluster("tree_cluster", new BlockCoordinate(8, 65, -4),
+                                List.of(new BlockEvidence("modded:rubber_log", new BlockCoordinate(8, 64, -4), "tree_cluster")),
+                                3, true, true, "medium"))
+                )
+        );
+
+        String formatted = RuntimeContextFormatter.format(snapshot);
+
+        require(formatted.contains("source=npc"), "perception source must be preserved");
+        require(formatted.contains("dimension=minecraft:overworld"), "perception dimension must be preserved");
+        require(formatted.contains("origin=10,64,-3"), "perception origin coordinates must be preserved");
+        require(formatted.contains("capped=true,truncated=true"), "perception cap flags must be preserved");
+        require(formatted.contains("nearest=10,64,-6"), "passability coordinates must be preserved");
+        require(formatted.contains("kind=lava,pos=12,63,-3"), "hazard coordinates and kind must be preserved");
+        require(formatted.contains("pos=9,64,-3,reason=flat_2x1"), "safe stand position and reason must be preserved");
+        require(formatted.contains("id=modded:rubber_log,pos=8,64,-4,label=tree_cluster"), "cluster evidence must be preserved");
     }
 
     private static RuntimeContextSnapshot emptySnapshot() {

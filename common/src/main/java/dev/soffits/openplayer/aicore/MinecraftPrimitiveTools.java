@@ -5,6 +5,7 @@ import dev.soffits.openplayer.intent.IntentKind;
 import dev.soffits.openplayer.intent.IntentPriority;
 import dev.soffits.openplayer.automation.CollectItemsInstructionParser;
 import dev.soffits.openplayer.automation.advanced.AdvancedTaskInstructionParser;
+import dev.soffits.openplayer.runtime.perception.WorldPerceptionClassifier;
 import dev.soffits.openplayer.runtime.validation.RuntimeIntentValidationResult;
 import dev.soffits.openplayer.runtime.validation.RuntimeIntentValidator;
 import java.util.LinkedHashMap;
@@ -440,6 +441,13 @@ public final class MinecraftPrimitiveTools {
     }
 
     private static Optional<ToolResult> validateToolSpecificArguments(ToolCall call) {
+        if (call.name().value().equals("observe_area")) {
+            Map<String, String> values = call.arguments().values();
+            if ((values.containsKey("x") || values.containsKey("y") || values.containsKey("z")) && !hasCoordinates(values)) {
+                return Optional.of(ToolResult.rejected("observe_area coordinates require x y z together"));
+            }
+            return Optional.empty();
+        }
         if (!call.name().equals(PICKUP_ITEMS_NEARBY)) {
             return Optional.empty();
         }
@@ -478,6 +486,10 @@ public final class MinecraftPrimitiveTools {
         Optional<Integer> timeoutTicks = integerArgument(call, "timeoutTicks");
         if (timeoutTicks.isPresent() && (timeoutTicks.get() < 0 || timeoutTicks.get() > 1200)) {
             return Optional.of(ToolResult.rejected("timeoutTicks must be between 0 and 1200"));
+        }
+        Optional<Integer> radius = integerArgument(call, "radius");
+        if (radius.isPresent() && (radius.get() < 1 || radius.get() > WorldPerceptionClassifier.MAX_SCAN_RADIUS)) {
+            return Optional.of(ToolResult.rejected("radius must be between 1 and " + WorldPerceptionClassifier.MAX_SCAN_RADIUS));
         }
         Optional<Integer> slot = integerArgument(call, "slot");
         if (slot.isPresent() && call.name().value().equals("set_quick_bar_slot") && (slot.get() < 0 || slot.get() > 8)) {

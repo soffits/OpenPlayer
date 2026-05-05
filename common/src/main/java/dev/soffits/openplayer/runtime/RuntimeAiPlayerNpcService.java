@@ -36,6 +36,7 @@ import dev.soffits.openplayer.runtime.planner.PlannerObservation;
 import dev.soffits.openplayer.runtime.planner.PlannerObservationStatus;
 import dev.soffits.openplayer.runtime.planner.PlannerTurnResult;
 import dev.soffits.openplayer.runtime.planner.PlannerTurnStatus;
+import dev.soffits.openplayer.runtime.perception.ServerWorldPerceptionScanner;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -881,7 +882,7 @@ public final class RuntimeAiPlayerNpcService implements AiPlayerNpcService, Inte
                 inventorySummary(entity)
         );
         RuntimeNearbySnapshot nearby = nearbySnapshot(level, entity, center);
-        return new RuntimeContextSnapshot(world, agent, nearby);
+        return new RuntimeContextSnapshot(world, agent, nearby, ServerWorldPerceptionScanner.scanNpcArea(level, center));
     }
 
     private static RuntimeNearbySnapshot nearbySnapshot(ServerLevel level, OpenPlayerNpcEntity entity, BlockPos center) {

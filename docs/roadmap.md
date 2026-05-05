@@ -21,6 +21,7 @@ This list tracks what already works and what still needs real game-side work.
 - [x] Nearby block break/place actions when policy allows them.
 - [x] Simple hostile-defense actions.
 - [x] Companion/world status snapshots for chat and planning.
+- [x] Nearby terrain, danger, safe standing spots, and visible work areas in companion planning context.
 - [x] Active task status, failure reasons, and cancellation points.
 - [x] Early support for longer tasks such as gathering materials, crafting a simple item, and delivering it.
 - [x] Early support for multiple companions sharing work and build plans.
@@ -50,6 +51,7 @@ This list tracks what already works and what still needs real game-side work.
 - [x] Report when a target is outside loaded or reachable space.
 - [ ] Improve obstacle handling and stuck recovery.
 - [ ] Improve short-range target search for blocks, items, and entities.
+- [x] Preserve coordinates and evidence for nearby terrain, hazards, trees, farms, containers, and workstations.
 - [ ] Add better path previews/status for long tasks.
 - [ ] Review any future pathing library before adoption. OpenPlayer should not quietly bundle a client-player bot and call it NPC control.
 
@@ -60,6 +62,7 @@ This list tracks what already works and what still needs real game-side work.
 - [x] Use simple crafting/resource planning for supported goals.
 - [x] Keep supported container transfers from losing items when something goes wrong.
 - [ ] Make crafting table, furnace, and container workflows friendlier in normal survival play.
+- [x] Notice nearby crafting tables, furnaces, chests, barrels, farms, and trees as structured local evidence.
 - [ ] Add more no-loss inventory moves with better error messages.
 - [ ] Add clearer support for locked, custom, or modded containers.
 

@@ -65,6 +65,10 @@ public final class AICoreToolCatalog {
         add(defs, "nearest_entity", "world_query", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Find the nearest loaded entity matching bounded criteria.", text("matching", false), integer("maxDistance"));
         add(defs, "find_loaded_blocks", "world_query", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Legacy loaded block search bridge.", text("matching"), integer("maxDistance", false));
         add(defs, "find_loaded_entities", "world_query", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Legacy loaded entity search bridge.", text("matching"), integer("maxDistance", false));
+        add(defs, "observe_area", "world_perception", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Return a compact loaded-only terrain, hazard, stand-spot, and object view around the NPC or explicit loaded coordinates.", integer("x", false), integer("y", false), integer("z", false), integer("radius", false));
+        add(defs, "find_safe_stand_near", "world_perception", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Return loaded candidate stand coordinates near a target coordinate.", integer("x"), integer("y"), integer("z"), integer("radius", false));
+        add(defs, "detect_nearby_structures", "world_perception", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Return evidence-only loaded nearby terrain object clusters.", integer("radius", false));
+        add(defs, "find_workstations", "world_perception", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, false, "", "Return loaded nearby crafting table, furnace, chest, barrel, and work area evidence.", integer("radius", false));
 
         add(defs, "set_control_state", "movement_pathfinder", CapabilityStatus.IMPLEMENTED_WITH_SERVER_SIDE_SEMANTICS, true, "", "Set one visible player-like control state without applying fake motion.", text("control"), bool("state"));
         add(defs, "get_control_state", "movement_pathfinder", CapabilityStatus.IMPLEMENTED, false, "", "Read one control state from the facade.", text("control"));

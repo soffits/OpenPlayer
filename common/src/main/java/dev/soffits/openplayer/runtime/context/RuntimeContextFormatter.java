@@ -3,6 +3,7 @@ package dev.soffits.openplayer.runtime.context;
 import dev.soffits.openplayer.runtime.context.RuntimeNearbySnapshot.BlockTargetSnapshot;
 import dev.soffits.openplayer.runtime.context.RuntimeNearbySnapshot.RuntimeEntitySnapshot;
 import dev.soffits.openplayer.runtime.context.RuntimeNearbySnapshot.RuntimeNamedEntitySnapshot;
+import dev.soffits.openplayer.runtime.perception.WorldPerceptionFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -57,7 +58,8 @@ public final class RuntimeContextFormatter {
         builder.append("nearbyDroppedItems: ").append(countedSummary(nearby.droppedItemCounts(), DROPPED_ITEM_SUMMARY_LIMIT)).append("\n");
         builder.append("nearbyHostiles: ").append(entitySummary(nearby.hostiles(), HOSTILE_SUMMARY_LIMIT)).append("\n");
         builder.append("nearbyPlayers: ").append(namedEntitySummary(nearby.players(), PLAYER_SUMMARY_LIMIT)).append("\n");
-        builder.append("nearbyOpenPlayerNpcs: ").append(namedEntitySummary(nearby.openPlayerNpcs(), OPENPLAYER_NPC_SUMMARY_LIMIT));
+        builder.append("nearbyOpenPlayerNpcs: ").append(namedEntitySummary(nearby.openPlayerNpcs(), OPENPLAYER_NPC_SUMMARY_LIMIT)).append("\n");
+        builder.append(WorldPerceptionFormatter.compact(snapshot.perception()));
         return builder.toString();
     }
 
