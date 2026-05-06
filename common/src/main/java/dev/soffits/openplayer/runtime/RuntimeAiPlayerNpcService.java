@@ -4,6 +4,7 @@ import dev.soffits.openplayer.api.AiPlayerNpcCommand;
 import dev.soffits.openplayer.api.AiPlayerNpcService;
 import dev.soffits.openplayer.api.AiPlayerNpcSession;
 import dev.soffits.openplayer.api.AiPlayerNpcSpec;
+import dev.soffits.openplayer.api.CommandResultDisplay;
 import dev.soffits.openplayer.api.CommandSubmissionResult;
 import dev.soffits.openplayer.api.CommandSubmissionStatus;
 import dev.soffits.openplayer.api.NpcOwnerId;
@@ -215,14 +216,16 @@ public final class RuntimeAiPlayerNpcService extends RuntimeAiPlayerNpcServiceSe
         if (!sessions.containsKey(sessionId)) {
             OpenPlayerDebugEvents.record("command_submission", "unknown_session", null, null,
                     sessionId.value().toString(), "submit_command");
-            return new CommandSubmissionResult(CommandSubmissionStatus.UNKNOWN_SESSION, "Unknown NPC session");
+            return new CommandSubmissionResult(CommandSubmissionStatus.UNKNOWN_SESSION, "Unknown NPC session",
+                    CommandResultDisplay.translatable("commands.openplayer.result.session.unknown"));
         }
         RuntimeAiPlayerNpcSession session = sessions.get(sessionId);
         OpenPlayerNpcEntity entity = entityFor(session);
         if (entity == null) {
             OpenPlayerDebugEvents.record("command_submission", "rejected", null, null,
                     sessionId.value().toString(), "NPC session entity is unavailable");
-            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "NPC session entity is unavailable");
+            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "NPC session entity is unavailable",
+                    CommandResultDisplay.translatable("commands.openplayer.result.session.entity_unavailable"));
         }
         if (command.intent().kind() == dev.soffits.openplayer.intent.IntentKind.STOP) {
             cancelPlannerSession(sessionId, "stop requested");
@@ -230,7 +233,8 @@ public final class RuntimeAiPlayerNpcService extends RuntimeAiPlayerNpcServiceSe
         try {
             return entity.submitRuntimeCommand(command);
         } catch (IllegalArgumentException exception) {
-            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, exception.getMessage());
+            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, exception.getMessage(),
+                    CommandResultDisplay.translatable("commands.openplayer.result.automation.validation_rejected"));
         }
     }
 
@@ -256,7 +260,8 @@ public final class RuntimeAiPlayerNpcService extends RuntimeAiPlayerNpcServiceSe
             if (!sessions.containsKey(sessionId)) {
                 OpenPlayerDebugEvents.record("command_text", "unknown_session", null, null,
                         sessionId.value().toString(), "submit_command_text");
-                return new CommandSubmissionResult(CommandSubmissionStatus.UNKNOWN_SESSION, "Unknown NPC session");
+                return new CommandSubmissionResult(CommandSubmissionStatus.UNKNOWN_SESSION, "Unknown NPC session",
+                    CommandResultDisplay.translatable("commands.openplayer.result.session.unknown"));
             }
         }
         InteractivePlannerSession plannerSession = new InteractivePlannerSession(UUID.randomUUID(), request.userRequest(),
@@ -270,7 +275,8 @@ public final class RuntimeAiPlayerNpcService extends RuntimeAiPlayerNpcServiceSe
             plannerRequests.put(sessionId, request);
         }
         schedulePlannerProviderCall(sessionId, plannerSession);
-        return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED, "Command text queued for interactive provider planning");
+        return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED, "Command text queued for interactive provider planning",
+                CommandResultDisplay.translatable("commands.openplayer.result.conversation.queued"));
     }
 
     protected static CommandIntent parseCommandText(IntentParser parser, NpcSessionId sessionId, String input,

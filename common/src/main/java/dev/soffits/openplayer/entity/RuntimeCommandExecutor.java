@@ -2,6 +2,7 @@ package dev.soffits.openplayer.entity;
 
 import dev.soffits.openplayer.OpenPlayerAutomationConfig;
 import dev.soffits.openplayer.api.AiPlayerNpcCommand;
+import dev.soffits.openplayer.api.CommandResultDisplay;
 import dev.soffits.openplayer.api.CommandSubmissionResult;
 import dev.soffits.openplayer.api.CommandSubmissionStatus;
 import dev.soffits.openplayer.api.NpcOwnerId;
@@ -41,7 +42,8 @@ final class RuntimeCommandExecutor {
                     OpenPlayerDebugEvents.sanitizeDetail(
                             "kind=" + safeIntentKindName(intent) + " message=" + validation.message()
                     ));
-            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, validation.message());
+            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, validation.message(),
+                    CommandResultDisplay.translatable("commands.openplayer.result.automation.validation_rejected"));
         }
         AutomationCommandResult result = automationController.submit(intent);
         OpenPlayerDebugEvents.record("automation", result.status().name(), null, null, null,
@@ -72,6 +74,6 @@ final class RuntimeCommandExecutor {
         CommandSubmissionStatus status = result.status() == AutomationCommandStatus.ACCEPTED
                 ? CommandSubmissionStatus.ACCEPTED
                 : CommandSubmissionStatus.REJECTED;
-        return new CommandSubmissionResult(status, result.message());
+        return new CommandSubmissionResult(status, result.message(), result.display());
     }
 }

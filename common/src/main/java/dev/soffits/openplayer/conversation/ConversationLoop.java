@@ -2,6 +2,7 @@ package dev.soffits.openplayer.conversation;
 
 import dev.soffits.openplayer.IntentParserRuntimeStatus;
 import dev.soffits.openplayer.api.AiPlayerNpcCommand;
+import dev.soffits.openplayer.api.CommandResultDisplay;
 import dev.soffits.openplayer.api.CommandSubmissionResult;
 import dev.soffits.openplayer.api.CommandSubmissionStatus;
 import dev.soffits.openplayer.character.LocalCharacterDefinition;
@@ -83,11 +84,13 @@ public final class ConversationLoop {
             IntentParser intentParser = intentParserSupplier.get();
             if (intentParser == null) {
                 return new CommandSubmissionResult(CommandSubmissionStatus.UNAVAILABLE,
-                        "Conversation unavailable: intent parser disabled");
+                        "Conversation unavailable: intent parser disabled",
+                        CommandResultDisplay.translatable("commands.openplayer.result.conversation.parser_disabled"));
             }
             intent = ConversationIntentValidator.requireConversationIntent(intentParser.parse(request.prompt()));
         } catch (IntentParseException exception) {
-            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, conversationFailureMessage(exception));
+            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, conversationFailureMessage(exception),
+                    CommandResultDisplay.translatable("commands.openplayer.result.conversation.parse_failed"));
         }
         return submitIntent(intent, submitter, acceptedIntentRecorder);
     }
@@ -104,7 +107,8 @@ public final class ConversationLoop {
         IntentParserRuntimeStatus status = statusSupplier.get();
         if (status == null || !status.enabled()) {
             return new ConversationParseRequest("", new CommandSubmissionResult(CommandSubmissionStatus.UNAVAILABLE,
-                    "Conversation unavailable: intent parser disabled"));
+                    "Conversation unavailable: intent parser disabled",
+                    CommandResultDisplay.translatable("commands.openplayer.result.conversation.parser_disabled")));
         }
         try {
             return new ConversationParseRequest(ConversationPromptAssembler.assemble(
@@ -114,7 +118,8 @@ public final class ConversationLoop {
                     contextSnapshot
             ), null);
         } catch (IllegalArgumentException exception) {
-            return new ConversationParseRequest("", new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, exception.getMessage()));
+            return new ConversationParseRequest("", new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, exception.getMessage(),
+                    CommandResultDisplay.translatable("commands.openplayer.result.conversation.invalid_context")));
         }
     }
 
@@ -132,11 +137,13 @@ public final class ConversationLoop {
         acceptedIntentRecorder.accept(intent);
         if (intent.kind() == IntentKind.CHAT) {
             return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED,
-                    ConversationReplyText.chatReply(intent.instruction()));
+                    ConversationReplyText.chatReply(intent.instruction()),
+                    CommandResultDisplay.companionChat("commands.openplayer.chat.dynamic"));
         }
         if (intent.kind() == IntentKind.UNAVAILABLE) {
             return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED,
-                    ConversationReplyText.unavailableReply(intent.instruction()));
+                    ConversationReplyText.unavailableReply(intent.instruction()),
+                    CommandResultDisplay.companionChat("commands.openplayer.chat.dynamic"));
         }
         return submitter.submit(new AiPlayerNpcCommand(UUID.randomUUID(), intent));
     }

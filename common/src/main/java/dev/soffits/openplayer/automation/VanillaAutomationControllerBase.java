@@ -1,5 +1,6 @@
 package dev.soffits.openplayer.automation;
 
+import dev.soffits.openplayer.api.CommandResultDisplay;
 import dev.soffits.openplayer.api.NpcOwnerId;
 import dev.soffits.openplayer.aicore.AICoreEventBus;
 import dev.soffits.openplayer.automation.AutomationInstructionParser.Coordinate;
@@ -407,11 +408,13 @@ abstract class VanillaAutomationControllerBase implements AutomationController {
         }
 
         protected static AutomationCommandResult accepted(String message) {
-            return new AutomationCommandResult(AutomationCommandStatus.ACCEPTED, message);
+            return new AutomationCommandResult(AutomationCommandStatus.ACCEPTED, message,
+                    CommandResultDisplay.translatable("commands.openplayer.result.automation.accepted"));
         }
 
         protected static AutomationCommandResult rejected(String message) {
-            return new AutomationCommandResult(AutomationCommandStatus.REJECTED, message);
+            return new AutomationCommandResult(AutomationCommandStatus.REJECTED, message,
+                    CommandResultDisplay.translatable("commands.openplayer.result.automation.rejected"));
         }
 
         protected boolean acquireInteractionCooldown() {

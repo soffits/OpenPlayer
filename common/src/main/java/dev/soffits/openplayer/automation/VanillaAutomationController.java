@@ -59,7 +59,7 @@ public AutomationCommandResult submit(CommandIntent intent) {
                 CommandSubmissionStatus status = primitiveResult.status() == AutomationCommandStatus.ACCEPTED
                         ? CommandSubmissionStatus.ACCEPTED
                         : CommandSubmissionStatus.REJECTED;
-                return new CommandSubmissionResult(status, primitiveResult.message());
+                return new CommandSubmissionResult(status, primitiveResult.message(), primitiveResult.display());
             });
     ToolResult result = executor.execute(toolCall, new ToolValidationContext(entity.allowWorldActions()));
     if (result.status() == ToolResultStatus.SUCCESS || result.status() == ToolResultStatus.RUNNING) {

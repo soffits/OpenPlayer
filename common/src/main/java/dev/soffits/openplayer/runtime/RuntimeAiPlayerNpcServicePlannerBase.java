@@ -4,6 +4,7 @@ import dev.soffits.openplayer.api.AiPlayerNpcCommand;
 import dev.soffits.openplayer.api.AiPlayerNpcService;
 import dev.soffits.openplayer.api.AiPlayerNpcSession;
 import dev.soffits.openplayer.api.AiPlayerNpcSpec;
+import dev.soffits.openplayer.api.CommandResultDisplay;
 import dev.soffits.openplayer.api.CommandSubmissionResult;
 import dev.soffits.openplayer.api.CommandSubmissionStatus;
 import dev.soffits.openplayer.api.NpcOwnerId;
@@ -267,7 +268,7 @@ abstract class RuntimeAiPlayerNpcServicePlannerBase implements AiPlayerNpcServic
         if (callbacks != null) {
             CommandSubmissionStatus status = result.status() == PlannerTurnStatus.FINISHED
                     ? CommandSubmissionStatus.ACCEPTED : CommandSubmissionStatus.REJECTED;
-            callbacks.completion().accept(new CommandSubmissionResult(status, result.message()));
+            callbacks.completion().accept(new CommandSubmissionResult(status, result.message(), plannerCompletionDisplay(result.status())));
         }
     }
 
@@ -277,6 +278,13 @@ abstract class RuntimeAiPlayerNpcServicePlannerBase implements AiPlayerNpcServic
 
     protected synchronized PlannerCommandTextCallbacks plannerCallbacks(NpcSessionId sessionId) {
         return plannerCallbacks.get(sessionId);
+    }
+
+    private static CommandResultDisplay plannerCompletionDisplay(PlannerTurnStatus status) {
+        if (status == PlannerTurnStatus.FINISHED) {
+            return CommandResultDisplay.companionChat("commands.openplayer.result.planner.finished");
+        }
+        return CommandResultDisplay.translatable("commands.openplayer.result.planner.rejected");
     }
 
     protected void recordPlannerIntent(NpcSessionId sessionId, CommandIntent intent) {

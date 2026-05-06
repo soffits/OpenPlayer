@@ -34,7 +34,7 @@ public final class UnavailableAiPlayerNpcService implements AiPlayerNpcService {
         if (command == null) {
             throw new IllegalArgumentException("command cannot be null");
         }
-        return new CommandSubmissionResult(CommandSubmissionStatus.UNAVAILABLE, UNAVAILABLE_MESSAGE);
+        return unavailableResult();
     }
 
     @Override
@@ -45,7 +45,7 @@ public final class UnavailableAiPlayerNpcService implements AiPlayerNpcService {
         if (input == null) {
             throw new IllegalArgumentException("input cannot be null");
         }
-        return new CommandSubmissionResult(CommandSubmissionStatus.UNAVAILABLE, UNAVAILABLE_MESSAGE);
+        return unavailableResult();
     }
 
     @Override
@@ -54,5 +54,10 @@ public final class UnavailableAiPlayerNpcService implements AiPlayerNpcService {
             throw new IllegalArgumentException("sessionId cannot be null");
         }
         return NpcSessionStatus.UNAVAILABLE;
+    }
+
+    private static CommandSubmissionResult unavailableResult() {
+        return new CommandSubmissionResult(CommandSubmissionStatus.UNAVAILABLE, UNAVAILABLE_MESSAGE,
+                CommandResultDisplay.translatable("commands.openplayer.result.service.unavailable"));
     }
 }

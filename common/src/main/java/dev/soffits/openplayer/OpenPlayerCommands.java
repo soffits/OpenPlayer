@@ -10,6 +10,7 @@ import dev.soffits.openplayer.aicore.ToolArguments;
 import dev.soffits.openplayer.aicore.ToolCall;
 import dev.soffits.openplayer.aicore.ToolName;
 import dev.soffits.openplayer.api.CommandSubmissionResult;
+import dev.soffits.openplayer.api.CommandResultDisplay;
 import dev.soffits.openplayer.api.CommandSubmissionStatus;
 import dev.soffits.openplayer.intent.IntentKind;
 import dev.soffits.openplayer.intent.IntentPriority;
@@ -173,7 +174,7 @@ public final class OpenPlayerCommands {
 
     private static int chat(ServerPlayer player, String assignmentId, String message) {
         CommandSubmissionResult result = OpenPlayerNetworking.submitAssignmentCommandTextResult(player, assignmentId, message);
-        if (result.status() == CommandSubmissionStatus.ACCEPTED) {
+        if (result.status() == CommandSubmissionStatus.ACCEPTED && result.display().companionChat()) {
             OpenPlayerNetworking.sendAcceptedChatReply(player, assignmentId, result.message());
             return 1;
         }
@@ -212,7 +213,11 @@ public final class OpenPlayerCommands {
     }
 
     private static int sendResult(ServerPlayer player, CommandSubmissionResult result) {
-        player.sendSystemMessage(Component.translatable("commands.openplayer.result", result.message()));
+        player.sendSystemMessage(Component.translatable("commands.openplayer.result", displayComponent(result.display())));
         return result.status() == CommandSubmissionStatus.ACCEPTED ? 1 : 0;
+    }
+
+    private static Component displayComponent(CommandResultDisplay display) {
+        return Component.translatable(display.translationKey(), (Object[]) display.args());
     }
 }

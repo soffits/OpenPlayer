@@ -6,6 +6,7 @@ import dev.soffits.openplayer.OpenPlayerIntentParserConfig;
 import dev.soffits.openplayer.OpenPlayerRuntimeStatus;
 import dev.soffits.openplayer.api.AiPlayerNpcCommand;
 import dev.soffits.openplayer.api.CommandSubmissionResult;
+import dev.soffits.openplayer.api.CommandResultDisplay;
 import dev.soffits.openplayer.api.CommandSubmissionStatus;
 import dev.soffits.openplayer.api.NpcOwnerId;
 import dev.soffits.openplayer.api.NpcSpawnLocation;
@@ -342,7 +343,8 @@ public final class OpenPlayerNetworking extends OpenPlayerNetworkingBase {
         if (sender == null || assignmentId == null || assignmentId.isBlank()
                 || commandText == null || commandText.isBlank() || commandText.length() > MAX_COMMAND_TEXT_LENGTH) {
             OpenPlayerDebugEvents.record("command_text", "rejected", assignmentId, null, null, "invalid_length_or_blank");
-            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Message was blank or too long");
+            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Message was blank or too long",
+                    CommandResultDisplay.translatable("commands.openplayer.result.input.invalid_message"));
         }
         String trimmedAssignmentId = assignmentId.trim();
         String trimmedCommandText = commandText.trim();
@@ -394,12 +396,16 @@ public final class OpenPlayerNetworking extends OpenPlayerNetworkingBase {
     private static void sendSelectedCommandTextResultMessage(ServerPlayer sender, String assignmentId,
                                                               CommandSubmissionResult result) {
         if (result.status() == CommandSubmissionStatus.ACCEPTED) {
-            sendAcceptedChatReply(sender, assignmentId, result.message());
+            if (result.display().companionChat()) {
+                sendAcceptedChatReply(sender, assignmentId, result.message());
+            } else {
+                sender.sendSystemMessage(Component.translatable("commands.openplayer.result", displayComponent(result.display())));
+            }
             return;
         }
         if (result.status() == CommandSubmissionStatus.REJECTED || result.status() == CommandSubmissionStatus.UNAVAILABLE
                 || result.status() == CommandSubmissionStatus.UNKNOWN_SESSION) {
-            sender.sendSystemMessage(Component.translatable("commands.openplayer.result", result.message()));
+            sender.sendSystemMessage(Component.translatable("commands.openplayer.result", displayComponent(result.display())));
         }
     }
 
@@ -415,6 +421,10 @@ public final class OpenPlayerNetworking extends OpenPlayerNetworkingBase {
 
     private static Component progressComponent(PlannerPrimitiveProgress.Display progress) {
         return Component.translatable(progress.translationKey(), (Object[]) progress.args());
+    }
+
+    private static Component displayComponent(CommandResultDisplay display) {
+        return Component.translatable(display.translationKey(), (Object[]) display.args());
     }
 
 }

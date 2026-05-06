@@ -4,6 +4,7 @@ import dev.soffits.openplayer.OpenPlayerConstants;
 import dev.soffits.openplayer.api.AiPlayerNpcCommand;
 import dev.soffits.openplayer.api.AiPlayerNpcService;
 import dev.soffits.openplayer.api.AiPlayerNpcSession;
+import dev.soffits.openplayer.api.CommandResultDisplay;
 import dev.soffits.openplayer.api.CommandSubmissionResult;
 import dev.soffits.openplayer.api.CommandSubmissionStatus;
 import dev.soffits.openplayer.api.NpcOwnerId;
@@ -99,7 +100,8 @@ public final class CompanionLifecycleManager extends CompanionLifecycleManagerBa
         if (findActiveSession(ownerId.value(), resolvedAssignment.get()).isEmpty()
                 && activeAssignmentCount(ownerId.value()) >= MAX_ACTIVE_ASSIGNMENTS_PER_OWNER) {
             return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED,
-                    "Active companion assignment limit reached");
+                    "Active companion assignment limit reached",
+                    CommandResultDisplay.translatable("commands.openplayer.result.companion.assignment_limit"));
         }
         LocalAssignmentDefinition assignment = resolvedAssignment.get().assignment();
         LocalCharacterDefinition character = resolvedAssignment.get().character();
@@ -115,7 +117,8 @@ public final class CompanionLifecycleManager extends CompanionLifecycleManagerBa
                     assignment.resolvedDisplayName(character)
             );
         }
-        return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED, "Companion spawned");
+        return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED, "Companion spawned",
+                CommandResultDisplay.translatable("commands.openplayer.result.companion.spawned"));
     }
 
     public CommandSubmissionResult despawnSelected(UUID ownerId, String characterId) {
@@ -135,9 +138,11 @@ public final class CompanionLifecycleManager extends CompanionLifecycleManagerBa
             }
         }
         if (!despawned) {
-            return new CommandSubmissionResult(CommandSubmissionStatus.UNKNOWN_SESSION, "Companion is not spawned");
+            return new CommandSubmissionResult(CommandSubmissionStatus.UNKNOWN_SESSION, "Companion is not spawned",
+                    CommandResultDisplay.translatable("commands.openplayer.result.companion.not_spawned"));
         }
-        return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED, "Companion despawned");
+        return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED, "Companion despawned",
+                CommandResultDisplay.translatable("commands.openplayer.result.companion.despawned"));
     }
 
     public CommandSubmissionResult submitSelectedCommand(UUID ownerId, String characterId, AiPlayerNpcCommand command) {
@@ -158,7 +163,8 @@ public final class CompanionLifecycleManager extends CompanionLifecycleManagerBa
     private CommandSubmissionResult resetSelectedMemory(UUID ownerId, String characterId, CommandIntent intent) {
         RuntimeIntentValidationResult validation = RuntimeIntentValidator.validate(intent, true);
         if (!validation.isAccepted()) {
-            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, validation.message());
+            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, validation.message(),
+                    CommandResultDisplay.translatable("commands.openplayer.result.automation.validation_rejected"));
         }
         Optional<ResolvedAssignment> resolvedAssignment = findAssignment(characterId);
         if (resolvedAssignment.isEmpty()) {
@@ -173,7 +179,8 @@ public final class CompanionLifecycleManager extends CompanionLifecycleManagerBa
                 "conversationHistory=" + clearedConversationHistory + " automationLocalMemory=false");
         return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED,
                 "RESET_MEMORY accepted: cleared conversationHistory=" + clearedConversationHistory
-                        + ", automationLocalMemory=false");
+                        + ", automationLocalMemory=false",
+                CommandResultDisplay.translatable("commands.openplayer.result.memory.reset"));
     }
 
     public CommandSubmissionResult submitSelectedCommandText(UUID ownerId, String characterId, String commandText) {
@@ -192,7 +199,8 @@ public final class CompanionLifecycleManager extends CompanionLifecycleManagerBa
             OpenPlayerDebugEvents.record("conversation", "unavailable", assignment.id(), character.id(), null,
                     "conversation_config_missing messageLength=" + commandText.trim().length());
             return new CommandSubmissionResult(CommandSubmissionStatus.UNAVAILABLE,
-                    "Conversation unavailable: conversation config missing");
+                    "Conversation unavailable: conversation config missing",
+                    CommandResultDisplay.translatable("commands.openplayer.result.conversation.config_missing"));
         }
         conversationStatusRepository.recordPlayerMessage(ownerId, assignment.id(), commandText);
         Optional<AiPlayerNpcSession> session = findActiveSession(ownerId, resolvedAssignment.get());
@@ -200,7 +208,8 @@ public final class CompanionLifecycleManager extends CompanionLifecycleManagerBa
             conversationStatusRepository.recordFailure(ownerId, assignment.id(), "Companion is not spawned");
             OpenPlayerDebugEvents.record("conversation", "unknown_session", assignment.id(), character.id(), null,
                     "companion_not_spawned messageLength=" + commandText.trim().length());
-            return new CommandSubmissionResult(CommandSubmissionStatus.UNKNOWN_SESSION, "Companion is not spawned");
+            return new CommandSubmissionResult(CommandSubmissionStatus.UNKNOWN_SESSION, "Companion is not spawned",
+                    CommandResultDisplay.translatable("commands.openplayer.result.companion.not_spawned"));
         }
         ConversationHistoryKey historyKey = new ConversationHistoryKey(ownerId, assignment.id());
         List<ConversationTurn> history = conversationHistory.getOrDefault(historyKey, List.of());
@@ -288,9 +297,11 @@ public final class CompanionLifecycleManager extends CompanionLifecycleManagerBa
             conversationStatusRepository.recordFailure(ownerId, context.assignment().id(), message);
             OpenPlayerDebugEvents.record("conversation", CommandSubmissionStatus.REJECTED.name(), context.assignment().id(),
                     context.character().id(), context.sessionId(), message);
-            completion.accept(new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, message));
+            completion.accept(new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, message,
+                    CommandResultDisplay.translatable("commands.openplayer.result.conversation.parse_failed")));
         });
-        return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED, "Conversation queued for provider parsing");
+        return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED, "Conversation queued for provider parsing",
+                CommandResultDisplay.translatable("commands.openplayer.result.conversation.queued"));
     }
 
 }

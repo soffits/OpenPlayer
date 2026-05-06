@@ -4,6 +4,7 @@ import dev.soffits.openplayer.OpenPlayerConstants;
 import dev.soffits.openplayer.api.AiPlayerNpcCommand;
 import dev.soffits.openplayer.api.AiPlayerNpcService;
 import dev.soffits.openplayer.api.AiPlayerNpcSession;
+import dev.soffits.openplayer.api.CommandResultDisplay;
 import dev.soffits.openplayer.api.CommandSubmissionResult;
 import dev.soffits.openplayer.api.CommandSubmissionStatus;
 import dev.soffits.openplayer.api.NpcSessionStatus;
@@ -126,11 +127,13 @@ abstract class CompanionLifecycleManagerBase {
         }
         if (lastIntent.kind() == IntentKind.CHAT) {
             return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED,
-                    ConversationReplyText.chatReply(lastIntent.instruction()));
+                    ConversationReplyText.chatReply(lastIntent.instruction()),
+                    CommandResultDisplay.companionChat("commands.openplayer.chat.dynamic"));
         }
         if (lastIntent.kind() == IntentKind.UNAVAILABLE) {
             return new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED,
-                    ConversationReplyText.unavailableReply(lastIntent.instruction()));
+                    ConversationReplyText.unavailableReply(lastIntent.instruction()),
+                    CommandResultDisplay.companionChat("commands.openplayer.chat.dynamic"));
         }
         return result;
     }
@@ -150,7 +153,8 @@ abstract class CompanionLifecycleManagerBase {
             OpenPlayerDebugEvents.record("conversation", "unavailable", assignment.id(), character.id(), null,
                     "conversation_config_missing messageLength=" + commandText.trim().length());
             return ConversationSubmissionContext.immediate(new CommandSubmissionResult(CommandSubmissionStatus.UNAVAILABLE,
-                    "Conversation unavailable: conversation config missing"));
+                    "Conversation unavailable: conversation config missing",
+                    CommandResultDisplay.translatable("commands.openplayer.result.conversation.config_missing")));
         }
         conversationStatusRepository.recordPlayerMessage(ownerId, assignment.id(), commandText);
         Optional<AiPlayerNpcSession> session = findActiveSession(ownerId, resolvedAssignment.get());
@@ -159,7 +163,8 @@ abstract class CompanionLifecycleManagerBase {
             OpenPlayerDebugEvents.record("conversation", "unknown_session", assignment.id(), character.id(), null,
                     "companion_not_spawned messageLength=" + commandText.trim().length());
             return ConversationSubmissionContext.immediate(new CommandSubmissionResult(CommandSubmissionStatus.UNKNOWN_SESSION,
-                    "Companion is not spawned"));
+                    "Companion is not spawned",
+                    CommandResultDisplay.translatable("commands.openplayer.result.companion.not_spawned")));
         }
         ConversationHistoryKey historyKey = new ConversationHistoryKey(ownerId, assignment.id());
         List<ConversationTurn> history = conversationHistory.getOrDefault(historyKey, List.of());
@@ -423,14 +428,16 @@ abstract class CompanionLifecycleManagerBase {
         if (findCharacter(characterId).isEmpty()) {
             return rejectedUnknownAssignment();
         }
-        return new CommandSubmissionResult(CommandSubmissionStatus.UNKNOWN_SESSION, "Companion is not spawned");
+        return new CommandSubmissionResult(CommandSubmissionStatus.UNKNOWN_SESSION, "Companion is not spawned",
+                CommandResultDisplay.translatable("commands.openplayer.result.companion.not_spawned"));
     }
 
     protected CommandSubmissionResult unknownOrMissingAssignment(String assignmentId) {
         if (findAssignment(assignmentId).isEmpty()) {
             return rejectedUnknownAssignment();
         }
-        return new CommandSubmissionResult(CommandSubmissionStatus.UNKNOWN_SESSION, "Companion is not spawned");
+        return new CommandSubmissionResult(CommandSubmissionStatus.UNKNOWN_SESSION, "Companion is not spawned",
+                CommandResultDisplay.translatable("commands.openplayer.result.companion.not_spawned"));
     }
 
     protected CommandSubmissionResult rejectedUnknownCharacter() {
@@ -438,7 +445,8 @@ abstract class CompanionLifecycleManagerBase {
     }
 
     protected CommandSubmissionResult rejectedUnknownAssignment() {
-        return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Unknown local assignment");
+        return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Unknown local assignment",
+                CommandResultDisplay.translatable("commands.openplayer.result.assignment.unknown"));
     }
 
     protected static LocalAssignmentRepositoryResult defaultAssignmentResult(LocalCharacterRepositoryResult characterResult) {

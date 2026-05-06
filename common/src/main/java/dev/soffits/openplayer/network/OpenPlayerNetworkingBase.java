@@ -5,6 +5,7 @@ import dev.soffits.openplayer.OpenPlayerConstants;
 import dev.soffits.openplayer.OpenPlayerIntentParserConfig;
 import dev.soffits.openplayer.OpenPlayerRuntimeStatus;
 import dev.soffits.openplayer.api.AiPlayerNpcCommand;
+import dev.soffits.openplayer.api.CommandResultDisplay;
 import dev.soffits.openplayer.api.CommandSubmissionResult;
 import dev.soffits.openplayer.api.CommandSubmissionStatus;
 import dev.soffits.openplayer.api.NpcOwnerId;
@@ -54,7 +55,8 @@ class OpenPlayerNetworkingBase {
 
     public static CommandSubmissionResult spawnAssignmentResult(ServerPlayer sender, String assignmentId) {
         if (sender == null || assignmentId == null || assignmentId.isBlank()) {
-            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Unknown local assignment");
+            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Unknown local assignment",
+                    CommandResultDisplay.translatable("commands.openplayer.result.assignment.unknown"));
         }
         CommandSubmissionResult result = COMPANION_LIFECYCLE_MANAGER.spawnSelectedAssignment(
                 new NpcOwnerId(sender.getUUID()),
@@ -73,7 +75,8 @@ class OpenPlayerNetworkingBase {
 
     public static CommandSubmissionResult despawnAssignmentResult(ServerPlayer sender, String assignmentId) {
         if (sender == null || assignmentId == null || assignmentId.isBlank()) {
-            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Unknown local assignment");
+            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Unknown local assignment",
+                    CommandResultDisplay.translatable("commands.openplayer.result.assignment.unknown"));
         }
         CommandSubmissionResult result = COMPANION_LIFECYCLE_MANAGER.despawnSelectedAssignment(sender.getUUID(), assignmentId.trim());
         sendCharacterListResponse(sender);
@@ -84,7 +87,8 @@ class OpenPlayerNetworkingBase {
     public static CommandSubmissionResult submitAssignmentIntentResult(ServerPlayer sender, String assignmentId,
                                                                        IntentKind intentKind) {
         if (sender == null || assignmentId == null || assignmentId.isBlank() || intentKind == null) {
-            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Unknown local assignment");
+            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Unknown local assignment",
+                    CommandResultDisplay.translatable("commands.openplayer.result.assignment.unknown"));
         }
         CommandSubmissionResult result = COMPANION_LIFECYCLE_MANAGER.submitSelectedCommand(
                 sender.getUUID(),
@@ -99,13 +103,15 @@ class OpenPlayerNetworkingBase {
     public static CommandSubmissionResult submitAssignmentQueuedIntentResult(ServerPlayer sender, String assignmentId,
                                                                             IntentKind intentKind, String instruction) {
         if (sender == null || assignmentId == null || assignmentId.isBlank() || intentKind == null) {
-            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Unknown local assignment");
+            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Unknown local assignment",
+                    CommandResultDisplay.translatable("commands.openplayer.result.assignment.unknown"));
         }
         String normalizedInstruction = instruction == null ? "" : instruction.trim();
         if (normalizedInstruction.length() > MAX_COMMAND_TEXT_LENGTH) {
             OpenPlayerDebugEvents.record("command_submission", "rejected", assignmentId, null, null,
                     "kind=" + intentKind.name() + " instruction_too_long");
-            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Queued command instruction was too long");
+            return new CommandSubmissionResult(CommandSubmissionStatus.REJECTED, "Queued command instruction was too long",
+                    CommandResultDisplay.translatable("commands.openplayer.result.input.instruction_too_long"));
         }
         CommandSubmissionResult result = COMPANION_LIFECYCLE_MANAGER.submitSelectedCommand(
                 sender.getUUID(),
