@@ -21,6 +21,7 @@ import dev.soffits.openplayer.conversation.ConversationTurn;
 import dev.soffits.openplayer.debug.OpenPlayerDebugEvents;
 import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentKind;
+import dev.soffits.openplayer.runtime.planner.PlannerPrimitiveProgress;
 import dev.soffits.openplayer.intent.IntentParseException;
 import java.util.ArrayList;
 import java.util.Locale;
@@ -50,8 +51,9 @@ abstract class CompanionLifecycleManagerBase {
     }
 
     protected CommandSubmissionResult submitPlannedConversation(ConversationSubmissionContext context,
-                                                             InteractivePlannerCommandTextService plannerService,
-                                                             Consumer<CommandSubmissionResult> completion) {
+                                                              InteractivePlannerCommandTextService plannerService,
+                                                              Consumer<PlannerPrimitiveProgress.Display> progress,
+                                                              Consumer<CommandSubmissionResult> completion) {
         List<AiPlayerNpcCommand> submittedCommands = new ArrayList<>();
         CommandIntent[] lastIntent = new CommandIntent[1];
         return plannerService.submitPlannedCommandText(
@@ -74,7 +76,7 @@ abstract class CompanionLifecycleManagerBase {
                             submittedCommands.add(command);
                             conversationStatusRepository.recordAction(context.ownerId(), context.assignment().id(), command.intent());
                         },
-                        completion,
+                        progress,
                         result -> completion.accept(finishPlannedConversationSubmission(context, result, lastIntent[0], submittedCommands))
                 )
         );

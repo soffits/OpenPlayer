@@ -26,6 +26,7 @@ import dev.soffits.openplayer.intent.IntentParser;
 import dev.soffits.openplayer.intent.IntentKind;
 import dev.soffits.openplayer.intent.IntentParseException;
 import dev.soffits.openplayer.OpenPlayerIntentParserConfig;
+import dev.soffits.openplayer.runtime.planner.PlannerPrimitiveProgress;
 import dev.soffits.openplayer.runtime.validation.RuntimeIntentValidationResult;
 import dev.soffits.openplayer.runtime.validation.RuntimeIntentValidator;
 import java.util.ArrayList;
@@ -251,8 +252,18 @@ public final class CompanionLifecycleManager extends CompanionLifecycleManagerBa
     }
 
     public CommandSubmissionResult submitSelectedCommandTextAsync(MinecraftServer server, UUID ownerId, String characterId,
-                                                                 String commandText,
-                                                                 Consumer<CommandSubmissionResult> completion) {
+                                                                  String commandText,
+                                                                  Consumer<CommandSubmissionResult> completion) {
+        return submitSelectedCommandTextAsync(server, ownerId, characterId, commandText, ignored -> { }, completion);
+    }
+
+    public CommandSubmissionResult submitSelectedCommandTextAsync(MinecraftServer server, UUID ownerId, String characterId,
+                                                                  String commandText,
+                                                                  Consumer<PlannerPrimitiveProgress.Display> progress,
+                                                                  Consumer<CommandSubmissionResult> completion) {
+        if (progress == null) {
+            throw new IllegalArgumentException("progress cannot be null");
+        }
         if (completion == null) {
             throw new IllegalArgumentException("completion cannot be null");
         }
@@ -262,7 +273,7 @@ public final class CompanionLifecycleManager extends CompanionLifecycleManagerBa
         }
         AiPlayerNpcService service = npcService();
         if (service instanceof InteractivePlannerCommandTextService plannerService) {
-            return submitPlannedConversation(context, plannerService, completion);
+            return submitPlannedConversation(context, plannerService, progress, completion);
         }
         if (server == null) {
             throw new IllegalArgumentException("server cannot be null");

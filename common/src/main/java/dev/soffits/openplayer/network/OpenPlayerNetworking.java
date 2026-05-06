@@ -33,6 +33,7 @@ import dev.soffits.openplayer.intent.IntentParser;
 import dev.soffits.openplayer.runtime.CompanionLifecycleManager;
 import dev.soffits.openplayer.runtime.OpenPlayerRuntime;
 import dev.soffits.openplayer.runtime.RuntimeAgentExecutor;
+import dev.soffits.openplayer.runtime.planner.PlannerPrimitiveProgress;
 import io.netty.buffer.Unpooled;
 import java.util.List;
 import java.util.UUID;
@@ -361,7 +362,15 @@ public final class OpenPlayerNetworking extends OpenPlayerNetworkingBase {
                                                                          String commandText) {
         UUID senderId = sender.getUUID();
         MinecraftServer server = sender.server;
-        return COMPANION_LIFECYCLE_MANAGER.submitSelectedCommandTextAsync(server, senderId, assignmentId, commandText, result -> {
+        return COMPANION_LIFECYCLE_MANAGER.submitSelectedCommandTextAsync(server, senderId, assignmentId, commandText, progress -> {
+            ServerPlayer player = server.getPlayerList().getPlayer(senderId);
+            if (player == null) {
+                return;
+            }
+            sendAcceptedChatReply(player, assignmentId, progressComponent(progress));
+            sendCharacterListResponse(player);
+            sendStatusResponse(player);
+        }, result -> {
             ServerPlayer player = server.getPlayerList().getPlayer(senderId);
             if (player == null) {
                 return;
@@ -398,6 +407,14 @@ public final class OpenPlayerNetworking extends OpenPlayerNetworkingBase {
         for (String chunk : ConversationReplyText.displayChunks(message)) {
             sender.sendSystemMessage(Component.translatable("commands.openplayer.chat.reply", assignmentId, chunk));
         }
+    }
+
+    public static void sendAcceptedChatReply(ServerPlayer sender, String assignmentId, Component message) {
+        sender.sendSystemMessage(Component.translatable("commands.openplayer.chat.reply", assignmentId, message));
+    }
+
+    private static Component progressComponent(PlannerPrimitiveProgress.Display progress) {
+        return Component.translatable(progress.translationKey(), (Object[]) progress.args());
     }
 
 }

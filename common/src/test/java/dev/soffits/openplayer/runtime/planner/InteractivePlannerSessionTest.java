@@ -30,7 +30,7 @@ public final class InteractivePlannerSessionTest {
         stopsWhenToolStepBudgetIsExhausted();
         rejectsRemovedToolBeforePlannerExecution();
         cancelsActiveSession();
-        formatsPrimitiveProgressWithoutRawProviderArguments();
+        formatsPrimitiveProgressAsLocalizedFallbackWithoutRawProviderArguments();
     }
 
     private static void activePrimitiveBlocksNextProviderIteration() {
@@ -432,18 +432,26 @@ public final class InteractivePlannerSessionTest {
         require(result.message().contains("stop requested"), "cancel reason must be preserved");
     }
 
-    private static void formatsPrimitiveProgressWithoutRawProviderArguments() {
-        require("I'll pick up nearby spruce logs first.".equals(PlannerPrimitiveProgress.format(
-                        new CommandIntent(IntentKind.COLLECT_ITEMS, IntentPriority.NORMAL, "minecraft:spruce_log 16"))),
-                "collect progress must use friendly item wording");
-        String rawCollect = PlannerPrimitiveProgress.format(
+    private static void formatsPrimitiveProgressAsLocalizedFallbackWithoutRawProviderArguments() {
+        PlannerPrimitiveProgress.Display collect = PlannerPrimitiveProgress.fallback(
+                new CommandIntent(IntentKind.COLLECT_ITEMS, IntentPriority.NORMAL, "minecraft:spruce_log 16"));
+        require("commands.openplayer.progress.primitive.started.collect_items.item".equals(collect.translationKey()),
+                "collect progress must use a translation key");
+        require(collect.args().length == 1 && "spruce logs".equals(collect.args()[0]),
+                "collect progress may expose only a safe item placeholder");
+        PlannerPrimitiveProgress.Display rawCollect = PlannerPrimitiveProgress.fallback(
                 new CommandIntent(IntentKind.COLLECT_ITEMS, IntentPriority.NORMAL,
                         "matching=minecraft:spruce_log maxDistance=16"));
-        require(!rawCollect.contains("matching=") && !rawCollect.contains("maxDistance="),
+        require("commands.openplayer.progress.primitive.started.collect_items".equals(rawCollect.translationKey()),
+                "raw collect progress must use the generic collect category key");
+        require(rawCollect.args().length == 0,
                 "collect progress must not expose raw provider argument syntax");
-        require(!PlannerPrimitiveProgress.format(new CommandIntent(IntentKind.CRAFT, IntentPriority.NORMAL,
-                        "minecraft:furnace 1")).contains("finished"),
-                "primitive progress must not claim completion");
+        require("commands.openplayer.progress.primitive.started.inventory".equals(PlannerPrimitiveProgress.fallback(
+                        new CommandIntent(IntentKind.CRAFT, IntentPriority.NORMAL, "minecraft:furnace 1")).translationKey()),
+                "inventory primitives must use a category translation key");
+        require("commands.openplayer.progress.primitive.started.move".equals(PlannerPrimitiveProgress.fallback(
+                        new CommandIntent(IntentKind.GOTO, IntentPriority.NORMAL, "0 64 0")).translationKey()),
+                "movement primitives must use a category translation key");
     }
 
     private static InteractivePlannerConfig testConfig(int maxIterations, int maxProviderCalls, int maxToolSteps) {

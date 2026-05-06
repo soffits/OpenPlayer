@@ -4,6 +4,7 @@ import dev.soffits.openplayer.api.AiPlayerNpcCommand;
 import dev.soffits.openplayer.api.CommandSubmissionResult;
 import dev.soffits.openplayer.api.NpcSessionId;
 import dev.soffits.openplayer.intent.CommandIntent;
+import dev.soffits.openplayer.runtime.planner.PlannerPrimitiveProgress;
 import java.util.function.Consumer;
 
 public interface InteractivePlannerCommandTextService {
@@ -27,7 +28,7 @@ public interface InteractivePlannerCommandTextService {
 
     record PlannerCommandTextCallbacks(Consumer<CommandIntent> acceptedIntentRecorder,
                                         Consumer<AiPlayerNpcCommand> submittedCommandRecorder,
-                                        Consumer<CommandSubmissionResult> progress,
+                                        Consumer<PlannerPrimitiveProgress.Display> progress,
                                         Consumer<CommandSubmissionResult> completion) {
         public PlannerCommandTextCallbacks {
             if (acceptedIntentRecorder == null) {

@@ -22,6 +22,7 @@ import dev.soffits.openplayer.intent.CommandIntent;
 import dev.soffits.openplayer.intent.IntentKind;
 import dev.soffits.openplayer.intent.IntentParser;
 import dev.soffits.openplayer.intent.IntentPriority;
+import dev.soffits.openplayer.runtime.planner.PlannerPrimitiveProgress;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -477,16 +478,20 @@ public final class CompanionLifecycleManagerTest {
             );
             manager.spawnSelectedAssignment(new NpcOwnerId(OWNER_ID),
                     new NpcSpawnLocation("minecraft:overworld", 1.0D, 64.0D, 1.0D), character.id());
+            List<PlannerPrimitiveProgress.Display> progress = new ArrayList<>();
             List<CommandSubmissionResult> completions = new ArrayList<>();
 
             CommandSubmissionResult queued = manager.submitSelectedCommandTextAsync(null, OWNER_ID, character.id(),
-                    "pick up the spruce logs", completions::add);
+                    "pick up the spruce logs", progress::add, completions::add);
 
             require(queued.status() == CommandSubmissionStatus.ACCEPTED, "planner progress conversation must queue");
-            require(completions.size() == 2, "primitive progress and final chat must both reach selected callback");
-            require("I'll pick up nearby spruce logs first.".equals(completions.get(0).message()),
-                    "primitive progress must be surfaced before final chat");
-            require("Ready".equals(completions.get(1).message()), "final chat must still be surfaced");
+            require(progress.size() == 1, "accepted active primitive progress must reach selected progress callback");
+            require("commands.openplayer.progress.primitive.started.collect_items.item".equals(progress.get(0).translationKey()),
+                    "primitive progress must be surfaced as a translation key");
+            require(progress.get(0).args().length == 1 && "spruce logs".equals(progress.get(0).args()[0]),
+                    "primitive progress must expose only safe localized placeholders");
+            require(completions.size() == 1 && "Ready".equals(completions.get(0).message()),
+                    "final chat must still be surfaced separately");
         } finally {
             restoreProperty("OPENPLAYER_INTENT_PROVIDER_ENDPOINT", previousEndpoint);
             restoreProperty("OPENPLAYER_INTENT_PROVIDER_MODEL", previousModel);
@@ -898,8 +903,7 @@ public final class CompanionLifecycleManagerTest {
                 AiPlayerNpcCommand command = new AiPlayerNpcCommand(UUID.randomUUID(), primitive);
                 submitCommand(sessionId, command);
                 callbacks.submittedCommandRecorder().accept(command);
-                callbacks.progress().accept(new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED,
-                        dev.soffits.openplayer.runtime.planner.PlannerPrimitiveProgress.format(primitive)));
+                callbacks.progress().accept(PlannerPrimitiveProgress.fallback(primitive));
                 CommandIntent chat = new CommandIntent(IntentKind.CHAT, IntentPriority.NORMAL, "Ready");
                 callbacks.acceptedIntentRecorder().accept(chat);
                 callbacks.completion().accept(new CommandSubmissionResult(CommandSubmissionStatus.ACCEPTED, "Ready"));

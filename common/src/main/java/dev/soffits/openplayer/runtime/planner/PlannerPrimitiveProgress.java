@@ -5,49 +5,48 @@ import dev.soffits.openplayer.intent.IntentKind;
 import java.util.Locale;
 
 public final class PlannerPrimitiveProgress {
+    private static final String KEY_PREFIX = "commands.openplayer.progress.primitive.started.";
+
     private PlannerPrimitiveProgress() {
     }
 
-    public static String format(CommandIntent intent) {
+    public static Display fallback(CommandIntent intent) {
         if (intent == null) {
             throw new IllegalArgumentException("intent cannot be null");
         }
-        return format(intent.kind(), intent.instruction());
+        return fallback(intent.kind(), intent.instruction());
     }
 
-    public static String format(IntentKind kind, String instruction) {
+    public static Display fallback(IntentKind kind, String instruction) {
         if (kind == null) {
             throw new IllegalArgumentException("kind cannot be null");
         }
-        String boundedInstruction = bound(instruction, 96);
-        return switch (kind) {
-            case COLLECT_ITEMS -> collectItemsProgress(boundedInstruction);
-            case BREAK_BLOCK -> "I'll break that block and then check what dropped.";
-            case LOCATE_LOADED_BLOCK -> "I'll look nearby for usable blocks.";
-            case LOCATE_LOADED_ENTITY -> "I'll look nearby for useful entities.";
-            case GOTO, MOVE, FOLLOW_OWNER -> "I'll move into position first.";
-            case LOOK -> "I'll look at the target first.";
-            case CRAFT -> "I'll try that craft from my current inventory.";
-            case DROP_ITEM -> "I'll drop the item once I have it selected.";
-            case PLACE_BLOCK -> "I'll place that block and then check the result.";
-            case INVENTORY_QUERY -> "I'll check my inventory first.";
-            case EQUIP_ITEM -> "I'll select the item I need first.";
-            case INTERACT -> "I'll interact with the target and then check what happened.";
-            case ATTACK_NEAREST, ATTACK_TARGET -> "I'll handle the nearby threat first.";
-            case REPORT_STATUS -> "I'll check what I'm doing right now.";
-            case STOP -> "I'll stop the current action first.";
-            case PAUSE -> "I'll pause the current action first.";
-            case UNPAUSE -> "I'll resume the queued action first.";
-            default -> "I'll try the next safe step first.";
-        };
+        if (kind == IntentKind.COLLECT_ITEMS) {
+            String itemName = firstItemName(bound(instruction, 96));
+            if (!itemName.isBlank()) {
+                return new Display(KEY_PREFIX + "collect_items.item", new String[] { itemName });
+            }
+        }
+        return new Display(KEY_PREFIX + category(kind), new String[0]);
     }
 
-    private static String collectItemsProgress(String instruction) {
-        String itemName = firstItemName(instruction);
-        if (itemName.isBlank()) {
-            return "I'll pick up nearby items first.";
-        }
-        return "I'll pick up nearby " + itemName + " first.";
+    private static String category(IntentKind kind) {
+        return switch (kind) {
+            case MOVE, GOTO, FOLLOW_OWNER, GUARD_OWNER, PATROL -> "move";
+            case LOOK -> "look";
+            case COLLECT_ITEMS -> "collect_items";
+            case SWAP_TO_OFFHAND, DROP_ITEM, INVENTORY_QUERY, EQUIP_ITEM, GIVE_ITEM, DEPOSIT_ITEM, STASH_ITEM,
+                    WITHDRAW_ITEM, CRAFT -> "inventory";
+            case PLACE_BLOCK -> "place_block";
+            case BREAK_BLOCK -> "break_block";
+            case INTERACT -> "interact";
+            case ATTACK_NEAREST, ATTACK_TARGET -> "combat";
+            case REPORT_STATUS, OBSERVE, UNAVAILABLE, RESET_MEMORY, BODY_LANGUAGE, LOCATE_LOADED_BLOCK,
+                    LOCATE_LOADED_ENTITY, FIND_LOADED_BIOME -> "status";
+            case PAUSE, UNPAUSE -> "pause";
+            case STOP -> "stop";
+            case CHAT, PROVIDER_PLAN -> "default";
+        };
     }
 
     private static String firstItemName(String instruction) {
@@ -76,5 +75,24 @@ public final class PlannerPrimitiveProgress {
             return source;
         }
         return source.substring(0, maxLength);
+    }
+
+    public record Display(String translationKey, String[] args) {
+        public Display {
+            if (translationKey == null || translationKey.isBlank()) {
+                throw new IllegalArgumentException("translationKey cannot be blank");
+            }
+            args = args == null ? new String[0] : args.clone();
+            for (String arg : args) {
+                if (arg == null) {
+                    throw new IllegalArgumentException("args cannot contain null");
+                }
+            }
+        }
+
+        @Override
+        public String[] args() {
+            return args.clone();
+        }
     }
 }
