@@ -121,10 +121,10 @@ Do not keep completed implementation checklists in this file as if they are stil
 
 ## Verification Commands
 
-Use Java 17 explicitly:
+Run Gradle on Java 21 or newer, which Loom requires. The mod still compiles for Java 17 through the Gradle toolchain, so a JDK 17 must be installed too:
 
 ```bash
-JAVA_HOME=/opt/data/tools/jdk-17.0.19+10 PATH=/opt/data/tools/jdk-17.0.19+10/bin:$PATH ./gradlew :common:check build
+./gradlew :common:check build
 ```
 
 For focused changes, also run the matching main-method JavaExec tasks registered in `common/build.gradle`, such as policy loader, chunk ticket model, planner session, provider schema/prompt, primitive tools, navigation, automation backend, resource planning, and coordination tests.
