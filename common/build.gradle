@@ -6,6 +6,10 @@ dependencies {
     modApi "dev.architectury:architectury:${architectury_api_version}"
 }
 
+tasks.named('test') {
+    failOnNoDiscoveredTests = false
+}
+
 tasks.register('runLocalCharacterDefinitionTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = sourceSets.test.runtimeClasspath
