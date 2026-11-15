@@ -38,6 +38,7 @@ OpenPlayer is an AGPL-3.0-or-later Minecraft mod developed as a legally clean, l
 - Keep configuration centralized once configuration exists.
 - Avoid networking, entities, GUI, skins, LLM providers, pathfinding integrations, or automation-runtime integrations unless the active task explicitly asks for that phase.
 - Do not hardcode gameplay route planners in Java. Use generic primitives, capability adapters, validation, and truthful status; use local strategy/meta packs only as advisory goal-decomposition reference.
+- Durable boundaries: no OP/admin/cheat operations, no permission bypass, no arbitrary provider-origin execution, no opaque bot/runtime dependency, and no fake success.
 - Normal player-like behavior should be attempted when reviewed adapters and policy allow it. A missing behavior is an adapter/interface gap or world-state/policy failure, not a permanent product-level prohibition.
 - While OpenPlayer runtime and intent surfaces are unreleased or unfinished, remove abandoned internal intent/API designs fully instead of keeping aliases. Do not preserve compatibility for provider/internal command names that were never a stable public contract; prefer clean generic primitives and capability adapters over old synonyms.
 - When replacing an internal runtime/provider/API design, delete the old-style code in the same change unless it is a real shipped external contract. Do not wait, leave dormant fallback paths, or keep legacy shims “just in case”; stale internal surfaces create misleading behavior and must be removed with their tests/docs/prompts.
@@ -74,14 +75,8 @@ Run the strongest available check before reporting completion:
 - PR titles are Conventional Commit subjects (`feat: ...`, `fix(scope): ...`), because a squash merge makes the title the commit on the default branch; CI checks it.
 - Write handwritten release notes only when explicitly requested.
 
-## OpenCode Delegation
+## Working In The Repository
 
-- Build context before editing, then give OpenCode a broad enough mandate to inspect, design, and edit within the requested capability or cleanup cluster.
-- Do not micromanage OpenCode with one-alias, one-method, or one-file follow-up prompts when the user asked for a broad phase/full-repo cleanup. Use narrow follow-up prompts only for concrete review blockers, safety regressions, build failures, or user-visible overclaims.
-- Prefer coherent capability clusters over artificial tiny phases. Durable boundaries are no OP/admin/cheat operations, no permission bypass, no arbitrary provider-origin execution, no opaque bot/runtime dependency, and no fake success.
-- For Lia's explicit fast-loop mode, run one broad OpenCode phase per planned milestone: OpenCode must inspect, implement, and run the required Java 17 build/check before stopping; if that build passes, treat it as the phase verification baseline.
-- In fast-loop mode, Sakina reviews the diff for blockers only. If review is clean, do not run redundant local builds/tests and do not wait for GitHub CI; commit/push and immediately continue the next broad phase. If a concrete blocker is found, fix that blocker narrowly, add or update regression coverage, then run the smallest necessary targeted check plus broader build/check only when warranted by the fix.
-- OpenCode prompts for this repository should usually include the Java 17 command shape `JAVA_HOME=/opt/data/tools/jdk-17.0.19+10 PATH=/opt/data/tools/jdk-17.0.19+10/bin:$PATH ./gradlew :common:check build` or the stronger task-specific build/check command.
 - Preserve unrelated user or agent work in the git worktree.
 - Do not commit unless the user explicitly requests it.
 - Report verification results, pushed commits, remaining truthful limitations, and any environment limitation.
