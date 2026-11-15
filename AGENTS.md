@@ -1,6 +1,6 @@
 # OpenPlayer Agent Rules
 
-OpenPlayer is an AGPL-3.0-only Minecraft mod developed as a legally clean, local-first AI companion runtime. Keep every repository-visible text string in English except translated locale resource values.
+OpenPlayer is an AGPL-3.0-or-later Minecraft mod developed as a legally clean, local-first AI companion runtime. Keep every repository-visible text string in English except translated locale resource values.
 
 ## Scope
 
@@ -22,7 +22,7 @@ OpenPlayer is an AGPL-3.0-only Minecraft mod developed as a legally clean, local
 
 ## License And Provenance
 
-- Project code and metadata must declare `AGPL-3.0-only`.
+- Project code and metadata must declare `AGPL-3.0-or-later`.
 - Do not copy proprietary, closed, or opaque code line-for-line.
 - Do not paste decompiled implementation details into this repository.
 - Do not vendor opaque jars.

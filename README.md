@@ -54,7 +54,7 @@ See `docs/` for commands, tool details, and roadmap notes.
 
 ## License
 
-OpenPlayer is licensed under `AGPL-3.0-only`. See `LICENSE`.
+OpenPlayer is licensed under `AGPL-3.0-or-later`. See `LICENSE`.
 
 ## References and credits
 
